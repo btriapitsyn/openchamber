@@ -15,8 +15,24 @@ import {
 import { Icon } from "@/components/icon/Icon";
 import type { IconName } from "@/components/icon/icons";
 import { useGitIdentitiesStore, type GitIdentityProfile } from '@/stores/useGitIdentitiesStore';
+import { ManagedSshCredentials } from '@/components/sections/openchamber/ManagedSshCredentials';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { getSourceControlAuthKey, useSourceControlAuthStore } from '@/stores/useSourceControlAuthStore';
+import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
+import { buildManagedAccountOptions, getManagedCredentialSourceLabelKey } from '@/lib/source-control/identity';
+import type { GitIdentityTransport } from '@/lib/api/types';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
+
+/** Select value for an identity that answers to no connected account. */
+const NO_ACCOUNT = '__none__';
+
+const TRANSPORT_LABEL_KEYS = {
+  account: 'settings.gitIdentities.editor.transport.account',
+  ssh: 'settings.sourceControl.transport.ssh',
+  anonymous: 'settings.sourceControl.transport.anonymous',
+  system: 'settings.sourceControl.transport.system',
+} as const;
 
 const PROFILE_COLORS = [
   { key: 'keyword', label: 'Green', cssVar: 'var(--syntax-keyword)' },
@@ -66,9 +82,29 @@ export const GitIdentityEditorDialog: React.FC<GitIdentityEditorDialogProps> = (
   const [signingKey, setSigningKey] = React.useState('');
   const [color, setColor] = React.useState('keyword');
   const [icon, setIcon] = React.useState('branch');
+  const [accountKey, setAccountKey] = React.useState(NO_ACCOUNT);
+  const [transport, setTransport] = React.useState<GitIdentityTransport>('system');
+  const [sshCredentialId, setSshCredentialId] = React.useState('');
   const [isSaving, setIsSaving] = React.useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = React.useState(false);
   const [isDeleting, setIsDeleting] = React.useState(false);
+
+  const { sourceControl } = useRuntimeAPIs();
+  const identities = useSourceControlAuthStore((state) => state.identities);
+  const authEntries = useSourceControlAuthStore((state) => state.entries);
+  const refreshAccounts = useSourceControlAuthStore((state) => state.refreshAll);
+  React.useEffect(() => {
+    if (open && !isGlobalProfile) void refreshAccounts(sourceControl);
+  }, [open, isGlobalProfile, refreshAccounts, sourceControl]);
+
+  // Every connected account, whichever provider or instance it belongs to: an
+  // identity picks one, and the transport picks up its credential from there.
+  const accountOptions = React.useMemo(() => identities.flatMap((identity) => {
+    const entry = authEntries[getSourceControlAuthKey(identity)];
+    if (!entry?.hasChecked || entry.status?.status !== 'connected') return [];
+    return buildManagedAccountOptions(identity, entry.status.accounts, (account) => t(getManagedCredentialSourceLabelKey(account.source)));
+  }), [authEntries, identities, t]);
+  const selectedAccount = accountOptions.find((option) => option.key === accountKey) ?? null;
 
   React.useEffect(() => {
     if (!open) return;
@@ -80,6 +116,9 @@ export const GitIdentityEditorDialog: React.FC<GitIdentityEditorDialogProps> = (
       setSigningKey('');
       setColor('keyword');
       setIcon('branch');
+      setAccountKey(NO_ACCOUNT);
+      setTransport('system');
+      setSshCredentialId('');
     } else if (selectedProfile) {
       setName(selectedProfile.name);
       setUserName(selectedProfile.userName);
@@ -88,6 +127,11 @@ export const GitIdentityEditorDialog: React.FC<GitIdentityEditorDialogProps> = (
       setSigningKey(selectedProfile.signingKey || '');
       setColor(selectedProfile.color || 'keyword');
       setIcon(selectedProfile.icon || 'branch');
+      setAccountKey(selectedProfile.account
+        ? JSON.stringify([selectedProfile.account.provider, selectedProfile.account.instance, selectedProfile.account.accountId])
+        : NO_ACCOUNT);
+      setTransport(selectedProfile.transport ?? 'system');
+      setSshCredentialId(selectedProfile.sshCredentialId ?? '');
     } else if (isGlobalProfile) {
       const global = getProfileById('global');
       if (global) {
@@ -111,6 +155,14 @@ export const GitIdentityEditorDialog: React.FC<GitIdentityEditorDialogProps> = (
       toast.error(t('settings.gitIdentities.editor.toast.signingKeyRequired'));
       return;
     }
+    if (transport === 'account' && !selectedAccount) {
+      toast.error(t('settings.gitIdentities.editor.toast.accountRequired'));
+      return;
+    }
+    if (transport === 'ssh' && !sshCredentialId.trim()) {
+      toast.error(t('settings.gitIdentities.editor.toast.sshKeyRequired'));
+      return;
+    }
 
     setIsSaving(true);
     try {
@@ -119,11 +171,16 @@ export const GitIdentityEditorDialog: React.FC<GitIdentityEditorDialogProps> = (
         name: name.trim() || userName.trim(),
         userName: userName.trim(),
         userEmail: userEmail.trim(),
+        account: selectedAccount?.reference ?? null,
+        transport,
         signCommits,
         signingKey: signingKey.trim() || null,
         color,
         icon,
       };
+      // Only an SSH transport names a managed key, so the field is absent
+      // rather than empty when another transport is chosen.
+      if (transport === 'ssh') profileData.sshCredentialId = sshCredentialId.trim();
 
       let success: boolean;
       if (isNewProfile) {
@@ -303,6 +360,66 @@ export const GitIdentityEditorDialog: React.FC<GitIdentityEditorDialogProps> = (
                 />
               </div>
             </div>
+
+            {/* An identity is an account, a transport and a signature: the
+                three answers a repository needs, given once and named. */}
+            {!isGlobalProfile && (
+              <>
+                <div className="border-t border-border/40" />
+                <div className="space-y-3">
+                  <div>
+                    <label className={`${SETTINGS_FIELD_LABEL_CLASS} block mb-1.5`}>
+                      {t('settings.gitIdentities.editor.field.account')}
+                    </label>
+                    <Select
+                      value={accountKey}
+                      onValueChange={(value) => {
+                        setAccountKey(value);
+                        // An identity that answers to no account cannot use an
+                        // account's credential, so the transport follows.
+                        if (value === NO_ACCOUNT && transport === 'account') setTransport('system');
+                        if (value !== NO_ACCOUNT && transport === 'system') setTransport('account');
+                      }}
+                    >
+                      <SelectTrigger className="w-full" aria-label={t('settings.gitIdentities.editor.field.account')}>
+                        <SelectValue>{selectedAccount?.label ?? t('settings.gitIdentities.editor.field.accountNone')}</SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {accountOptions.map((option) => (
+                          <SelectItem key={option.key} value={option.key}>{option.label}</SelectItem>
+                        ))}
+                        <SelectItem value={NO_ACCOUNT}>{t('settings.gitIdentities.editor.field.accountNone')}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <label className={`${SETTINGS_FIELD_LABEL_CLASS} block mb-1.5`}>
+                      {t('settings.sourceControl.transport.modeLabel')}
+                    </label>
+                    <Select value={transport} onValueChange={(value) => {
+                      if (!Object.hasOwn(TRANSPORT_LABEL_KEYS, value)) return;
+                      setTransport(value === 'account' || value === 'ssh' || value === 'anonymous' ? value : 'system');
+                      if (value !== 'ssh') setSshCredentialId('');
+                    }}>
+                      <SelectTrigger className="w-full" aria-label={t('settings.sourceControl.transport.modeLabel')}>
+                        <SelectValue>{t(TRANSPORT_LABEL_KEYS[transport])}</SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="account" disabled={!selectedAccount}>{t(TRANSPORT_LABEL_KEYS.account)}</SelectItem>
+                        <SelectItem value="ssh">{t(TRANSPORT_LABEL_KEYS.ssh)}</SelectItem>
+                        <SelectItem value="anonymous">{t(TRANSPORT_LABEL_KEYS.anonymous)}</SelectItem>
+                        <SelectItem value="system">{t(TRANSPORT_LABEL_KEYS.system)}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {transport === 'ssh' ? (
+                    <ManagedSshCredentials selection={{ value: sshCredentialId, onChange: setSshCredentialId }} />
+                  ) : null}
+                </div>
+              </>
+            )}
 
             {/* Commit signing is independent of transport authentication. */}
             {!isGlobalProfile && (
