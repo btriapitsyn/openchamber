@@ -296,7 +296,9 @@ it for whoever starts the process. With it off nothing is put into the child's
 environment at all. `agent-authority-storage.js` then holds the per-repository
 answer, and stores only exclusions: when the machine-wide answer is no there is
 nothing for a single repository to turn back on, so the per-repository control
-can only be an opt-out. An excluded repository is answered the same way a
+can only be an opt-out, and it lives in the repository dialog alone — adding or
+cloning a repository asks nothing, because the default is the answer. An
+excluded repository is answered the same way a
 System Git one is — handed back to the person's own chain, because the host's
 chain is severed for the whole process and answering nothing would leave it
 with no credential at all.

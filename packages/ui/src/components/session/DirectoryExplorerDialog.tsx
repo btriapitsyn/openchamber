@@ -172,7 +172,6 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
   const runtimeKey = getRuntimeKey();
   const openContextSurface = useUIStore((s) => s.openContextSurface);
   const mobileActions = useMobileAppActions();
-  const agentGitAuthorityEnabled = useUIStore((s) => s.agentGitAuthorityEnabled);
   const refreshAccounts = useSourceControlAuthStore((s) => s.refreshAll);
   const homeDirectory = useDirectoryStore((s) => s.homeDirectory);
   const projects = useProjectsStore((s) => s.projects);
@@ -209,7 +208,6 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
   // add and clone screens ask once instead of assembling three answers.
   const [identityChoice, setIdentityChoice] = React.useState<{ key: string; id: string } | null>(null);
   const [unverifiedConfirmed, setUnverifiedConfirmed] = React.useState(false);
-  const [agentAuthorityEnabled, setAgentAuthorityEnabled] = React.useState(true);
   const cloneController = React.useRef<AbortController | null>(null);
   const cloneRecovery = useGitOperationRecovery(open && isCloneMode ? 'clone' : null, git, sourceControl, { kind: 'clone' });
   const [showHidden, setShowHidden] = React.useState(false);
@@ -232,7 +230,6 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     setIsCloneMode(false);
     setCloneRemoteUrl('');
     setIdentityChoice(null);
-    setAgentAuthorityEnabled(true);
     setUnverifiedConfirmed(false);
     setSelectedPaths([]);
     setShowHidden(false);
@@ -644,10 +641,6 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
         // here rather than swallowed, and the Git panel can finish it.
         if (outcome.status === 'failed') toast.warning(t('directoryExplorerDialog.existing.bindFailed'));
       }
-      // Only an exclusion is stored, so the common answer leaves no record.
-      if (!agentAuthorityEnabled && git.setAgentGitAuthority) {
-        await git.setAgentGitAuthority(project.path, false).catch(() => undefined);
-      }
       openProjectDraft(project.id, project.path);
       if (setupRequired) {
         if (mobileActions) mobileActions.openChanges();
@@ -664,7 +657,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
       cloneController.current = null;
       setIsConfirming(false);
     }
-  }, [addProject, addProjects, addedProjectPaths, agentAuthorityEnabled, canSubmitClone, cloneRecovery, cloneSelection, identityChoice, identityChoiceKey, unverifiedConfirmed, cloneRemoteUrl, existingRepository, git, handleClose, isCloneMode, isConfirming, mobileActions, openContextSurface, openProjectDraft, runtimeKey, selectedGitIdentity, selectedPaths, shouldCreateTarget, sourceControl, targetPath, t]);
+  }, [addProject, addProjects, addedProjectPaths, canSubmitClone, cloneRecovery, cloneSelection, identityChoice, identityChoiceKey, unverifiedConfirmed, cloneRemoteUrl, existingRepository, git, handleClose, isCloneMode, isConfirming, mobileActions, openContextSurface, openProjectDraft, runtimeKey, selectedGitIdentity, selectedPaths, shouldCreateTarget, sourceControl, targetPath, t]);
 
   const browseToDisplayPath = React.useCallback((displayPath: string) => {
     setQuery(ensureBrowseDirectoryPath(displayPath));
@@ -808,13 +801,6 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
       {!isCloneMode && existingRepository ? (
         <div className="mb-1.5 space-y-1.5">
           {identityPicker}
-          {agentGitAuthorityEnabled && git.setAgentGitAuthority ? (
-            <label className="flex items-start gap-2 typography-micro text-muted-foreground">
-              <Checkbox checked={agentAuthorityEnabled} disabled={isConfirming} onChange={setAgentAuthorityEnabled}
-                ariaLabel={t('settings.sourceControl.agentAuthority.label')} />
-              {t('settings.sourceControl.agentAuthority.label')}
-            </label>
-          ) : null}
         </div>
       ) : null}
       {isCloneMode ? (
