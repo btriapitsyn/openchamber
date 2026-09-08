@@ -113,6 +113,8 @@ import { createDevTunnelRuntime } from './lib/dev-tunnel/runtime.js';
 import { registerBrowserControlRoutes } from './lib/browser-control/routes.js';
 import { createSystemPromptRuntime } from './lib/system-prompt/runtime.js';
 import { createMcpReconnectRuntime } from './lib/mcp-reconnect/runtime.js';
+import { isPlatformEnabled } from './lib/platform/index.js';
+import { registerPlatformAuthRoutes } from './lib/platform/auth/routes.js';
 import { createOpenChamberSessionService } from './lib/openchamber-sessions/routes.js';
 import { createScheduledTaskService } from './lib/scheduled-tasks/service.js';
 import { createOpenChamberControlService } from './lib/openchamber-control/service.js';
@@ -1724,6 +1726,18 @@ async function main(options = {}) {
   }));
   expressApp = app;
   server = http.createServer(app);
+
+  // Platform auth routes register before setupBaseRoutes so they precede the
+  // generic /api auth gate (which enforces the shared UI password) and the
+  // OpenCode proxy fallback: the platform issues its own sessions and must
+  // not be gated by, or proxied to, the single-user OpenCode upstream. This
+  // is a complete no-op when the platform is disabled, leaving behavior
+  // unchanged.
+  let platformAuthHandle = null;
+  if (isPlatformEnabled()) {
+    platformAuthHandle = await registerPlatformAuthRoutes(app, { env: process.env, logger: console });
+  }
+
   let realtimeProxyRuntime = { stop: () => {} };
 
   // The relay service is constructed further below (it depends on the tunnel
