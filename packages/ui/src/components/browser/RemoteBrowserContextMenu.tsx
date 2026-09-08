@@ -95,7 +95,7 @@ export function RemoteBrowserContextMenu({ client, enabled, canvas, frame, clipb
   return <>
     <ContextMenu open={enabled && outcome === 'menu'} onOpenChange={(open) => { if (!open) dismiss(); }}>
       <ContextMenuTrigger render={children} onContextMenu={request} />
-      <ContextMenuContent ref={menu}>
+      <ContextMenuContent ref={menu} className="bg-[var(--surface-elevated)]">
         <ContextMenuItem disabled={!activeTab?.canGoBack} onClick={() => navigate('back')}>{t('contextPanel.browser.back')}</ContextMenuItem>
         <ContextMenuItem disabled={!activeTab?.canGoForward} onClick={() => navigate('forward')}>{t('contextPanel.browser.forward')}</ContextMenuItem>
         <ContextMenuItem onClick={() => navigate('reload')}>{t('contextPanel.browser.reload')}</ContextMenuItem>
