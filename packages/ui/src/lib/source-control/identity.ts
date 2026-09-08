@@ -123,12 +123,18 @@ export const getChangeRequestReferencePrefix = (provider: SourceControlProvider)
 export const formatChangeRequestReference = (provider: SourceControlProvider | null | undefined, number: number): string =>
   `${provider ? getChangeRequestReferencePrefix(provider) : '#'}${number}`;
 
-/** One label shape for every account picker: provider @user · instance · source · exact account id. */
+/**
+ * One label shape for every account picker: provider @user · instance · source.
+ *
+ * The credential's own reference is deliberately absent. It is opaque, it is
+ * long enough to hide the account name it sits beside, and a person choosing
+ * an account means the person, not one of their stored credentials.
+ */
 const formatSourceControlAccountLabel = (
   identity: SourceControlIdentity,
-  account: { id: string; user: { username: string } },
+  account: { user: { username: string } },
   sourceLabel: string,
-): string => `${getSourceControlProviderLabel(identity.provider)} @${account.user.username} · ${identity.instance} · ${sourceLabel} · ${account.id}`;
+): string => `${getSourceControlProviderLabel(identity.provider)} @${account.user.username} · ${identity.instance} · ${sourceLabel}`;
 
 type ManagedCredentialSourceLabelKey =
   | 'settings.github.page.accountSource.oauth'
@@ -287,16 +293,29 @@ type ManagedAccountOption = {
   source: SourceControlAuthAccount['source'];
 };
 
-/** Selectable managed HTTPS credential accounts: valid, non-CLI accounts of one connected identity. */
+/**
+ * Selectable managed HTTPS credential accounts: one per person.
+ *
+ * Re-authenticating keeps the credential it replaces, so one account can hold
+ * several. Offering each of them separately asks a question nobody can answer
+ * — they carry the same name — so the current credential represents the
+ * person, and the others stay valid for identities that already name them.
+ */
 export const buildManagedAccountOptions = (
   identity: SourceControlIdentity,
   accounts: SourceControlAuthAccount[],
   sourceLabel: (account: SourceControlAuthAccount) => string,
-): ManagedAccountOption[] => accounts
-  .filter((account) => account.status === 'valid' && account.source !== 'cli')
-  .map((account) => ({
+): ManagedAccountOption[] => {
+  const byProviderUser = new Map<string, SourceControlAuthAccount>();
+  for (const account of accounts) {
+    if (account.status !== 'valid' || account.source === 'cli') continue;
+    const existing = byProviderUser.get(account.providerUserId);
+    if (!existing || (account.current && !existing.current)) byProviderUser.set(account.providerUserId, account);
+  }
+  return [...byProviderUser.values()].map((account) => ({
     key: JSON.stringify([identity.provider, identity.instance, account.id]),
     reference: { ...identity, accountId: account.id },
     label: formatSourceControlAccountLabel(identity, account, sourceLabel(account)),
     source: account.source,
   }));
+};

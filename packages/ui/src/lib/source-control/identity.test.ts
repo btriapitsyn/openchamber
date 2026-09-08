@@ -13,6 +13,7 @@ import {
   selectableIdentities,
   identityDisplayName,
   identityAccountConnected,
+  buildManagedAccountOptions,
   remoteTraits,
   instanceHost,
 } from './identity';
@@ -265,5 +266,31 @@ describe('identityAccountConnected', () => {
     expect(identityAccountConnected(identity, () => null)).toBe(true);
     // The System identity names no account, so there is nothing to check.
     expect(identityAccountConnected({ account: null }, () => [])).toBe(true);
+  });
+});
+
+describe('buildManagedAccountOptions', () => {
+  const identity = { provider: 'gitlab', instance: 'https://gitlab.com' } as const;
+  const account = (id: string, providerUserId: string, current: boolean) => ({
+    id, providerUserId, current, status: 'valid', source: 'pat', credentialId: id, credentialRevision: 1,
+    providerUserStatus: 'available',
+    user: { id: 'gitlab-7', username: 'ada', provider: 'gitlab', instance: 'https://gitlab.com' },
+  } as const);
+
+  test('offers one option per person, preferring the current credential', () => {
+    const options = buildManagedAccountOptions(identity, [
+      account('occred:v1:gitlab:old:r1', 'gitlab#7', false),
+      account('occred:v1:gitlab:new:r1', 'gitlab#7', true),
+      account('occred:v1:gitlab:other:r1', 'gitlab#9', false),
+    ], () => 'Personal access token');
+
+    expect(options.map((option) => option.reference.accountId))
+      .toEqual(['occred:v1:gitlab:new:r1', 'occred:v1:gitlab:other:r1']);
+  });
+
+  test('names the person and never the credential reference', () => {
+    const [option] = buildManagedAccountOptions(identity, [account('occred:v1:gitlab:new:r1', 'gitlab#7', true)], () => 'Personal access token');
+    expect(option.label).toBe('GitLab @ada · https://gitlab.com · Personal access token');
+    expect(option.label).not.toContain('occred');
   });
 });
