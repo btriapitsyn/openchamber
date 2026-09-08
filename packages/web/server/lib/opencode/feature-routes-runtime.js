@@ -58,6 +58,7 @@ import { getGitHubAuthByAccountId } from '../github/auth.js';
 import { createSourceControlAuthStore } from '../gitlab/auth-storage.js';
 import { createGitCredentialResolver, createHttpsCredentialReference } from '../git/credential-resolver.js';
 import { createNetworkOperations } from '../git/network-operations.js';
+import { createGitAgentOperations } from '../git/agent-operations.js';
 import { createManagedSshCredentialStore } from '../git/ssh-credential-storage.js';
 import { createManagedSshInventory } from '../git/credentials.js';
 import { createSystemPushAcknowledgementStore } from '../git/system-push-acknowledgement-storage.js';
@@ -96,6 +97,7 @@ export const createFeatureRoutesRuntime = (dependencies) => {
   let walkthroughService = null;
   let walkthroughBindingService = null;
   let networkOperations = null;
+  let gitAgentOperations = null;
   const getWalkthroughService = async () => {
     if (!walkthroughService) {
       const [service, pullRequest] = await Promise.all([
@@ -463,6 +465,13 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       validateGitIdentity,
       resolveGitIdentity,
     });
+    // The agent reaches transfers through the same planned operations the Git
+    // panel runs, so a bound repository acts as its bound account there too.
+    gitAgentOperations = createGitAgentOperations({
+      networkOperations,
+      readBinding: walkthroughBindingService.get,
+      readStatus: async (directory) => (await import('../git/index.js')).getStatus(directory),
+    });
     registerGitRoutes(app, {
       managedSshInventory,
       networkOperations,
@@ -510,5 +519,7 @@ export const createFeatureRoutesRuntime = (dependencies) => {
   return {
     registerRoutes,
     hydrateBoundCheckout,
+    /** Null until the Git feature routes are registered. */
+    getGitAgentOperations: () => gitAgentOperations,
   };
 };
