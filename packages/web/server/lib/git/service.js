@@ -3499,12 +3499,23 @@ export async function unstageFiles(directory, paths) {
 export async function commit(directory, message, options = {}) {
   return withGitIndexMutationQueue(directory, async () => {
     const { directoryPath, directoryGit, repoRoot, git } = await createRepositoryGitContext(directory);
+    // An identity applied here writes the repository's own author, and that is
+    // what a commit uses. A repository on the System identity deliberately has
+    // none: it says no override applies, so the machine's own author answers,
+    // which is what Git itself would do. The panel names that author before
+    // the commit, so it is a stated choice rather than an ambient surprise.
     const [localUserName, localUserEmail] = await Promise.all([
       git.getConfig('user.name', 'local').catch(() => null),
       git.getConfig('user.email', 'local').catch(() => null),
     ]);
     if (!localUserName?.value?.trim() || !localUserEmail?.value?.trim()) {
-      throw new Error('A complete repository-local Git identity is required before committing');
+      const [globalUserName, globalUserEmail] = await Promise.all([
+        git.getConfig('user.name', 'global').catch(() => null),
+        git.getConfig('user.email', 'global').catch(() => null),
+      ]);
+      if (!globalUserName?.value?.trim() || !globalUserEmail?.value?.trim()) {
+        throw new Error('No Git author is configured. Choose an identity for this repository, or set user.name and user.email on this computer.');
+      }
     }
     let temporarilyUnstagedFiles = [];
 

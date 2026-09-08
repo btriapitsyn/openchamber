@@ -268,22 +268,32 @@ describe.runIf(canRunGit())('setLocalIdentity', () => {
     expect(runGit(tmpDir, ['config', '--local', '--get', 'commit.gpgsign']).trim()).toBe('true');
   });
 
-  it('requires both local identity fields before committing', async () => {
+  it('commits with the machine author when the repository overrides none, and refuses when there is none at all', async () => {
     const tmpDir = createTempDir();
     runGit(tmpDir, ['init']);
     fs.writeFileSync(path.join(tmpDir, 'README.md'), '# identity\n');
     runGit(tmpDir, ['add', 'README.md']);
 
+    // Nothing anywhere: the refusal says how to fix it rather than naming an internal rule.
     await expect(hasLocalIdentity(tmpDir)).resolves.toBe(false);
-    await expect(commit(tmpDir, 'Missing identity')).rejects.toThrow('repository-local Git identity');
+    await expect(commit(tmpDir, 'No author')).rejects.toThrow('No Git author is configured');
 
+    // A repository on the System identity has no local author on purpose; the
+    // machine's own author answers, exactly as plain Git would resolve it.
+    runGit(tmpDir, ['config', '--global', 'user.name', 'Machine Author']);
+    runGit(tmpDir, ['config', '--global', 'user.email', 'machine@example.com']);
+    await expect(hasLocalIdentity(tmpDir)).resolves.toBe(false);
+    await expect(commit(tmpDir, 'System identity')).resolves.toMatchObject({ success: true });
+    expect(runGit(tmpDir, ['log', '-1', '--format=%an <%ae>']).trim()).toBe('Machine Author <machine@example.com>');
+
+    // An applied identity still decides: its author is the repository's own.
+    fs.writeFileSync(path.join(tmpDir, 'README.md'), '# identity two\n');
+    runGit(tmpDir, ['add', 'README.md']);
     runGit(tmpDir, ['config', '--local', 'user.name', 'Test User']);
-    await expect(hasLocalIdentity(tmpDir)).resolves.toBe(false);
-    await expect(commit(tmpDir, 'Missing email')).rejects.toThrow('repository-local Git identity');
-
     runGit(tmpDir, ['config', '--local', 'user.email', 'test@example.com']);
     await expect(hasLocalIdentity(tmpDir)).resolves.toBe(true);
     await expect(commit(tmpDir, 'Complete identity')).resolves.toMatchObject({ success: true });
+    expect(runGit(tmpDir, ['log', '-1', '--format=%an <%ae>']).trim()).toBe('Test User <test@example.com>');
   });
 
   // Author profiles no longer carry transport configuration: `setLocalIdentity`
