@@ -1706,6 +1706,7 @@ export const dict = {
   'directoryExplorerDialog.actions.alreadyAdded': 'Déjà ajouté',
   'directoryExplorerDialog.clone.remoteUrlPlaceholder': 'URL du dépôt (HTTPS ou SSH)',
   'directoryExplorerDialog.clone.setupRequired': 'Copie de travail conservée et projet ajouté. Terminez la liaison du transport dans le panneau Git. Ne relancez pas le clonage.',
+  'directoryExplorerDialog.clone.identityMismatch': 'Cette identité ne peut pas atteindre cette adresse. Choisissez-en une dont le transport correspond.',
   'directoryExplorerDialog.clone.unsupported': "Le clonage n'est pas pris en charge dans l'environnement VS Code.",
   'directoryExplorerDialog.existing.title': 'Déjà défini dans ce dépôt',
   'directoryExplorerDialog.existing.accountNone': 'Ne lier aucun compte',

@@ -30,7 +30,6 @@ const readAuthorCallback = (file: URL, name: string): string => {
   }).outputText;
 };
 
-const cloneDefault = readAuthorCallback(new URL('../session/DirectoryExplorerDialog.tsx', import.meta.url), 'selectedGitIdentityId');
 const availableAuthors = readAuthorCallback(new URL('./GitView.tsx', import.meta.url), 'availableIdentities');
 const activeAuthor = readAuthorCallback(new URL('./GitView.tsx', import.meta.url), 'activeIdentityProfile');
 
@@ -43,67 +42,9 @@ const signed: GitIdentityProfile = {
 const plain: GitIdentityProfile = { id: 'plain', name: 'Author', userName: 'Plain Author', userEmail: 'plain@example.com' };
 const profiles = [work, signed, plain];
 
-const cloneState = {
-  open: true,
-  isCloneMode: true,
-  selectedGitIdentityId: null,
-  defaultGitIdentityId: null,
-  availableGitIdentities: [globalIdentity, ...profiles],
-};
-
-const applyCloneDefault = (state: {
-  open: boolean;
-  isCloneMode: boolean;
-  selectedGitIdentityId: string | null;
-  defaultGitIdentityId: string | null;
-  availableGitIdentities: GitIdentityProfile[];
-}) => {
-  let selectedId = state.selectedGitIdentityId;
-  const writes: string[] = [];
-  runInNewContext(cloneDefault, {
-    ...state,
-    setSelectedGitIdentityId: (id: string) => { selectedId = id; writes.push(id); },
-  });
-  return { selectedId, writes };
-};
-
-describe('clone author precedence', () => {
-  test('keeps an explicit author ahead of the configured default', () => {
-    expect(applyCloneDefault({ ...cloneState, selectedGitIdentityId: signed.id, defaultGitIdentityId: work.id }))
-      .toEqual({ selectedId: signed.id, writes: [] });
-  });
-
-  test('does not replace an explicit choice when the inventory is temporarily empty', () => {
-    expect(applyCloneDefault({ ...cloneState, selectedGitIdentityId: signed.id, defaultGitIdentityId: work.id, availableGitIdentities: [] }))
-      .toEqual({ selectedId: signed.id, writes: [] });
-  });
-
-  for (const profile of [globalIdentity, signed, plain, work]) {
-    test(`honors the configured ${profile.id} author`, () => {
-      expect(applyCloneDefault({ ...cloneState, defaultGitIdentityId: ` ${profile.id} ` }))
-        .toEqual({ selectedId: profile.id, writes: [profile.id] });
-    });
-  }
-
-  test('does not infer an author when a valid default is absent', () => {
-    for (const defaultGitIdentityId of [null, '', 'missing']) {
-      expect(applyCloneDefault({ ...cloneState, defaultGitIdentityId })).toEqual({ selectedId: null, writes: [] });
-    }
-  });
-
-  test('waits for the configured author to arrive instead of selecting another profile', () => {
-    const waiting = { ...cloneState, defaultGitIdentityId: signed.id, availableGitIdentities: [work] };
-    expect(applyCloneDefault(waiting)).toEqual({ selectedId: null, writes: [] });
-    expect(applyCloneDefault({ ...waiting, availableGitIdentities: profiles }))
-      .toEqual({ selectedId: signed.id, writes: [signed.id] });
-  });
-
-  test('does not choose an author while closed or browsing', () => {
-    expect(applyCloneDefault({ ...cloneState, defaultGitIdentityId: signed.id, open: false })).toEqual({ selectedId: null, writes: [] });
-    expect(applyCloneDefault({ ...cloneState, defaultGitIdentityId: signed.id, isCloneMode: false })).toEqual({ selectedId: null, writes: [] });
-  });
-});
-
+// The clone screen no longer chooses an author on its own: it proposes one
+// identity, which carries the author with it, and `proposeIdentityForHost`
+// owns that rule and its tests.
 describe('Git view authors', () => {
   test('offers every author for unrelated HTTPS, SSH, and absent remotes', () => {
     expect(runInNewContext(availableAuthors, { profiles, globalIdentity })).toEqual([globalIdentity, ...profiles]);

@@ -1950,6 +1950,7 @@ export const dict: Record<I18nKey, string> = {
   'directoryExplorerDialog.actions.alreadyAdded': 'すでに追加済み',
   'directoryExplorerDialog.clone.remoteUrlPlaceholder': 'リポジトリURL（HTTPSまたはSSH）',
   'directoryExplorerDialog.clone.setupRequired': '作業コピーを保持し、プロジェクトを追加しました。Git パネルで転送認証の紐付けを完了してください。再度クローンしないでください。',
+  'directoryExplorerDialog.clone.identityMismatch': 'このアイデンティティではそのアドレスに接続できません。転送方法が一致するものを選んでください。',
   'directoryExplorerDialog.clone.unsupported': 'VS Code ランタイムではクローンはサポートされていません。',
   'directoryExplorerDialog.existing.title': 'このリポジトリに設定済み',
   'directoryExplorerDialog.existing.accountNone': 'アカウントを紐付けない',

@@ -1956,6 +1956,7 @@ export const dict: Record<I18nKey, string> = {
   'directoryExplorerDialog.actions.alreadyAdded': '이미 추가됨',
   'directoryExplorerDialog.clone.remoteUrlPlaceholder': '저장소 URL (HTTPS 또는 SSH)',
   'directoryExplorerDialog.clone.setupRequired': '작업 복사본을 유지하고 프로젝트를 추가했습니다. Git 패널에서 전송 바인딩을 완료하세요. 다시 복제하지 마세요.',
+  'directoryExplorerDialog.clone.identityMismatch': '이 ID로는 해당 주소에 연결할 수 없습니다. 전송 방식이 맞는 ID를 선택하세요.',
   'directoryExplorerDialog.clone.unsupported': 'VS Code 런타임에서는 복제가 지원되지 않습니다.',
   'directoryExplorerDialog.existing.title': '이 저장소에 이미 설정됨',
   'directoryExplorerDialog.existing.accountNone': '계정을 연결하지 않음',

@@ -181,6 +181,32 @@ export const isSshRemoteUrl = (remoteUrl: string): boolean => {
 };
 
 /** True only when every endpoint parses and shares the given origin. */
+/**
+ * The identity to offer for a repository on this host.
+ *
+ * An identity that already names an account on the host is the answer the
+ * person has effectively given: it says both whose repository this is and how
+ * to reach it. Failing that, the one marked default, and failing that nothing —
+ * proposing an unrelated identity would be a guess wearing a name.
+ */
+export const proposeIdentityForHost = <T extends { id: string; account?: { instance: string } | null }>(
+  identities: T[],
+  host: string | null,
+  defaultIdentityId?: string | null,
+): T | null => {
+  const matching = host
+    ? identities.find((identity) => {
+      const instance = identity.account?.instance ?? '';
+      // An instance is either a bare host or a URL, the way accounts store it.
+      return instance.length > 0
+        && gitRemoteHost(instance.includes('://') ? instance : `https://${instance}`) === host;
+    })
+    : undefined;
+  if (matching) return matching;
+  const preferred = defaultIdentityId?.trim();
+  return (preferred && identities.find((identity) => identity.id === preferred)) || null;
+};
+
 export const endpointsShareOrigin = (endpoints: string[], origin: string): boolean => endpoints.every((endpoint) => {
   try {
     return new URL(endpoint).origin === origin;

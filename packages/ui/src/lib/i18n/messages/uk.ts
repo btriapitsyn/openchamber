@@ -1922,6 +1922,7 @@ export const dict: Record<I18nKey, string> = {
   "directoryExplorerDialog.actions.alreadyAdded": "Уже додано",
   "directoryExplorerDialog.clone.remoteUrlPlaceholder": "URL репозиторію (HTTPS або SSH)",
   "directoryExplorerDialog.clone.setupRequired": "Робочу копію збережено, проєкт додано. Завершіть прив'язку транспорту на панелі Git. Не клонуйте повторно.",
+  "directoryExplorerDialog.clone.identityMismatch": "Ця ідентичність не дотягнеться до цієї адреси. Обери таку, чий транспорт їй відповідає.",
   "directoryExplorerDialog.clone.unsupported": "Клонування не підтримується в середовищі VS Code.",
   "directoryExplorerDialog.existing.title": "Уже задано в цьому репозиторії",
   "directoryExplorerDialog.existing.accountNone": "Не прив'язувати обліковий запис",

@@ -1922,6 +1922,7 @@ export const dict: Record<I18nKey, string> = {
   "directoryExplorerDialog.actions.alreadyAdded": "Já adicionado",
   "directoryExplorerDialog.clone.remoteUrlPlaceholder": "URL do repositório (HTTPS ou SSH)",
   "directoryExplorerDialog.clone.setupRequired": "Cópia de trabalho mantida e projeto adicionado. Conclua a vinculação do transporte no painel Git. Não clone novamente.",
+  "directoryExplorerDialog.clone.identityMismatch": "Esta identidade não alcança esse endereço. Escolha uma cujo transporte corresponda.",
   "directoryExplorerDialog.clone.unsupported": "A clonagem não é compatível com o ambiente do VS Code.",
   "directoryExplorerDialog.existing.title": "Já definido neste repositório",
   "directoryExplorerDialog.existing.accountNone": "Não vincular nenhuma conta",

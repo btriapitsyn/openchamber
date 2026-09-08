@@ -3421,6 +3421,7 @@ export const dict = {
   'gitView.toast.contributorPublishCancelledAfterUpdate': 'Değişiklikler yerel olarak güncellendi ancak yayınlama iptal edildi.',
   'gitView.confirm.systemTransport': 'Sistem Git, bu makinede yapılandırılmış kimlik bilgilerini kullanabilir. Bu Git işlemine devam edilsin mi?',
   'directoryExplorerDialog.clone.setupRequired': 'Checkout korundu ve proje eklendi. Aktarım bağlamasını Git panelinde tamamlayın. Tekrar klonlamayın.',
+  'directoryExplorerDialog.clone.identityMismatch': 'Bu kimlik o adrese ulaşamaz. Aktarımı buna uyan bir kimlik seç.',
   'directoryExplorerDialog.clone.unsupported': 'VS Code runtime\'ında klonlama desteklenmiyor.',
   'directoryExplorerDialog.existing.title': 'Bu depoda zaten ayarlı',
   'directoryExplorerDialog.existing.accountNone': 'Hiçbir hesabı bağlama',

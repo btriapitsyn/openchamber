@@ -1920,6 +1920,7 @@ export const dict: Record<I18nKey, string> = {
   'directoryExplorerDialog.actions.alreadyAdded': '已添加',
   'directoryExplorerDialog.clone.remoteUrlPlaceholder': '仓库 URL（HTTPS 或 SSH）',
   'directoryExplorerDialog.clone.setupRequired': '已保留工作副本并添加项目。请在 Git 面板中完成传输绑定。不要再次克隆。',
+  'directoryExplorerDialog.clone.identityMismatch': '该身份无法连接此地址。请选择传输方式相符的身份。',
   'directoryExplorerDialog.clone.unsupported': 'VS Code 运行时不支持克隆。',
   'directoryExplorerDialog.existing.title': '此仓库中已有的设置',
   'directoryExplorerDialog.existing.accountNone': '不绑定账户',

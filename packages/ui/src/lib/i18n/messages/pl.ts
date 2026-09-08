@@ -2000,6 +2000,7 @@ export const dict: Record<I18nKey, string> = {
   'directoryExplorerDialog.description': 'Wybierz folder, który chcesz dodać jako projekt.',
   'directoryExplorerDialog.clone.remoteUrlPlaceholder': 'URL repozytorium (HTTPS lub SSH)',
   'directoryExplorerDialog.clone.setupRequired': 'Zachowano kopię roboczą i dodano projekt. Dokończ powiązanie transportu w panelu Git. Nie klonuj ponownie.',
+  'directoryExplorerDialog.clone.identityMismatch': 'Ta tożsamość nie sięgnie tego adresu. Wybierz taką, której transport do niego pasuje.',
   'directoryExplorerDialog.clone.unsupported': 'Klonowanie nie jest obsługiwane w środowisku VS Code.',
   'directoryExplorerDialog.existing.title': 'Już ustawione w tym repozytorium',
   'directoryExplorerDialog.existing.accountNone': 'Nie wiąż żadnego konta',

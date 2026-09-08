@@ -1954,6 +1954,7 @@ export const dict = {
   'directoryExplorerDialog.actions.alreadyAdded': 'Already added',
   'directoryExplorerDialog.clone.remoteUrlPlaceholder': 'Repository URL (HTTPS or SSH)',
   'directoryExplorerDialog.clone.setupRequired': 'Checkout retained and project added. Finish transport binding in the Git panel. Do not clone again.',
+  'directoryExplorerDialog.clone.identityMismatch': 'This identity cannot reach that address. Choose one whose transport matches it.',
   'directoryExplorerDialog.clone.unsupported': 'Cloning is not supported in the VS Code runtime.',
   'directoryExplorerDialog.existing.title': 'Already set in this repository',
   'directoryExplorerDialog.existing.accountNone': 'Do not bind an account',

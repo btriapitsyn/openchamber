@@ -9,6 +9,7 @@ import {
   resolveSourceControlTarget,
   gitRemoteHost,
   isSshRemoteUrl,
+  proposeIdentityForHost,
 } from './identity';
 
 const remote = (url: string): GitRemote => ({ name: 'origin', fetchUrl: url, pushUrl: url });
@@ -180,5 +181,24 @@ describe('gitIdentityProfileSchema', () => {
     expect(() => gitIdentityProfileSchema.parse({ ...signature, transport: 'account' })).toThrow();
     expect(() => gitIdentityProfileSchema.parse({ ...signature, transport: 'ssh' })).toThrow();
     expect(() => gitIdentityProfileSchema.parse({ ...signature, transport: 'system', sshCredentialId: 'k' })).toThrow();
+  });
+});
+
+describe('proposeIdentityForHost', () => {
+  const github = { id: 'gh', account: { instance: 'github.com' } };
+  const gitlab = { id: 'gl', account: { instance: 'https://gitlab.com' } };
+  const plain = { id: 'plain', account: null };
+
+  test('offers the identity that already names an account on the host', () => {
+    expect(proposeIdentityForHost([plain, gitlab, github], 'github.com')?.id).toBe('gh');
+    expect(proposeIdentityForHost([plain, github, gitlab], 'gitlab.com')?.id).toBe('gl');
+  });
+
+  test('falls back to the default identity, and to nothing rather than a guess', () => {
+    expect(proposeIdentityForHost([plain, github], 'gitlab.com', 'plain')?.id).toBe('plain');
+    expect(proposeIdentityForHost([plain, github], 'gitlab.com')).toBeNull();
+    expect(proposeIdentityForHost([plain, github], null, 'missing')).toBeNull();
+    // A host match wins over the default: it answers a question the default cannot.
+    expect(proposeIdentityForHost([plain, github], 'github.com', 'plain')?.id).toBe('gh');
   });
 });

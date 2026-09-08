@@ -1924,6 +1924,7 @@ export const dict: Record<I18nKey, string> = {
   'directoryExplorerDialog.actions.alreadyAdded': '已新增',
   'directoryExplorerDialog.clone.remoteUrlPlaceholder': '儲存庫 URL（HTTPS 或 SSH）',
   'directoryExplorerDialog.clone.setupRequired': '已保留工作副本並新增專案。請在 Git 面板中完成傳輸綁定。請勿再次複製。',
+  'directoryExplorerDialog.clone.identityMismatch': '此身分無法連線至該位址。請選擇傳輸方式相符的身分。',
   'directoryExplorerDialog.clone.unsupported': 'VS Code 執行環境不支援複製儲存庫。',
   'directoryExplorerDialog.existing.title': '此儲存庫中已有的設定',
   'directoryExplorerDialog.existing.accountNone': '不繫結帳戶',
