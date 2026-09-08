@@ -432,14 +432,17 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
   const identityApplicabilityOf = React.useCallback((identity: GitIdentityProfile): IdentityApplicability =>
     identityRemote ? identityApplicability(identity, identityRemote) : { applicable: true },
   [identityRemote]);
-  const proposedIdentity = React.useMemo(
-    () => proposeIdentityForHost(
-      availableGitIdentities.filter((identity) => identityApplicabilityOf(identity).applicable),
-      identityHost,
-      defaultGitIdentityId,
-    ),
-    [availableGitIdentities, defaultGitIdentityId, identityApplicabilityOf, identityHost],
-  );
+  const existingAuthor = existingRepository?.author ?? null;
+  const proposedIdentity = React.useMemo(() => {
+    const applicable = availableGitIdentities.filter((identity) => identityApplicabilityOf(identity).applicable);
+    // A repository already signed as one of the identities is proposed as that
+    // identity: it says what the repository is, before any host can guess.
+    const signedAs = existingAuthor
+      ? applicable.find((identity) => identity.userName === existingAuthor.userName
+        && identity.userEmail === existingAuthor.userEmail)
+      : undefined;
+    return signedAs ?? proposeIdentityForHost(applicable, identityHost, defaultGitIdentityId);
+  }, [availableGitIdentities, defaultGitIdentityId, existingAuthor, identityApplicabilityOf, identityHost]);
   const selectedGitIdentity = React.useMemo(() => {
     const chosen = identityChoice?.key === identityChoiceKey
       ? availableGitIdentities.find((identity) => identity.id === identityChoice.id)
