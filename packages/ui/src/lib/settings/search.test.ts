@@ -17,6 +17,18 @@ const runtimeCtx = {
 };
 
 describe('settings search', () => {
+  test('finds the server CDP port and hides it in VS Code', () => {
+    for (const isVSCode of [false, true]) {
+      const results = buildSettingsSearchResults({
+        query: 'cdp',
+        runtimeCtx: { ...runtimeCtx, isVSCode },
+        t,
+        getPageTitle: (page) => page,
+      });
+      expect(results.some((result) => result.id === 'sessions.server-browser-debug-port')).toBe(!isVSCode);
+    }
+  });
+
   test('finds Linear connect on the integrations page', () => {
     const results = buildSettingsSearchResults({
       query: 'linear',

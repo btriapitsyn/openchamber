@@ -1,4 +1,5 @@
 import type { DesktopSettings } from '@/lib/desktop';
+import { browserDebugPortSchema } from '@/lib/browserRuntimeStatus';
 import { sanitizeWorkStatusHiddenSections } from '@/components/chat/work-status/sections';
 import { createProjectIdFromPath } from '@/lib/projectId';
 import { useUIStore } from '@/stores/useUIStore';
@@ -589,6 +590,8 @@ const materializeAuthoritativeUiSettings = (settings: DesktopSettings): DesktopS
     showOpenCodeUpdateNotifications: defaults.showOpenCodeUpdateNotifications,
     agentControlToolEnabled: defaults.agentControlToolEnabled,
     agentWebToolEnabled: defaults.agentWebToolEnabled,
+    serverBrowserEnabled: defaults.serverBrowserEnabled,
+    serverBrowserDebugPort: defaults.serverBrowserDebugPort,
     agentMemoryToolEnabled: defaults.agentMemoryToolEnabled,
     showToolFileIcons: defaults.showToolFileIcons,
     codeBlockLineWrap: defaults.codeBlockLineWrap,
@@ -788,6 +791,16 @@ const applyDesktopUiPreferences = (settings: DesktopSettings) => {
     && settings.agentWebToolEnabled !== store.agentWebToolEnabled
   ) {
     store.setAgentWebToolEnabled(settings.agentWebToolEnabled);
+  }
+  if (
+    typeof settings.serverBrowserEnabled === 'boolean'
+    && settings.serverBrowserEnabled !== store.serverBrowserEnabled
+  ) {
+    store.setServerBrowserEnabled(settings.serverBrowserEnabled);
+  }
+  const browserDebugPort = browserDebugPortSchema.safeParse(settings.serverBrowserDebugPort);
+  if (browserDebugPort.success && browserDebugPort.data !== store.serverBrowserDebugPort) {
+    store.setServerBrowserDebugPort(browserDebugPort.data);
   }
   if (
     typeof settings.agentMemoryToolEnabled === 'boolean'
@@ -1513,6 +1526,13 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
   }
   if (typeof candidate.agentWebToolEnabled === 'boolean') {
     result.agentWebToolEnabled = candidate.agentWebToolEnabled;
+  }
+  if (typeof candidate.serverBrowserEnabled === 'boolean') {
+    result.serverBrowserEnabled = candidate.serverBrowserEnabled;
+  }
+  const browserDebugPort = browserDebugPortSchema.safeParse(candidate.serverBrowserDebugPort);
+  if (browserDebugPort.success) {
+    result.serverBrowserDebugPort = browserDebugPort.data;
   }
   if (typeof candidate.agentMemoryToolEnabled === 'boolean') {
     result.agentMemoryToolEnabled = candidate.agentMemoryToolEnabled;

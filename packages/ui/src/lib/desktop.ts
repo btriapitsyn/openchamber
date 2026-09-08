@@ -167,6 +167,9 @@ export type DesktopSettings = {
   showOpenCodeUpdateNotifications?: boolean;
   agentControlToolEnabled?: boolean;
   agentWebToolEnabled?: boolean;
+  serverBrowserEnabled?: boolean;
+  /** Zero chooses an automatic port; fixed ports apply on the next Chrome start. */
+  serverBrowserDebugPort?: number;
   agentMemoryToolEnabled?: boolean;
   agentMemoryFeatureAvailable?: boolean;
   optimizeSystemPrompt?: boolean;
