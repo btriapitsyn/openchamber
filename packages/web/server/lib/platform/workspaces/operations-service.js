@@ -260,6 +260,16 @@ export async function stopWorkspace(db, { user, workspaceId, requestId, reason, 
     return { status: 'already_stopped', workspace: toWorkspace(workspace), operation: null };
   }
 
+  // Validate the transition BEFORE creating any row: an invalid transition
+  // must not leave a phantom pending operation behind (the worker would
+  // later fail it as superseded with a spurious failure audit).
+  if (!canReachObservedState(workspace.observed_state, WORKSPACE_STATES.STOPPING)) {
+    throw new WorkspaceServiceError('invalid_state_transition', {
+      status: 409,
+      message: `cannot stop workspace in observed_state=${workspace.observed_state}`,
+    });
+  }
+
   const { operation } = await insertOperation(db, {
     workspace, kind: 'stop', generation: workspace.generation, userId: user?.id ?? null,
     requestId, reason,
@@ -268,12 +278,6 @@ export async function stopWorkspace(db, { user, workspaceId, requestId, reason, 
     throw new WorkspaceServiceError('operation_create_failed', { status: 500 });
   }
 
-  if (!canReachObservedState(workspace.observed_state, WORKSPACE_STATES.STOPPING)) {
-    throw new WorkspaceServiceError('invalid_state_transition', {
-      status: 409,
-      message: `cannot stop workspace in observed_state=${workspace.observed_state}`,
-    });
-  }
   const fresh = (
     await db.query(
       `UPDATE workspaces SET desired_state = 'stopped', observed_state = 'stopping'

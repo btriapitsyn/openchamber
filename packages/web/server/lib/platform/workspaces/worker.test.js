@@ -388,13 +388,83 @@ describe('reconciliation (plan sections 8.1 and 8.2)', () => {
     expect((await workspaceRow()).observed_state).toBe('stopped');
   });
 
+  it('settles a desired-stopped workspace stuck in error after a failed stop (error -> stopped, plan section 8.2)', async () => {
+    // Start succeeds.
+    const okDriver = createFakeRuntimeDriver();
+    await requestStart();
+    await processNextOperation(db, { driver: okDriver, logger: silentLogger });
+
+    // The stop then fails at the driver level (stop on a workspace that was
+    // still settling leaves desired=stopped / observed=error).
+    let failStops = true;
+    const failingDriver = createFakeRuntimeDriver({
+      hooks: {
+        beforeStop: () => {
+          if (failStops) {
+            const error = new Error('graceful stop timed out');
+            error.code = 'stop_timeout';
+            throw error;
+          }
+        },
+      },
+    });
+    const workspace = await workspaceRow();
+    const { operation: stopOp } = await stopWorkspace(db, {
+      user, workspaceId: workspace.id, requestId: 'req-stop', reason: 'cleanup', logger: silentLogger,
+    });
+    const stopResult = await processNextOperation(db, { driver: failingDriver, logger: silentLogger });
+    expect(stopResult.errorCode).toBe('stop_timeout');
+    let settled = await workspaceRow();
+    expect(settled.observed_state).toBe('error');
+    expect(settled.desired_state).toBe('stopped');
+    expect(settled.last_error).toContain('stop_timeout');
+    expect((await operationRow(stopOp.id)).status).toBe('failed');
+    failStops = false;
+
+    // Reconciliation performs the diagram's "error -> stopped: cleanup
+    // completed" arc: settle without retrying, keep the error locatable.
+    const summary = await reconcileRuntime(db, {
+      driver: okDriver, logger: silentLogger, staleOperationMs: 600000, startingTimeoutMs: 600000,
+    });
+    expect(summary.cleanedWorkspaces).toBe(1);
+    settled = await workspaceRow();
+    expect(settled.observed_state).toBe('stopped');
+    expect(settled.last_error).toContain('stop_timeout'); // failure stays locatable
+
+    const { rows: audits } = await db.query(
+      "SELECT * FROM audit_events WHERE action = 'platform.workspace.cleanup'",
+    );
+    expect(audits).toHaveLength(1);
+    expect(audits[0].outcome).toBe('success');
+    expect(audits[0].workspace_id).toBe(workspace.id);
+  });
+
+  it('does not clean up an errored workspace while a non-terminal operation exists', async () => {
+    const driver = createFakeRuntimeDriver();
+    await requestStart();
+    await processNextOperation(db, { driver, logger: silentLogger });
+    const workspace = await workspaceRow();
+    // A stop is registered but not yet processed; the workspace is somehow
+    // already in error (crash window). Reconciliation must NOT settle it.
+    await stopWorkspace(db, {
+      user, workspaceId: workspace.id, requestId: 'r', reason: 'x', logger: silentLogger,
+    });
+    await db.query("UPDATE workspaces SET observed_state = 'error' WHERE id = $1", [workspace.id]);
+
+    const summary = await reconcileRuntime(db, {
+      driver, logger: silentLogger, staleOperationMs: 600000, startingTimeoutMs: 600000,
+    });
+    expect(summary.cleanedWorkspaces).toBe(0);
+    expect((await workspaceRow()).observed_state).toBe('error');
+  });
+
   it('leaves fresh, healthy operations and workspaces untouched', async () => {
     const driver = createFakeRuntimeDriver();
     await requestStart();
     const summary = await reconcileRuntime(db, {
       driver, logger: silentLogger, staleOperationMs: 10 * 60 * 1000, startingTimeoutMs: 10 * 60 * 1000,
     });
-    expect(summary).toEqual({ staleOperations: 0, wedgedWorkspaces: 0, settledWorkspaces: 0 });
+    expect(summary).toEqual({ staleOperations: 0, wedgedWorkspaces: 0, settledWorkspaces: 0, cleanedWorkspaces: 0 });
     expect((await workspaceRow()).observed_state).toBe('starting');
   });
 });

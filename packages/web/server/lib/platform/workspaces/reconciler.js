@@ -14,6 +14,10 @@
 //   3. Workspaces with desired_state='stopped' but observed_state='starting'
 //      and no non-terminal operation left to drive them are settled back to
 //      'stopped' (nothing is or will be starting them).
+//   4. Workspaces with desired_state='stopped' but observed_state='error'
+//      and no non-terminal operation left are settled to 'stopped'
+//      (plan section 8.2 "error -> stopped: cleanup completed"): the user
+//      asked for stop, it failed, the record is settled without retrying.
 //
 // Timeouts are injected (now / ms values) so tests can use short windows.
 
@@ -91,7 +95,7 @@ export async function reconcileRuntime(
 ) {
   const staleCutoff = toIso(now - staleOperationMs);
   const startingCutoffMs = now - startingTimeoutMs;
-  const summary = { staleOperations: 0, wedgedWorkspaces: 0, settledWorkspaces: 0 };
+  const summary = { staleOperations: 0, wedgedWorkspaces: 0, settledWorkspaces: 0, cleanedWorkspaces: 0 };
 
   // 1. Stale running operations.
   const { rows: staleOps } = await db.query(
@@ -175,6 +179,41 @@ export async function reconcileRuntime(
     );
     await releaseRuntimeBestEffort(db, driver, orphan.id, logger);
     summary.settledWorkspaces += 1;
+  }
+
+  // 4. error --> stopped: cleanup completed (plan section 8.2). The user
+  //    asked for stop, the operation failed (e.g. the driver's stop threw
+  //    for a workspace that was still starting) and nothing non-terminal
+  //    remains: settle the record to stopped WITHOUT retrying the stop.
+  //    last_error is kept so the original failure stays locatable.
+  const { rows: errored } = await db.query(
+    `SELECT id FROM workspaces
+     WHERE desired_state = 'stopped' AND observed_state = 'error'
+       AND id NOT IN (
+         SELECT workspace_id FROM runtime_operations WHERE status IN ('pending', 'running')
+       )`,
+  );
+  for (const erroredWorkspace of errored) {
+    // Note: no RETURNING - UPDATE result rows are empty on every backend;
+    // the SELECT above already established the row under these conditions.
+    await db.query(
+      `UPDATE workspaces SET observed_state = 'stopped', last_activity_at = $1
+       WHERE id = $2 AND desired_state = 'stopped' AND observed_state = 'error'`,
+      [toIso(now), erroredWorkspace.id],
+    );
+    try {
+      await writeAuditEvent(db, {
+        actorUserId: null,
+        targetUserId: null,
+        workspaceId: erroredWorkspace.id,
+        action: 'platform.workspace.cleanup',
+        requestId: null,
+        outcome: 'success',
+      });
+    } catch (error) {
+      logger?.warn?.(`[runtime-worker] failed to write audit event: ${error?.message || error}`);
+    }
+    summary.cleanedWorkspaces += 1;
   }
 
   return summary;

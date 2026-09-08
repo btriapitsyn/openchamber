@@ -168,6 +168,27 @@ describe('stopWorkspace (plan sections 8.2 and 8.5)', () => {
     expect(second.operation.id).toBe(first.operation.id);
   });
 
+  it('stop on an error workspace rejects with 409 and creates no operation row', async () => {
+    await request();
+    const id = await currentWorkspaceId();
+    // Simulate a failed start: the workspace is in error and no runtime runs.
+    await db.query(
+      "UPDATE workspaces SET observed_state = 'error', last_error = 'image_pull_failed: boom' WHERE id = $1",
+      [id],
+    );
+    await expect(stopWorkspace(db, {
+      user, workspaceId: id, requestId: 'r-err', reason: 'cleanup', logger: silentLogger,
+    })).rejects.toMatchObject({ code: 'invalid_state_transition', status: 409 });
+
+    // No phantom operation may exist for the rejected stop.
+    const { rows: ops } = await db.query("SELECT * FROM runtime_operations WHERE kind = 'stop'");
+    expect(ops).toHaveLength(0);
+    const { rows: audits } = await db.query(
+      "SELECT * FROM audit_events WHERE action = 'platform.workspace.stop'",
+    );
+    expect(audits).toHaveLength(0);
+  });
+
   it('stop on a stopped workspace returns the current state without an operation', async () => {
     await ensureWorkspaceForUser(db, { userId: user.id });
     const result = await stopWorkspace(db, {
