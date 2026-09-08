@@ -91,7 +91,10 @@ import { ContributorDestinationDialog } from './git/ContributorDestinationDialog
 import { useContributorDestinationChooser } from './git/contributorDestination';
 import { RepositoryConfigurationDialog } from '@/components/sections/openchamber/SourceControlBindingSettings';
 import { applyIdentityToRepository, identityApplicability, needsSystemAcknowledgement, type IdentityApplicability } from '@/lib/source-control/applyIdentity';
-import { remoteTraits } from '@/lib/source-control/identity';
+import { remoteTraits,
+  selectableIdentities,
+  identityDisplayName,
+} from '@/lib/source-control/identity';
 import { SystemIdentityConfirmDialog } from '@/components/views/git/SystemIdentityConfirmDialog';
 
 type SyncAction = 'fetch' | 'sync' | 'publish' | null;
@@ -1490,7 +1493,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
       );
       if (getRuntimeKey() !== runtimeKey) return;
       if (outcome.status === 'failed') toast.error(t('gitView.toast.applyIdentityFailed'));
-      else toast.success(t('gitView.toast.appliedIdentity', { name: profile.name }));
+      else toast.success(t('gitView.toast.appliedIdentity', { name: identityDisplayName(profile, t) }));
       await refreshIdentity();
     } catch (err) {
       if (getRuntimeKey() !== runtimeKey) return;
@@ -1566,17 +1569,10 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
     return remoteCandidate && remoteBranches.includes(remoteCandidate) ? remoteCandidate : baseBranch;
   }, [baseBranch, binding.contexts, remoteBranches]);
 
-  const availableIdentities = React.useMemo(() => {
-    const unique = new Map<string, GitIdentityProfile>();
-    if (globalIdentity) {
-      unique.set(globalIdentity.id, globalIdentity);
-    }
-
-    for (const profile of profiles) {
-      if (isCompleteIdentity(profile)) unique.set(profile.id, profile);
-    }
-    return Array.from(unique.values());
-  }, [profiles, globalIdentity]);
+  const availableIdentities = React.useMemo(
+    () => selectableIdentities(profiles, globalIdentity, isCompleteIdentity),
+    [profiles, globalIdentity],
+  );
 
   const activeIdentityProfile = React.useMemo((): GitIdentityProfile | null => {
     if (currentIdentity?.userName && currentIdentity?.userEmail) {
@@ -2487,7 +2483,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
 
       {/* VS Code manages Git hosting itself; the webview projects remotes as a system binding without a settings surface. */}
       <SystemIdentityConfirmDialog
-        identityName={pendingSystemIdentity?.name ?? null}
+        open={pendingSystemIdentity !== null}
         onCancel={() => setPendingSystemIdentity(null)}
         onConfirm={() => {
           const profile = pendingSystemIdentity;

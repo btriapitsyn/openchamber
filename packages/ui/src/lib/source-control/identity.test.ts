@@ -10,6 +10,8 @@ import {
   gitRemoteHost,
   isSshRemoteUrl,
   proposeIdentityForHost,
+  selectableIdentities,
+  identityDisplayName,
   remoteTraits,
   instanceHost,
 } from './identity';
@@ -220,5 +222,30 @@ describe('remoteTraits and instanceHost', () => {
     expect(instanceHost('github.com')).toBe('github.com');
     expect(instanceHost('https://gitlab.com')).toBe('gitlab.com');
     expect(instanceHost('https://private.gitlab.example:8443')).toBe('private.gitlab.example');
+  });
+});
+
+describe('selectableIdentities', () => {
+  const complete = (profile: { id: string }) => profile.id.startsWith('ok');
+  const system = { id: 'global' };
+
+  test('always offers the system identity and only complete stored ones', () => {
+    expect(selectableIdentities([{ id: 'ok-one' }, { id: 'bad' }], system, complete).map((i) => i.id))
+      .toEqual(['global', 'ok-one']);
+    // Without a system identity the list is what is complete, and nothing else.
+    expect(selectableIdentities([{ id: 'ok-one' }, { id: 'bad' }], null, complete).map((i) => i.id))
+      .toEqual(['ok-one']);
+    // A stored record that took the system id cannot displace the discovered one.
+    expect(selectableIdentities([{ id: 'global' }], system, () => true).map((i) => i.id)).toEqual(['global']);
+    expect(selectableIdentities([{ id: 'global' }], system, () => true)[0]).toBe(system);
+  });
+});
+
+describe('identityDisplayName', () => {
+  test('names the system identity by the product, and every other by its record', () => {
+    const t = () => 'System identity';
+    expect(identityDisplayName({ id: 'global', name: 'Ada Lovelace' }, t)).toBe('System identity');
+    expect(identityDisplayName({ id: 'work', name: 'Work' }, t)).toBe('Work');
+    expect(identityDisplayName(null, t)).toBe('');
   });
 });

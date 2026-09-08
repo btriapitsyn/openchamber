@@ -6,6 +6,7 @@ import {
   proposeIdentityForHost,
   remoteTraits,
   type RemoteTraits,
+  selectableIdentities,
 } from '@/lib/source-control/identity';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { GitOperationResultError, runGitClone } from '@/lib/boundGitNetworkOperation';
@@ -261,16 +262,10 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     void loadDefaultGitIdentityId();
   }, [loadDefaultGitIdentityId, loadGitIdentityProfiles, loadGlobalGitIdentity, open]);
 
-  const availableGitIdentities = React.useMemo(() => {
-    const unique = new Map<string, NonNullable<typeof globalGitIdentity>>();
-    if (globalGitIdentity) {
-      unique.set(globalGitIdentity.id, globalGitIdentity);
-    }
-    for (const profile of gitIdentityProfiles) {
-      if (isCompleteIdentity(profile)) unique.set(profile.id, profile);
-    }
-    return Array.from(unique.values());
-  }, [gitIdentityProfiles, globalGitIdentity]);
+  const availableGitIdentities = React.useMemo(
+    () => selectableIdentities(gitIdentityProfiles, globalGitIdentity, isCompleteIdentity),
+    [gitIdentityProfiles, globalGitIdentity],
+  );
 
 
   const browseDirectoryDisplayPath = React.useMemo(() => getBrowseDirectoryPath(query), [query]);

@@ -87,7 +87,7 @@ describe('author profile storage', () => {
 
     expect(useGitIdentitiesStore.getState().getProfileById('global')).toEqual({
       id: 'global',
-      name: 'Global Identity',
+      name: 'Ada Lovelace',
       userName: 'System Author',
       userEmail: 'system@example.com',
       color: 'info',

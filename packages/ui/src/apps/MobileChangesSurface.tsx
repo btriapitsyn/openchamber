@@ -16,7 +16,10 @@ import { RepositoryConfigurationDialog } from '@/components/sections/openchamber
 import { IdentityDropdown } from '@/components/views/git/GitHeader';
 import { useGitIdentitiesStore } from '@/stores/useGitIdentitiesStore';
 import { applyIdentityToRepository, identityApplicability, needsSystemAcknowledgement } from '@/lib/source-control/applyIdentity';
-import { remoteTraits } from '@/lib/source-control/identity';
+import { remoteTraits,
+  selectableIdentities,
+  identityDisplayName,
+} from '@/lib/source-control/identity';
 import { SystemIdentityConfirmDialog } from '@/components/views/git/SystemIdentityConfirmDialog';
 import type { GitIdentityProfile } from '@/lib/api/types';
 import { PierreDiffViewer } from '@/components/views/PierreDiffViewer';
@@ -99,12 +102,10 @@ export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onCl
     void loadGitIdentityProfiles();
     void loadGlobalGitIdentity();
   }, [loadGitIdentityProfiles, loadGlobalGitIdentity]);
-  const availableIdentities = React.useMemo(() => {
-    const unique = new Map<string, GitIdentityProfile>();
-    if (globalGitIdentity) unique.set(globalGitIdentity.id, globalGitIdentity);
-    for (const profile of gitIdentityProfiles) if (isCompleteIdentity(profile)) unique.set(profile.id, profile);
-    return Array.from(unique.values());
-  }, [gitIdentityProfiles, globalGitIdentity]);
+  const availableIdentities = React.useMemo(
+    () => selectableIdentities(gitIdentityProfiles, globalGitIdentity, isCompleteIdentity),
+    [gitIdentityProfiles, globalGitIdentity],
+  );
   // The repository's own author decides which identity it is already acting as.
   const activeIdentityProfile = React.useMemo(() => availableIdentities.find((identity) =>
     identity.userName === currentIdentity?.userName && identity.userEmail === currentIdentity?.userEmail) ?? null,
@@ -124,7 +125,7 @@ export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onCl
         { git, sourceControl },
       );
       if (outcome.status === 'failed') toast.error(t('gitView.toast.applyIdentityFailed'));
-      else toast.success(t('gitView.toast.appliedIdentity', { name: profile.name }));
+      else toast.success(t('gitView.toast.appliedIdentity', { name: identityDisplayName(profile, t) }));
     } finally {
       setIsApplyingIdentity(false);
     }
@@ -749,7 +750,7 @@ export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onCl
         />
       </header>
       <SystemIdentityConfirmDialog
-        identityName={pendingSystemIdentity?.name ?? null}
+        open={pendingSystemIdentity !== null}
         onCancel={() => setPendingSystemIdentity(null)}
         onConfirm={() => {
           const profile = pendingSystemIdentity;

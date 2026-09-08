@@ -23,6 +23,7 @@ import type {
   GitHubChecksSummary,
 } from '@/lib/api/types';
 import { useI18n } from '@/lib/i18n';
+import { identityDisplayName } from '@/lib/source-control/identity';
 import { cn } from '@/lib/utils';
 import { describeIdentityApplicability, type IdentityApplicability } from '@/lib/source-control/applyIdentity';
 import { useDeviceInfo } from '@/lib/device';
@@ -188,7 +189,7 @@ export const IdentityDropdown: React.FC<IdentityDropdownProps> = ({
               )}
               {!iconOnly && (
                 <span className="git-identity-label min-w-0 flex-1 truncate text-left">
-                  {activeProfile?.name || t('gitView.header.noIdentity')}
+                  {activeProfile ? identityDisplayName(activeProfile, t) : t('gitView.header.noIdentity')}
                 </span>
               )}
               {attention ? (
@@ -221,7 +222,7 @@ export const IdentityDropdown: React.FC<IdentityDropdownProps> = ({
                   />
                   <span className="flex min-w-0 flex-col">
                     <span className="typography-ui-label text-foreground">
-                      {profile.name}
+                      {identityDisplayName(profile, t)}
                     </span>
                     <span className="typography-meta text-muted-foreground">
                       {fit.applicable ? profile.userEmail : describeIdentityApplicability(fit, t)}

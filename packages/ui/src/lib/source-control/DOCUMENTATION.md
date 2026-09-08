@@ -137,11 +137,21 @@ close or runtime/directory scope change; drafts and cancellation do not mutate,
 and stale conflicts perform one fresh owner read without retrying the mutation.
 Account and profile inventories remain in Git Settings.
 
-An identity is complete or it is not offered: `isCompleteIdentity` requires an
-account, a transport that is the account's credential (OAuth or token), a
-managed SSH key, or anonymous HTTPS, and a signature. The editor creates nothing else; the server refuses anything else
-from a client. Records written before identities carried an account stay in
-Git Settings flagged as needing one, and no picker lists them.
+`selectableIdentities` is the one place that decides what a repository may be
+given: the System identity, always, plus stored identities that are complete.
+The System identity is what OpenChamber read from the machine's own Git
+configuration — it is stored nowhere, cannot be created or edited, and choosing
+it means no override applies here, which is why the completeness rule does not
+reach it. `identityDisplayName` names it from the product's own copy
+(`gitView.identity.system`) rather than from the record, whose `name` carries
+the discovered author as a fallback.
+
+Every other identity is complete or it is not offered: `isCompleteIdentity`
+requires an account, a transport that is the account's credential (OAuth or
+token), a managed SSH key, or anonymous HTTPS, and a signature. The editor
+creates nothing else; the server refuses anything else from a client. Records
+written before identities carried an account stay in Git Settings flagged as
+needing one, and no picker lists them.
 
 Checkout repair first runs `checkout-hydration` against a user-selected ready parent fetch remote. The immutable public plan exposes bounded repository-relative submodule/LFS paths and redacted endpoints, never raw URLs, absolute paths, or credential references. Failed hydration stays visible through `GitOperationStatus`. The user selects one discovered endpoint, explicitly chooses System, anonymous HTTPS, managed HTTPS account, or managed SSH key, and saves or removes only that grant through the narrow CAS API. Retry plans a new inspection; it never reclones the retained repository. Missing `git-lfs` has a specific install-and-retry warning. Runtime and directory changes clear all repair drafts, and late mutation results reconcile through the captured binding owner scope.
 

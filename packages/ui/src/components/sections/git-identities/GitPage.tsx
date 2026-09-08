@@ -1,4 +1,5 @@
 import { isCompleteIdentity } from '@/lib/api/git-identity';
+import { identityDisplayName } from '@/lib/source-control/identity';
 import React from 'react';
 import { toast } from '@/components/ui';
 import {
@@ -274,7 +275,7 @@ const IdentityRow: React.FC<IdentityRowProps> = ({
         <Icon name={iconName} className="w-4 h-4 shrink-0" style={{ color: iconColor }} />
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">
-            <span className="typography-ui-label text-foreground truncate">{profile.name}</span>
+            <span className="typography-ui-label text-foreground truncate">{identityDisplayName(profile, t)}</span>
             {isDefault && (
               <span className="typography-micro text-primary bg-primary/12 px-1 rounded flex-shrink-0 leading-none pb-px border border-primary/25">
                 {t('settings.gitIdentities.page.badge.default')}

@@ -204,6 +204,36 @@ export const instanceHost = (instance: string): string | null =>
 /** The id the identities store gives the person's own Git configuration. */
 export const GLOBAL_IDENTITY_ID = 'global';
 
+/**
+ * The identities a repository may be given.
+ *
+ * The System identity is what OpenChamber discovered on this machine, and it
+ * is always offered: it is how a person says no override applies here. Stored
+ * identities are offered only when they are complete, because an identity that
+ * names no account cannot authenticate as anyone.
+ */
+export const selectableIdentities = <T extends { id: string }>(
+  profiles: T[],
+  systemIdentity: T | null | undefined,
+  isComplete: (profile: T) => boolean,
+): T[] => {
+  const unique = new Map<string, T>();
+  if (systemIdentity) unique.set(systemIdentity.id, systemIdentity);
+  for (const profile of profiles) {
+    if (profile.id !== GLOBAL_IDENTITY_ID && isComplete(profile)) unique.set(profile.id, profile);
+  }
+  return [...unique.values()];
+};
+
+/** What an identity is called on screen. The System one is named by the product, not by a record. */
+export const identityDisplayName = (
+  profile: { id: string; name: string } | null | undefined,
+  t: (key: 'gitView.identity.system') => string,
+): string => {
+  if (!profile) return '';
+  return profile.id === GLOBAL_IDENTITY_ID ? t('gitView.identity.system') : profile.name;
+};
+
 export const proposeIdentityForHost = <T extends { id: string; account?: { instance: string } | null }>(
   identities: T[],
   host: string | null,

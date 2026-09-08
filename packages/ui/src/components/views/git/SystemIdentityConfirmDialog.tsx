@@ -11,8 +11,8 @@ import {
 import { useI18n } from '@/lib/i18n';
 
 type SystemIdentityConfirmDialogProps = {
-  /** The identity waiting to be applied, or null when nothing is pending. */
-  identityName: string | null;
+  /** Whether a System identity is waiting to be applied. */
+  open: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 };
@@ -26,17 +26,17 @@ type SystemIdentityConfirmDialogProps = {
  * afterwards — picking a name from a menu is not the same as saying it.
  */
 export const SystemIdentityConfirmDialog: React.FC<SystemIdentityConfirmDialogProps> = ({
-  identityName,
+  open,
   onConfirm,
   onCancel,
 }) => {
   const { t } = useI18n();
   return (
-    <Dialog open={identityName !== null} onOpenChange={(open) => { if (!open) onCancel(); }}>
-      {identityName !== null ? (
+    <Dialog open={open} onOpenChange={(next) => { if (!next) onCancel(); }}>
+      {open ? (
         <DialogContent className="min-w-0">
           <DialogHeader>
-            <DialogTitle>{t('gitView.identity.systemConfirmTitle', { name: identityName })}</DialogTitle>
+            <DialogTitle>{t('gitView.identity.systemConfirmTitle')}</DialogTitle>
             <DialogDescription>{t('settings.sourceControl.transport.unverifiedConfirmation')}</DialogDescription>
           </DialogHeader>
           <DialogFooter>

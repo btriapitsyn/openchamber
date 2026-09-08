@@ -120,7 +120,9 @@ export const useGitIdentitiesStore = create<GitIdentitiesStore>()(
           set({
             globalIdentity: data?.userName && data.userEmail ? {
               id: 'global',
-              name: 'Global Identity',
+              // The display name is the product's word for it, resolved where
+              // it is rendered; the author's own name is the safe fallback.
+              name: data.userName,
               userName: data.userName,
               userEmail: data.userEmail,
               color: 'info',
