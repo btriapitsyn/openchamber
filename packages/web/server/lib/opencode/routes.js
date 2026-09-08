@@ -17,6 +17,8 @@ export const registerOpenCodeRoutes = (app, dependencies) => {
     readSettingsFromDisk,
     readSettingsFromDiskMigrated,
     persistSettings,
+    onServerBrowserEnabledChanged,
+    onServerBrowserDebugPortChanged,
     sanitizeProjects,
     validateDirectoryPath,
     resolveProjectDirectory,
@@ -421,8 +423,19 @@ ${desktopReturn ? `<a class="return" href="openchamber://focus/mcp-auth">Return 
   });
 
   app.put('/api/config/settings', async (req, res) => {
+    const hasDebugPort = Object.prototype.hasOwnProperty.call(req.body ?? {}, 'serverBrowserDebugPort');
+    if (hasDebugPort && (!Number.isInteger(req.body.serverBrowserDebugPort)
+      || req.body.serverBrowserDebugPort < 0 || req.body.serverBrowserDebugPort > 65535)) {
+      return res.status(400).json({ error: 'Chrome debugging port must be an integer from 0 to 65535' });
+    }
     try {
       const updated = await persistSettings(req.body ?? {});
+      if (hasDebugPort) onServerBrowserDebugPortChanged?.(updated.serverBrowserDebugPort);
+      // Live-apply the server browser toggle: enabling only arms lazy
+      // construction; disabling tears the backend down before responding.
+      if (Object.prototype.hasOwnProperty.call(req.body ?? {}, 'serverBrowserEnabled')) {
+        await onServerBrowserEnabledChanged?.(updated.serverBrowserEnabled === true);
+      }
       res.json(updated);
     } catch (error) {
       console.error('[API:PUT /api/config/settings] Failed to save settings:', error);

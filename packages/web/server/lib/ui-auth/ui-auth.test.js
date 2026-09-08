@@ -221,6 +221,14 @@ describe('ui auth client credential seam', () => {
     };
     expect(await auth.ensureSessionToken(dictationWsReq, null)).toBe('client:device-1');
 
+    const browserSurfaceWsReq = {
+      method: 'GET',
+      path: '/api/browser-surface',
+      url: `/api/browser-surface?oc_url_token=${encodeURIComponent(urlToken)}`,
+      headers: { upgrade: 'websocket' },
+    };
+    expect(await auth.ensureSessionToken(browserSurfaceWsReq, null)).toBe('client:device-1');
+
     const devTunnelWsReq = {
       method: 'GET',
       path: '/api/dev-tunnel',
