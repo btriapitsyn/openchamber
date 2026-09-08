@@ -29,6 +29,7 @@ import {
   unstageFiles,
   applyHunk,
   getDiff,
+  getUntrackedDiffs,
   getFileDiff,
   validateWorktreeCreate,
   parseBranchCreationSource,
@@ -354,6 +355,71 @@ describe('applyHunk', () => {
 
     const staged = (await git.raw(['show', `:${filePath}`])).replace(/\r\n/g, '\n');
     expect(staged).toBe(makeFile('TOP', 'line20'));
+  });
+});
+
+describe.runIf(canRunGit())('untracked diffs', () => {
+  it.each(['false', 'warn'])('returns only the patch with core.safecrlf=%s', async (safecrlf) => {
+    const { tmpDir, git } = await createTempRepo();
+    await git.addConfig('core.autocrlf', 'true');
+    await git.addConfig('core.safecrlf', safecrlf);
+    fs.writeFileSync(path.join(tmpDir, 'new file.txt'), 'first\nsecond\n');
+
+    // Confirm this fixture produces a real diff exit, including stderr in the warning case.
+    let expectedPatch;
+    try {
+      runGit(tmpDir, ['diff', '--no-color', '--no-index', '--', '/dev/null', 'new file.txt']);
+      throw new Error('Expected git diff to exit with differences');
+    } catch (error) {
+      expect(error.status).toBe(1);
+      expectedPatch = error.stdout;
+      if (safecrlf === 'warn') {
+        expect(error.stderr).toContain('LF will be replaced by CRLF');
+      }
+    }
+
+    const diff = await getDiff(tmpDir, { path: 'new file.txt' });
+    expect(diff).toBe(expectedPatch);
+    expect(diff).toContain('+first\n+second\n');
+    expect(diff).not.toContain('warning:');
+    expect(await getUntrackedDiffs(tmpDir, ['new file.txt'])).toEqual([diff]);
+  });
+
+  it('accepts an empty untracked file without a process error', async () => {
+    const { tmpDir } = await createTempRepo();
+    fs.writeFileSync(path.join(tmpDir, 'empty.txt'), '');
+    const diff = await getDiff(tmpDir, { path: 'empty.txt' });
+    expect(diff).toContain('new file mode 100644');
+    expect(diff).not.toContain('@@');
+    expect(await getUntrackedDiffs(tmpDir, ['empty.txt'])).toEqual([diff]);
+  });
+
+  it('rejects fatal conversion errors while preserving other batch entries', async () => {
+    const { tmpDir } = await createTempRepo();
+    runGit(tmpDir, ['config', 'diff.broken.textconv', 'false']);
+    fs.writeFileSync(path.join(tmpDir, '.gitattributes'), 'bad.txt diff=broken\n');
+    fs.writeFileSync(path.join(tmpDir, 'first.safe'), 'first\n');
+    fs.writeFileSync(path.join(tmpDir, 'bad.txt'), 'bad\n');
+    fs.writeFileSync(path.join(tmpDir, 'last.safe'), 'last\n');
+
+    await expect(getDiff(tmpDir, { path: 'bad.txt' })).rejects.toThrow('unable to read files to diff');
+    const diffs = await getUntrackedDiffs(tmpDir, ['first.safe', 'bad.txt', 'last.safe'], { concurrency: 1 });
+    expect(diffs).toHaveLength(3);
+    expect(diffs[0]).toContain('+first\n');
+    expect(diffs[1]).toBe('');
+    expect(diffs[2]).toContain('+last\n');
+  });
+
+  it('rejects truncated patches when the process output exceeds the buffer limit', async () => {
+    const { tmpDir } = await createTempRepo();
+    fs.writeFileSync(path.join(tmpDir, 'large.txt'), 'x'.repeat(21 * 1024 * 1024) + '\n');
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      await expect(getDiff(tmpDir, { path: 'large.txt' })).rejects.toThrow('maxBuffer');
+      expect(await getUntrackedDiffs(tmpDir, ['large.txt'])).toEqual(['']);
+    } finally {
+      errorSpy.mockRestore();
+    }
   });
 });
 
