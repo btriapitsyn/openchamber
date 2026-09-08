@@ -26,6 +26,7 @@ const REASON = 'This repository is configured in OpenChamber, so its transfers r
  */
 export function createGitShellBoundaryRuntime({
   readBinding,
+  isRepositoryEnabled = null,
   getActivePort,
   randomBytes = crypto.randomBytes,
 }) {
@@ -43,7 +44,13 @@ export function createGitShellBoundaryRuntime({
     try { read = await readBinding(directory); }
     catch { return ALLOW; }
     // Nothing is bound here, so there is no managed path to send the agent to.
-    if (read.status === 'missing' || !read.binding?.remotes.length) return ALLOW;
+    const grants = read.status === 'missing' ? [] : read.binding?.remotes ?? [];
+    // System Git is the person saying this repository may use whatever the
+    // machine holds. The credential helper honours that by handing the request
+    // back to their own chain, and refusing the same command here would
+    // contradict it.
+    if (!grants.length || grants.every((grant) => grant.mode === 'system')) return ALLOW;
+    if (isRepositoryEnabled && !(await isRepositoryEnabled(read.repository?.repositoryId))) return ALLOW;
     return { blocked: true, reason: REASON };
   };
 

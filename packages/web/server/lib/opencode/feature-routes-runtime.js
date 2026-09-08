@@ -61,6 +61,7 @@ import { createNetworkOperations } from '../git/network-operations.js';
 import { createGitAgentOperations } from '../git/agent-operations.js';
 import { createGitAgentCredentialRuntime } from '../git/agent-credential-runtime.js';
 import { createGitShellBoundaryRuntime } from '../git/shell-boundary-runtime.js';
+import { createGitAgentAuthorityStore, registerGitAgentAuthorityRoutes } from '../git/agent-authority-storage.js';
 import { createManagedSshCredentialStore } from '../git/ssh-credential-storage.js';
 import { createManagedSshInventory } from '../git/credentials.js';
 import { createSystemPushAcknowledgementStore } from '../git/system-push-acknowledgement-storage.js';
@@ -480,18 +481,29 @@ export const createFeatureRoutesRuntime = (dependencies) => {
     // Git in the agent's own shell answers to the binding too: the managed
     // OpenCode child is started by OpenChamber, so its environment can name
     // this helper as the credential chain for the hosts we hold bindings on.
+    const gitAgentAuthorityStore = createGitAgentAuthorityStore({
+      filePath: path.join(openchamberDataDir, 'git-agent-authority.json'),
+      fsImpl: fsPromises,
+    });
+    const isRepositoryEnabled = gitAgentAuthorityStore.isEnabled;
     gitAgentCredentialRuntime = createGitAgentCredentialRuntime({
       readBinding: walkthroughBindingService.get,
       listRemoteGrants: walkthroughBindingService.listRemoteGrants,
       credentialResolver: gitCredentialResolver,
+      isRepositoryEnabled,
       getActivePort: routeDependencies.getActivePort ?? (() => null),
     });
     gitAgentCredentialRuntime.registerRoutes(app);
     gitShellBoundaryRuntime = createGitShellBoundaryRuntime({
       readBinding: walkthroughBindingService.get,
+      isRepositoryEnabled,
       getActivePort: routeDependencies.getActivePort ?? (() => null),
     });
     gitShellBoundaryRuntime.registerRoutes(app);
+    registerGitAgentAuthorityRoutes(app, {
+      store: gitAgentAuthorityStore,
+      resolveRepositoryId: async (directory) => (await walkthroughBindingService.get(directory)).repository.repositoryId,
+    });
     registerGitRoutes(app, {
       managedSshInventory,
       networkOperations,

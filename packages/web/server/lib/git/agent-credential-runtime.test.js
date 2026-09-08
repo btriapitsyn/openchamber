@@ -28,6 +28,7 @@ const harness = ({
   resolve = async () => ({ mode: 'managed', transport: 'https', username: 'x-access-token', password: 'secret-value' }),
   port = 4399,
   env = {},
+  isRepositoryEnabled = null,
 } = {}) => {
   const resolved = [];
   return {
@@ -39,6 +40,7 @@ const harness = ({
       },
       listRemoteGrants: async () => grants,
       credentialResolver: { resolve: async (input) => { resolved.push(input); return resolve(input); } },
+      isRepositoryEnabled,
       getActivePort: () => port,
       helperPath: '/opt/openchamber/helper.js',
       nodePath: '/usr/bin/node',
@@ -108,6 +110,14 @@ describe('createGitAgentCredentialRuntime', () => {
       grants: [{ mode: 'system', displayUrl: GITHUB }],
     });
     expect((await ask(runtime, { token, body: { cwd: '/repo', query: query() } })).body).toEqual({ mode: 'system' });
+  });
+
+  test('hands an excluded repository back to the person own chain', async () => {
+    // The host's chain is severed for the whole process, so answering nothing
+    // would leave the repository without the setup they asked to keep.
+    const { runtime, token, resolved } = await armed({ isRepositoryEnabled: async () => false });
+    expect((await ask(runtime, { token, body: { cwd: '/repo', query: query() } })).body).toEqual({ mode: 'system' });
+    expect(resolved).toEqual([]);
   });
 
   test('answers nothing for what nobody bound', async () => {

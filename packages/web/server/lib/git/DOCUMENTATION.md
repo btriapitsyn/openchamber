@@ -286,6 +286,18 @@ can only deny — it is not an approval prompt — and anything that goes wrong 
 it allows the command, since a guard that fails closed on its own plumbing
 would strand an agent that has done nothing wrong.
 
+Both are switched off in two places. `agentGitAuthorityEnabled` is a machine
+fact in the settings registry — `instance` scope, so a phone cannot flip how
+Git behaves on a workstation — and `OPENCHAMBER_GIT_AGENT_AUTHORITY=off` pins
+it for whoever starts the process. With it off nothing is put into the child's
+environment at all. `agent-authority-storage.js` then holds the per-repository
+answer, and stores only exclusions: when the machine-wide answer is no there is
+nothing for a single repository to turn back on, so the per-repository control
+can only be an opt-out. An excluded repository is answered the same way a
+System Git one is — handed back to the person's own chain, because the host's
+chain is severed for the whole process and answering nothing would leave it
+with no credential at all.
+
 `shell-boundary.js` decides what counts as a transfer. It names the
 subcommands it blocks, which is the opposite of the UI's
 `shellOperationBoundary`: that one labels a call that already ran, where a

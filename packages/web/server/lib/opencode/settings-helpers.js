@@ -593,6 +593,9 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.showOpenCodeUpdateNotifications === 'boolean') {
       result.showOpenCodeUpdateNotifications = candidate.showOpenCodeUpdateNotifications;
     }
+    if (typeof candidate.agentGitAuthorityEnabled === 'boolean') {
+      result.agentGitAuthorityEnabled = candidate.agentGitAuthorityEnabled;
+    }
     if (typeof candidate.agentWebToolEnabled === 'boolean') {
       result.agentWebToolEnabled = candidate.agentWebToolEnabled;
     }

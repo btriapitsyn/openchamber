@@ -117,6 +117,9 @@
     "permissionAutoAccept": {
       "scope": "instance"
     },
+    "agentGitAuthorityEnabled": {
+      "scope": "instance"
+    },
     "agentControlToolEnabled": {
       "scope": "instance"
     },

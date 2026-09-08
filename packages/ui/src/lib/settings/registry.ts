@@ -245,6 +245,7 @@ export const SETTINGS_REGISTRY = {
       revision: z.number().int().nonnegative().catch(0),
     })),
   }),
+  agentGitAuthorityEnabled: field({ scope: 'instance', parse: parseBoolean, ui: uiStore('agentGitAuthorityEnabled', (v) => useUIStore.getState().setAgentGitAuthorityEnabled(v)) }),
   agentControlToolEnabled: field({ scope: 'instance', parse: parseBoolean, ui: uiStore('agentControlToolEnabled', (v) => useUIStore.getState().setAgentControlToolEnabled(v)) }),
   agentWebToolEnabled: field({ scope: 'instance', parse: parseBoolean, ui: uiStore('agentWebToolEnabled', (v) => useUIStore.getState().setAgentWebToolEnabled(v)) }),
   agentMemoryToolEnabled: field({ scope: 'instance', parse: parseBoolean, ui: uiStore('agentMemoryToolEnabled', (v) => useUIStore.getState().setAgentMemoryToolEnabled(v)) }),

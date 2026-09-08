@@ -591,6 +591,13 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['changes', 'flat list', 'tree view'],
   },
   {
+    id: 'git.agent-authority',
+    page: 'git',
+    titleKey: 'settings.openchamber.git.agentAuthority',
+    descriptionKey: 'settings.openchamber.git.agentAuthorityInfo',
+    keywords: ['agent', 'shell', 'credentials', 'transport', 'binding'],
+  },
+  {
     id: 'git.gitmoji',
     page: 'git',
     titleKey: 'settings.openchamber.git.enableGitmoji',

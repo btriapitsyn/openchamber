@@ -10,7 +10,8 @@ const bound = {
 const missing = { status: 'missing', revision: 0, binding: null,
   repository: { repositoryId: 'repo_one', configRevision: 'config_one', bare: false, remotes: [] } };
 
-const harness = ({ binding = bound, port = 4399 } = {}) => createGitShellBoundaryRuntime({
+const harness = ({ binding = bound, port = 4399, isRepositoryEnabled = null } = {}) => createGitShellBoundaryRuntime({
+  isRepositoryEnabled,
   readBinding: async (directory) => {
     if (directory === '/not-a-repo') throw new Error('Not a repository');
     return binding;
@@ -67,12 +68,34 @@ describe('createGitShellBoundaryRuntime', () => {
       .toEqual({ blocked: false });
   });
 
+  test('leaves a repository the person put on System Git alone', async () => {
+    // The credential helper hands those requests back to their own chain, so
+    // refusing the same command here would contradict the choice they made.
+    const system = armed({ binding: { ...bound, binding: { ...bound.binding,
+      remotes: [{ name: 'origin', mode: 'system', readiness: 'ready' }] } } });
+    expect((await ask(system.runtime, { token: system.token, body: { command: 'git push', directory: '/repo' } })).answer)
+      .toEqual({ blocked: false });
+    // One managed remote is enough to mean OpenChamber answers for this repository.
+    const mixed = armed({ binding: { ...bound, binding: { ...bound.binding, remotes: [
+      { name: 'origin', mode: 'system', readiness: 'ready' },
+      { name: 'upstream', mode: 'managed', readiness: 'ready' },
+    ] } } });
+    expect((await ask(mixed.runtime, { token: mixed.token, body: { command: 'git push', directory: '/repo' } })).answer.blocked)
+      .toBe(true);
+  });
+
   test('allows rather than blocks when it cannot tell', async () => {
     const { runtime, token } = armed();
     expect((await ask(runtime, { token, body: { command: 'git push', directory: '/not-a-repo' } })).answer)
       .toEqual({ blocked: false });
     expect((await ask(runtime, { token, body: { command: 'git push' } })).answer).toEqual({ blocked: false });
     expect((await ask(runtime, { token, body: { directory: '/repo' } })).answer).toEqual({ blocked: false });
+  });
+
+  test('leaves a repository the person excluded alone', async () => {
+    const excluded = armed({ isRepositoryEnabled: async () => false });
+    expect((await ask(excluded.runtime, { token: excluded.token, body: { command: 'git push', directory: '/repo' } })).answer)
+      .toEqual({ blocked: false });
   });
 
   test('answers nothing without the current token', async () => {

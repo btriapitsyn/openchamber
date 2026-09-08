@@ -19,6 +19,7 @@ import {
   SETTINGS_FIELDS_STACK_CLASS,
   SETTINGS_HELPER_CLASS,
   SETTINGS_SELECT_SIZE,
+  SettingsCheckboxRow,
   SettingsControlGroup,
   SettingsStackedField,
 } from '../shared/SettingsSection';
@@ -105,6 +106,72 @@ const RepositoryAuthorEditor = ({ directory, className }: { directory: string; c
         {t('settings.sourceControl.transport.retry')}
       </Button> : null}
     </div>
+  </SettingsControlGroup>;
+};
+
+/**
+ * Whether OpenChamber answers Git for this repository in the agent's shell.
+ *
+ * An opt-out, not a choice between two settings: when the machine-wide answer
+ * is no, nothing is put into the agent's environment at all, so there is
+ * nothing a single repository could turn back on.
+ */
+const AgentAuthorityEditor = ({ directory, className }: { directory: string; className?: string }) => {
+  const { t } = useI18n();
+  const { git } = useRuntimeAPIs();
+  const machineEnabled = useUIStore((state) => state.agentGitAuthorityEnabled);
+  const [enabled, setEnabled] = React.useState<boolean | null>(null);
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState(false);
+  const generation = React.useRef(0);
+
+  React.useEffect(() => {
+    const request = ++generation.current;
+    const runtimeKey = getRuntimeKey();
+    setEnabled(null);
+    setError(false);
+    if (!directory || !git.getAgentGitAuthority) return;
+    void git.getAgentGitAuthority(directory).then((value) => {
+      if (request === generation.current && runtimeKey === getRuntimeKey()) setEnabled(value);
+    }).catch(() => {
+      if (request === generation.current && runtimeKey === getRuntimeKey()) setError(true);
+    });
+    return () => { generation.current += 1; };
+  }, [directory, git]);
+
+  if (!git.setAgentGitAuthority || !git.getAgentGitAuthority) return null;
+
+  const change = (value: boolean) => {
+    if (!git.setAgentGitAuthority || saving) return;
+    const request = generation.current;
+    const runtimeKey = getRuntimeKey();
+    const isCurrent = () => request === generation.current && runtimeKey === getRuntimeKey();
+    setEnabled(value);
+    setSaving(true);
+    setError(false);
+    void git.setAgentGitAuthority(directory, value).then((stored) => {
+      if (isCurrent()) setEnabled(stored);
+    }).catch(() => {
+      if (!isCurrent()) return;
+      setEnabled(!value);
+      setError(true);
+    }).finally(() => {
+      if (isCurrent()) setSaving(false);
+    });
+  };
+
+  return <SettingsControlGroup title={t('settings.sourceControl.agentAuthority.title')} className={cn('min-w-0', className)}>
+    <SettingsCheckboxRow
+      checked={enabled ?? false}
+      disabled={enabled === null || saving || !machineEnabled}
+      onChange={change}
+      label={t('settings.sourceControl.agentAuthority.label')}
+      ariaLabel={t('settings.sourceControl.agentAuthority.label')}
+      info={t(machineEnabled ? 'settings.sourceControl.agentAuthority.info' : 'settings.sourceControl.agentAuthority.machineOff')}
+    />
+    {error ? <p role="alert" className={cn(SETTINGS_HELPER_CLASS, 'text-[var(--status-error)]')}>
+      {t('settings.gitlab.status.operationFailed')}
+    </p> : null}
   </SettingsControlGroup>;
 };
 
@@ -277,6 +344,7 @@ export const SourceControlBindingSettings: React.FC<SourceControlBindingSettings
           </DialogHeader>
           <ProviderSourceControlBindingSettings directory={directory} />
           <TransportBindingSettings directory={directory} className={DIALOG_DIVIDER_CLASS} />
+          <AgentAuthorityEditor directory={directory} className={DIALOG_DIVIDER_CLASS} />
           <AuxiliaryBindingSettings directory={directory} className={DIALOG_DIVIDER_CLASS} />
           {allowAuthorApply ? <RepositoryAuthorEditor directory={directory} className={DIALOG_DIVIDER_CLASS} /> : null}
           {read?.binding ? <SettingsControlGroup

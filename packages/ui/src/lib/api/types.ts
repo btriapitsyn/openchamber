@@ -1007,6 +1007,12 @@ export interface GitAPI {
   /** Connected-server inventory only; the VS Code webview does not implement it. */
   managedSshCredentials?(intent: GitManagedSshIntent): Promise<GitManagedSshResult>;
   /** Host-owned credential setup is available only in runtimes that implement this operation. */
+  /**
+   * Whether OpenChamber answers Git for this repository in agent shells. Absent
+   * on runtimes that do not start the agent process and so cannot answer at all.
+   */
+  getAgentGitAuthority?(directory: string): Promise<boolean>;
+  setAgentGitAuthority?(directory: string, enabled: boolean): Promise<boolean>;
   configureTransportBinding?(intent: GitTransportBindingIntent): Promise<GitTransportBindingResult>;
   /** Removes only one committed remote transport grant. Git configuration and credentials are unchanged. */
   removeTransportBinding?(intent: GitTransportBindingRemovalIntent): Promise<GitTransportBindingRemovalResult>;

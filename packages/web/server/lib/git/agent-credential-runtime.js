@@ -85,6 +85,7 @@ export function createGitAgentCredentialRuntime({
   readBinding,
   listRemoteGrants,
   credentialResolver,
+  isRepositoryEnabled = null,
   getActivePort,
   helperPath = HELPER_PATH,
   nodePath = process.execPath,
@@ -125,6 +126,11 @@ export function createGitAgentCredentialRuntime({
     const matched = grantForOrigin(read, origin);
     if (!matched) return NONE;
     const { grant, endpointUrl } = matched;
+    // Excluded repositories are handed back the same way System Git is: this
+    // host's chain is severed for the whole process, so answering nothing would
+    // leave them without the setup they asked to keep.
+    const repositoryId = read.repository?.repositoryId;
+    if (isRepositoryEnabled && !(await isRepositoryEnabled(repositoryId))) return { mode: 'system' };
     // The person decided this repository may use whatever the machine holds.
     if (grant.mode === 'system') return { mode: 'system' };
     if (grant.mode !== 'managed' || !grant.credentialId) return NONE;

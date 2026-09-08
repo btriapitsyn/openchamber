@@ -194,6 +194,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
   const runtimeKey = getRuntimeKey();
   const openContextSurface = useUIStore((s) => s.openContextSurface);
   const mobileActions = useMobileAppActions();
+  const agentGitAuthorityEnabled = useUIStore((s) => s.agentGitAuthorityEnabled);
   const identities = useSourceControlAuthStore((s) => s.identities);
   const authEntries = useSourceControlAuthStore((s) => s.entries);
   const identitiesError = useSourceControlAuthStore((s) => s.identitiesError);
@@ -236,6 +237,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
   const [cloneProviderAccountKey, setCloneProviderAccountKey] = React.useState('');
   const [existingProviderChoice, setExistingProviderChoice] = React.useState<{ directory: string; key: string } | null>(null);
   const [existingTransportChoice, setExistingTransportChoice] = React.useState<ExistingTransportChoice | null>(null);
+  const [agentAuthorityEnabled, setAgentAuthorityEnabled] = React.useState(true);
   const cloneController = React.useRef<AbortController | null>(null);
   const cloneRecovery = useGitOperationRecovery(open && isCloneMode ? 'clone' : null, git, sourceControl, { kind: 'clone' });
   const [selectedGitIdentityId, setSelectedGitIdentityId] = React.useState<string | null>(null);
@@ -263,6 +265,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     setCloneProviderAccountKey('');
     setExistingProviderChoice(null);
     setExistingTransportChoice(null);
+    setAgentAuthorityEnabled(true);
     setCloneSshCredential('');
     setUnverifiedConfirmed(false);
     setSelectedPaths([]);
@@ -747,6 +750,10 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
           transportAccount: existingTransportAccount?.reference ?? null,
         });
       }
+      // Only an exclusion is stored, so the common answer leaves no record.
+      if (!agentAuthorityEnabled && git.setAgentGitAuthority) {
+        await git.setAgentGitAuthority(project.path, false).catch(() => undefined);
+      }
       openProjectDraft(project.id, project.path);
       if (setupRequired) {
         if (mobileActions) mobileActions.openChanges();
@@ -763,7 +770,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
       cloneController.current = null;
       setIsConfirming(false);
     }
-  }, [addProject, addProjects, addedProjectPaths, applyExistingRepositoryBinding, canSubmitClone, cloneRecovery, cloneTransport, cloneAccount, cloneSshCredential, unverifiedConfirmed, cloneRemoteUrl, existingProviderAccount, existingRepository, existingTransport, existingTransportAccount, git, handleClose, isCloneMode, isConfirming, mobileActions, openContextSurface, openProjectDraft, runtimeKey, selectedGitIdentity?.id, cloneProviderAccount?.reference, selectedPaths, shouldCreateTarget, targetPath, t]);
+  }, [addProject, addProjects, addedProjectPaths, agentAuthorityEnabled, applyExistingRepositoryBinding, canSubmitClone, cloneRecovery, cloneTransport, cloneAccount, cloneSshCredential, unverifiedConfirmed, cloneRemoteUrl, existingProviderAccount, existingRepository, existingTransport, existingTransportAccount, git, handleClose, isCloneMode, isConfirming, mobileActions, openContextSurface, openProjectDraft, runtimeKey, selectedGitIdentity?.id, cloneProviderAccount?.reference, selectedPaths, shouldCreateTarget, targetPath, t]);
 
   const browseToDisplayPath = React.useCallback((displayPath: string) => {
     setQuery(ensureBrowseDirectoryPath(displayPath));
@@ -958,6 +965,13 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
             {existingTransport.transport === 'https' && !existingTransportAccounts.length
               ? <p className="typography-micro text-muted-foreground">{t('settings.sourceControl.binding.noAccounts')}</p> : null}
           </> : null}
+          {agentGitAuthorityEnabled && git.setAgentGitAuthority ? (
+            <label className="flex items-start gap-2 typography-micro text-muted-foreground">
+              <Checkbox checked={agentAuthorityEnabled} disabled={isConfirming} onChange={setAgentAuthorityEnabled}
+                ariaLabel={t('settings.sourceControl.agentAuthority.label')} />
+              {t('settings.sourceControl.agentAuthority.label')}
+            </label>
+          ) : null}
         </div>
       ) : null}
       {isCloneMode ? (
@@ -1038,6 +1052,13 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
                 <SelectItem key={account.key} value={account.key}>{account.label}</SelectItem>
               ))}</SelectContent>
             </Select>
+          ) : null}
+          {agentGitAuthorityEnabled && git.setAgentGitAuthority ? (
+            <label className="flex items-start gap-2 typography-micro text-muted-foreground">
+              <Checkbox checked={agentAuthorityEnabled} disabled={isConfirming} onChange={setAgentAuthorityEnabled}
+                ariaLabel={t('settings.sourceControl.agentAuthority.label')} />
+              {t('settings.sourceControl.agentAuthority.label')}
+            </label>
           ) : null}
           {runtime.isVSCode ? <p className="typography-micro text-muted-foreground">{t('directoryExplorerDialog.clone.unsupported')}</p> : null}
         </div>

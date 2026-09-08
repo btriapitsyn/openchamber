@@ -1854,6 +1854,22 @@ export async function getCurrentGitIdentity(directory: string): Promise<GitIdent
   return gitIdentitySummarySchema.parse(data);
 }
 
+export async function getAgentGitAuthority(directory: string): Promise<boolean> {
+  const response = await runtimeFetch(buildUrl(`${API_BASE}/agent-authority`, directory));
+  if (!response.ok) throw new Error(`Failed to read the Git agent authority: ${response.statusText}`);
+  return (await response.json())?.enabled === true;
+}
+
+export async function setAgentGitAuthority(directory: string, enabled: boolean): Promise<boolean> {
+  const response = await runtimeFetch(`${API_BASE}/agent-authority`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ directory, enabled }),
+  });
+  if (!response.ok) throw new Error(`Failed to set the Git agent authority: ${response.statusText}`);
+  return (await response.json())?.enabled === true;
+}
+
 export async function hasLocalIdentity(directory: string): Promise<boolean> {
   if (!directory) {
     return false;
