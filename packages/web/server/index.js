@@ -1733,9 +1733,8 @@ async function main(options = {}) {
   // not be gated by, or proxied to, the single-user OpenCode upstream. This
   // is a complete no-op when the platform is disabled, leaving behavior
   // unchanged.
-  let platformAuthHandle = null;
   if (isPlatformEnabled()) {
-    platformAuthHandle = await registerPlatformAuthRoutes(app, { env: process.env, logger: console });
+    await registerPlatformAuthRoutes(app, { env: process.env, logger: console });
   }
 
   let realtimeProxyRuntime = { stop: () => {} };

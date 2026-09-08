@@ -2,9 +2,11 @@
 //
 // startLogin creates the one-time login transaction and builds the provider
 // authorization redirect. completeLogin consumes the transaction, runs the
-// full authorization-code grant through openid-client (which validates the
-// id_token signature, issuer, audience, expiry, nonce and PKCE against the
-// provider's discovered JWKS metadata), and resolves the local user strictly
+// authorization-code grant through openid-client (which validates the state,
+// nonce, PKCE exchange and the id_token issuer/audience/expiry claims), then
+// verifies the id_token JWS signature explicitly with jose against the
+// provider's discovered JWKS - openid-client deliberately skips signature
+// verification for the plain code flow. It resolves the local user strictly
 // by (issuer, subject) - never by display name or email auto-linking.
 //
 // The openid-client Configuration is created lazily and cached; discovery is
