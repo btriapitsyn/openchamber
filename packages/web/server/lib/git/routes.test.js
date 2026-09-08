@@ -169,6 +169,9 @@ describe('git route renderer DTOs', () => {
 
     expect(response.body).toEqual([{
       id: 'author-one', name: 'Work', userName: 'Author', userEmail: 'author@example.com',
+      // The legacy transport fields name no credential this build can resolve,
+      // so the identity reads as System Git with no account.
+      account: null, transport: 'system',
       signCommits: true, signingKey: '/public/signing.pub', color: 'string', icon: 'briefcase',
     }]);
   });
@@ -204,13 +207,13 @@ describe('git route renderer DTOs', () => {
       query: { directory: '/repo' }, body: { profileId: 'global' },
     }, response);
 
-    expect(gitLibraries.setLocalIdentity).toHaveBeenCalledWith('/repo', {
+    // The global identity is the machine's own setup: System Git, no account.
+    const globalProfile = {
       id: 'global', name: 'Global Identity', userName: 'Global Author', userEmail: 'global@example.com',
-    });
-    expect(response.body).toEqual({
-      success: true,
-      profile: { id: 'global', name: 'Global Identity', userName: 'Global Author', userEmail: 'global@example.com' },
-    });
+      account: null, transport: 'system',
+    };
+    expect(gitLibraries.setLocalIdentity).toHaveBeenCalledWith('/repo', globalProfile);
+    expect(response.body).toEqual({ success: true, profile: globalProfile });
   });
 
   it('does not pass retained migration fields into author application', async () => {
@@ -230,6 +233,7 @@ describe('git route renderer DTOs', () => {
 
     const publicProfile = {
       id: 'author-one', name: 'Work', userName: 'Author', userEmail: 'author@example.com',
+      account: null, transport: 'system',
       signCommits: true, signingKey: '/public/signing.pub',
     };
     expect(gitLibraries.setLocalIdentity).toHaveBeenCalledWith('/repo', publicProfile);

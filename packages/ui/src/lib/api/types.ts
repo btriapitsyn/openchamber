@@ -36,7 +36,12 @@ import type {
 } from '../source-control/types';
 
 export type * from '../source-control/types';
-export type { GitIdentityProfile, GitIdentitySummary } from './git-identity';
+export type {
+  GitIdentityAccount,
+  GitIdentityProfile,
+  GitIdentitySummary,
+  GitIdentityTransport,
+} from './git-identity';
 
 type RuntimePlatform = 'web' | 'desktop' | 'vscode';
 

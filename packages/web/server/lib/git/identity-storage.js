@@ -14,10 +14,41 @@ const invalidStore = (cause) => Object.assign(new Error('Git identity profile st
   code: 'GIT_IDENTITY_STORE_INVALID',
 });
 const PUBLIC_PROFILE_KEYS = new Set([
-  'id', 'name', 'userName', 'userEmail', 'signCommits', 'signingKey', 'color', 'icon',
+  'id', 'name', 'userName', 'userEmail', 'account', 'transport', 'sshCredentialId',
+  'signCommits', 'signingKey', 'color', 'icon',
 ]);
+const ACCOUNT_KEYS = ['provider', 'instance', 'accountId'];
+const TRANSPORTS = ['account', 'ssh', 'system', 'anonymous'];
 const validProfileText = (value, { required = false, max = 512 } = {}) => isString(value)
   && value.length <= max && (!required || value.trim().length > 0);
+
+/**
+ * The account an identity acts as, addressed the way bindings address one.
+ *
+ * Only the reference is stored. The credential behind it lives in the provider
+ * auth store, so an identity that names a disconnected account resolves to
+ * nothing rather than to a stale secret.
+ */
+const parseIdentityAccount = (value) => {
+  if (value === null || value === undefined) return null;
+  if (!isPlainObject(value)
+    || Object.keys(value).length !== ACCOUNT_KEYS.length
+    || !ACCOUNT_KEYS.every((key) => validProfileText(value[key], { required: true }))
+    || !['github', 'gitlab'].includes(value.provider)) {
+    throw new TypeError('Invalid Git identity account');
+  }
+  return { provider: value.provider, instance: value.instance.trim(), accountId: value.accountId.trim() };
+};
+
+/**
+ * An identity written before identities carried a transport says who commits
+ * and nothing about how transfers authenticate, which is what System Git is.
+ */
+const parseIdentityTransport = (value) => {
+  if (value === undefined) return 'system';
+  if (!TRANSPORTS.includes(value)) throw new TypeError('Invalid Git identity transport');
+  return value;
+};
 
 export const parsePublicGitIdentityProfile = (value, expectedId) => {
   if (!isPlainObject(value) || Object.keys(value).some((key) => !PUBLIC_PROFILE_KEYS.has(key))
@@ -32,12 +63,22 @@ export const parsePublicGitIdentityProfile = (value, expectedId) => {
     || (value.icon !== undefined && value.icon !== null && !validProfileText(value.icon))) {
     throw new TypeError('Invalid public Git identity profile');
   }
+  const account = parseIdentityAccount(value.account);
+  const transport = parseIdentityTransport(value.transport);
+  const sshCredentialId = value.sshCredentialId === null || value.sshCredentialId === undefined
+    ? null : value.sshCredentialId.trim();
+  if (transport === 'account' && !account) throw new TypeError('An account transport requires an account');
+  if (transport === 'ssh' && !sshCredentialId) throw new TypeError('An SSH transport requires a managed key');
+  if (transport !== 'ssh' && sshCredentialId) throw new TypeError('Only an SSH transport names a managed key');
   const profile = {
     id: value.id.trim(),
     name: value.name.trim(),
     userName: value.userName.trim(),
     userEmail: value.userEmail.trim(),
+    account,
+    transport,
   };
+  if (sshCredentialId) profile.sshCredentialId = sshCredentialId;
   for (const key of ['signCommits', 'signingKey', 'color', 'icon']) {
     if (Object.hasOwn(value, key)) profile[key] = isString(value[key]) ? value[key].trim() : value[key];
   }
@@ -45,12 +86,28 @@ export const parsePublicGitIdentityProfile = (value, expectedId) => {
 };
 
 export const toPublicGitIdentityProfile = (value) => {
+  let account = null;
+  try { account = parseIdentityAccount(value.account); }
+  catch { account = null; }
+  // A stored record from before identities carried a transport keeps only its
+  // signature; the legacy `authType`, `sshKey` and `host` beside it named no
+  // credential this build can resolve, so they are not carried forward.
+  let transport = 'system';
+  try { transport = parseIdentityTransport(value.transport); }
+  catch { transport = 'system'; }
+  if (transport === 'account' && !account) transport = 'system';
+  const sshCredentialId = transport === 'ssh' && validProfileText(value.sshCredentialId, { required: true })
+    ? value.sshCredentialId : null;
+  if (transport === 'ssh' && !sshCredentialId) transport = 'system';
   const profile = {
     id: value.id,
     name: validProfileText(value.name, { required: true }) ? value.name : value.userName,
     userName: value.userName,
     userEmail: value.userEmail,
+    account,
+    transport,
   };
+  if (sshCredentialId) profile.sshCredentialId = sshCredentialId;
   if (typeof value.signCommits === 'boolean') profile.signCommits = value.signCommits;
   for (const key of ['signingKey', 'color', 'icon']) {
     if (value[key] === null || validProfileText(value[key])) profile[key] = value[key];

@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import type { GitRemote, SourceControlBindingRead, SourceControlIdentity } from '@/lib/api/types';
+import { gitIdentityProfileSchema, identityTransport } from '@/lib/api/git-identity';
 import {
   getBoundSourceControlReadContexts,
   getSourceControlBaseUrl,
@@ -153,5 +154,31 @@ describe('isSshRemoteUrl', () => {
     expect(isSshRemoteUrl('https://github.com/team/repo.git')).toBe(false);
     expect(isSshRemoteUrl('http://gitlab.example.com:8080/team/repo.git')).toBe(false);
     expect(isSshRemoteUrl('')).toBe(false);
+  });
+});
+
+describe('gitIdentityProfileSchema', () => {
+  const signature = { id: 'work', name: 'Work', userName: 'Ada', userEmail: 'ada@example.com' };
+  const account = { provider: 'github', instance: 'github.com', accountId: 'occred:v1:github:one:r1' } as const;
+
+  test('reads an identity written before identities carried a transport as System Git', () => {
+    const parsed = gitIdentityProfileSchema.parse(signature);
+    expect(identityTransport(parsed)).toBe('system');
+    expect(parsed.account ?? null).toBeNull();
+  });
+
+  test('accepts an account, an SSH key, and an SSH key that still names an account', () => {
+    expect(gitIdentityProfileSchema.parse({ ...signature, account, transport: 'account' }).account).toEqual(account);
+    const ssh = gitIdentityProfileSchema.parse({
+      ...signature, transport: 'ssh', sshCredentialId: 'ocgit:v1:ssh:key', account,
+    });
+    expect(identityTransport(ssh)).toBe('ssh');
+    expect(ssh.account).toEqual(account);
+  });
+
+  test('refuses a transport its credentials cannot serve', () => {
+    expect(() => gitIdentityProfileSchema.parse({ ...signature, transport: 'account' })).toThrow();
+    expect(() => gitIdentityProfileSchema.parse({ ...signature, transport: 'ssh' })).toThrow();
+    expect(() => gitIdentityProfileSchema.parse({ ...signature, transport: 'system', sshCredentialId: 'k' })).toThrow();
   });
 });

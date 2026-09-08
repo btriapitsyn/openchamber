@@ -36,6 +36,39 @@ describe('git identity storage', () => {
     expect(store.getProfiles()).toEqual([shipped]);
   });
 
+  it('stores an identity as an account, a transport and a signature', async () => {
+    const { store } = await setup();
+    const account = { provider: 'github', instance: 'github.com', accountId: 'occred:v1:github:one:r1' };
+    const created = store.createProfile({ ...profile('work'), account, transport: 'account' });
+    expect(created).toMatchObject({ account, transport: 'account' });
+
+    const ssh = store.createProfile({
+      ...profile('deploy'), transport: 'ssh', sshCredentialId: 'ocgit:v1:ssh:key-one', account,
+    });
+    // An SSH identity still names an account, because issues and change
+    // requests are a question about the host, not about the transfer.
+    expect(ssh).toMatchObject({ transport: 'ssh', sshCredentialId: 'ocgit:v1:ssh:key-one', account });
+
+    const plain = store.createProfile(profile('personal'));
+    expect(plain).toMatchObject({ transport: 'system', account: null });
+    expect(plain.sshCredentialId).toBeUndefined();
+  });
+
+  it('refuses an identity whose transport and credentials disagree', async () => {
+    const { store } = await setup();
+    const account = { provider: 'github', instance: 'github.com', accountId: 'occred:v1:github:one:r1' };
+    expect(() => store.createProfile({ ...profile('a'), transport: 'account' }))
+      .toThrow(/account transport requires an account/i);
+    expect(() => store.createProfile({ ...profile('b'), transport: 'ssh' }))
+      .toThrow(/SSH transport requires a managed key/i);
+    expect(() => store.createProfile({ ...profile('c'), account, transport: 'account', sshCredentialId: 'k' }))
+      .toThrow(/Only an SSH transport names a managed key/i);
+    expect(() => store.createProfile({ ...profile('d'), transport: 'made-up' }))
+      .toThrow(/Invalid Git identity transport/i);
+    expect(() => store.createProfile({ ...profile('e'), account: { provider: 'bitbucket', instance: 'x', accountId: 'y' }, transport: 'account' }))
+      .toThrow(/Invalid Git identity account/i);
+  });
+
   it('retains server-only legacy fields while merging public author edits', async () => {
     const { filePath } = await setup();
     const legacy = {
@@ -64,6 +97,12 @@ describe('git identity storage', () => {
       signingKey: '/public/signing-key.pub',
       color: 'string',
       icon: 'briefcase',
+      // An edit states the identity's account and transport, and a record
+      // written before identities carried either says System Git and no
+      // account. The legacy fields beside it named no credential this build can
+      // resolve, so they are kept but not read.
+      account: null,
+      transport: 'system',
     });
     expect(JSON.parse(await fs.readFile(filePath, 'utf8')).profiles[0]).toEqual(updated);
   });
