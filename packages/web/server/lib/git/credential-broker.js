@@ -10,7 +10,11 @@ const MAX_BODY_BYTES = 64 * 1024;
 const HELPER_PATH = fileURLToPath(new URL('./credential-helper.js', import.meta.url));
 const isString = (value) => Object.prototype.toString.call(value) === '[object String]';
 
-const parseCredentialQuery = (value) => {
+/**
+ * Git's credential wire format: `key=value` lines, one per attribute. Exported
+ * so everything that answers git parses the same shape.
+ */
+export const parseGitCredentialQuery = (value) => {
   const result = {};
   for (const line of String(value).split(/\r?\n/)) {
     if (!line) continue;
@@ -97,7 +101,7 @@ export function createGitCredentialBroker({
           remove(nonce);
           throw new Error('Credential lease is no longer active');
         }
-        const endpoint = endpointFromQuery(parseCredentialQuery(Buffer.concat(chunks).toString('utf8')));
+        const endpoint = endpointFromQuery(parseGitCredentialQuery(Buffer.concat(chunks).toString('utf8')));
         if (!lease.endpoints.some((candidate) => sameEndpoint(endpoint, candidate))) throw new Error('Credential endpoint mismatch');
         lease.used = true;
         const body = `username=${lease.username}\npassword=${lease.password}\n\n`;

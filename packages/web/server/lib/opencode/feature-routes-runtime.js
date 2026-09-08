@@ -59,6 +59,7 @@ import { createSourceControlAuthStore } from '../gitlab/auth-storage.js';
 import { createGitCredentialResolver, createHttpsCredentialReference } from '../git/credential-resolver.js';
 import { createNetworkOperations } from '../git/network-operations.js';
 import { createGitAgentOperations } from '../git/agent-operations.js';
+import { createGitAgentCredentialRuntime } from '../git/agent-credential-runtime.js';
 import { createManagedSshCredentialStore } from '../git/ssh-credential-storage.js';
 import { createManagedSshInventory } from '../git/credentials.js';
 import { createSystemPushAcknowledgementStore } from '../git/system-push-acknowledgement-storage.js';
@@ -98,6 +99,7 @@ export const createFeatureRoutesRuntime = (dependencies) => {
   let walkthroughBindingService = null;
   let networkOperations = null;
   let gitAgentOperations = null;
+  let gitAgentCredentialRuntime = null;
   const getWalkthroughService = async () => {
     if (!walkthroughService) {
       const [service, pullRequest] = await Promise.all([
@@ -432,6 +434,17 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       filePath: path.join(openchamberDataDir, 'git-network-operations.json'),
       fsImpl: fsPromises,
     });
+    const gitCredentialResolver = createGitCredentialResolver({
+      readGitHubAccount: (accountId, credentialRevision) => resolveSourceControlAccount({
+        provider: 'github', instance: 'github.com', accountId, credentialRevision,
+      }),
+      readGitLabAccount: (instance, accountId, credentialRevision) => resolveSourceControlAccount({
+        provider: 'gitlab', instance, accountId, credentialRevision,
+      }),
+      lookupManagedSshKey: sshCredentialStore.lookup,
+      fsImpl: fsPromises,
+      snapshotRoot: path.join(openchamberDataDir, 'git-ssh-operation-keys'),
+    });
     networkOperations = createNetworkOperations({
       validateManagedSshCredential: managedSshInventory.assertAvailable,
       resolveSourceControlAccount,
@@ -441,17 +454,7 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       systemPushAcknowledgements,
       contributorProvenance,
       resolveChangeRequestSource: walkthroughBindingService.resolveChangeRequestSource,
-      credentialResolver: createGitCredentialResolver({
-        readGitHubAccount: (accountId, credentialRevision) => resolveSourceControlAccount({
-          provider: 'github', instance: 'github.com', accountId, credentialRevision,
-        }),
-        readGitLabAccount: (instance, accountId, credentialRevision) => resolveSourceControlAccount({
-          provider: 'gitlab', instance, accountId, credentialRevision,
-        }),
-        lookupManagedSshKey: sshCredentialStore.lookup,
-        fsImpl: fsPromises,
-        snapshotRoot: path.join(openchamberDataDir, 'git-ssh-operation-keys'),
-      }),
+      credentialResolver: gitCredentialResolver,
       runtimeIdentity: gitRuntimeIdentity,
       auditStore: sourceControlAuditStore,
       operationStore: networkOperationStore,
@@ -472,6 +475,16 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       readBinding: walkthroughBindingService.get,
       readStatus: async (directory) => (await import('../git/index.js')).getStatus(directory),
     });
+    // Git in the agent's own shell answers to the binding too: the managed
+    // OpenCode child is started by OpenChamber, so its environment can name
+    // this helper as the credential chain for the hosts we hold bindings on.
+    gitAgentCredentialRuntime = createGitAgentCredentialRuntime({
+      readBinding: walkthroughBindingService.get,
+      listRemoteGrants: walkthroughBindingService.listRemoteGrants,
+      credentialResolver: gitCredentialResolver,
+      getActivePort: routeDependencies.getActivePort ?? (() => null),
+    });
+    gitAgentCredentialRuntime.registerRoutes(app);
     registerGitRoutes(app, {
       managedSshInventory,
       networkOperations,
@@ -521,5 +534,6 @@ export const createFeatureRoutesRuntime = (dependencies) => {
     hydrateBoundCheckout,
     /** Null until the Git feature routes are registered. */
     getGitAgentOperations: () => gitAgentOperations,
+    getGitAgentCredentialRuntime: () => gitAgentCredentialRuntime,
   };
 };

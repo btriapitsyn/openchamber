@@ -240,6 +240,41 @@ VS Code runs existing-repository network operations as plain Git commands on the
 - `stashPop(directory, options)`: Apply a stash by ref and drop it only after a successful apply.
 - `stashDrop(directory, options)`: Drop a stash by ref.
 
+## Git the agent runs itself
+
+Planned operations own every transfer OpenChamber starts, and they run with a
+scrubbed environment so no ambient credential can reach them. A `git push` the
+agent types in its own shell is a different process: it inherits the person's
+environment, their global config and their credential helpers, so a bound
+repository would still transfer as whoever the machine happens to hold.
+
+Two modules close that, both scoped to the OpenCode process OpenChamber itself
+starts. Neither writes anything to a repository and neither persists anything.
+
+- `agent-operations.js` gives the agent `git.push`, `git.pull` and `git.fetch`
+  through the managed OpenChamber tool. They build the same planned operation
+  the Git panel builds. Anything needing a person's decision — no binding, a
+  stale or unready grant, several bound remotes with none named, a detached
+  HEAD, a branch with no upstream, a push over an anonymous transport — is
+  refused with what to do instead.
+- `agent-credential-runtime.js` answers Git itself. It puts command-scope
+  `credential.<origin>.helper` entries into the managed child's environment —
+  an empty value to sever the inherited chain, then `agent-credential-helper.js`
+  — for the HTTPS origins the bindings name. Command scope outranks every
+  configuration file, which is what lets a binding override the machine's
+  default, and the process boundary is what keeps the person's own terminal
+  untouched.
+
+The helper reports the working directory it was invoked from, and Git runs a
+credential helper from the repository root, so the answer is per repository:
+a managed grant answers with its account, a System Git grant is handed back to
+the person's own chain with this helper removed from it, and anything else
+answers nothing at all — which is the point, because nothing is what stops an
+unbound repository from silently borrowing an ambient identity.
+
+Nothing is injected while no binding names an HTTPS host. The bearer token
+lives only in that child's environment and dies with the process.
+
 ## Internal Helpers
 
 The following functions are internal helpers used by exported functions:

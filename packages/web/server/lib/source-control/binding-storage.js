@@ -65,6 +65,24 @@ export function createBindingStore({ filePath, fsImpl = fs, lockWaitMs = 2_000 }
   const read = (repositoryId) => enqueueWrite(async () => (
     (await readState()).repositories[repositoryId] ?? { revision: 0, binding: null }
   ));
+  /**
+   * Every remote grant the store holds, without the repositories they belong
+   * to. Only the endpoint and mode leave: the caller decides which hosts
+   * OpenChamber answers for, and nothing else about a repository is its
+   * business.
+   */
+  const listRemoteGrants = () => enqueueWrite(async () => {
+    const grants = [];
+    for (const record of Object.values((await readState()).repositories)) {
+      for (const remote of record.binding?.remotes ?? []) {
+        grants.push(Object.freeze({ mode: remote.mode, displayUrl: remote.fetch.displayUrl }));
+        if (remote.push.displayUrl !== remote.fetch.displayUrl) {
+          grants.push(Object.freeze({ mode: remote.mode, displayUrl: remote.push.displayUrl }));
+        }
+      }
+    }
+    return Object.freeze(grants);
+  });
   const compareAndSwap = (repositoryId, expectedRevision, binding) => enqueueWrite(async () => {
     const state = await readState();
     const current = state.repositories[repositoryId] ?? { revision: 0, binding: null };
@@ -122,5 +140,5 @@ export function createBindingStore({ filePath, fsImpl = fs, lockWaitMs = 2_000 }
     return changed;
   });
 
-  return { read, compareAndSwap, reconcileAccount };
+  return { read, listRemoteGrants, compareAndSwap, reconcileAccount };
 }

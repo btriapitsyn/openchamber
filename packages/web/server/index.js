@@ -1262,7 +1262,11 @@ const openCodeLifecycleRuntime = createOpenCodeLifecycleRuntime({
     }
     // Always on for managed OpenCode: it only retries servers OpenCode gave up on.
     const mcpReconnectEnv = await mcpReconnectRuntime.prepareManagedOpenCodeEnv(configContent);
-    return { ...managedEnv, ...mcpReconnectEnv };
+    // Git the agent runs itself answers to the repository binding on the hosts
+    // OpenChamber holds bindings on. Injects nothing when it holds none.
+    const gitCredentialEnv = await featureRoutesRuntime.getGitAgentCredentialRuntime()
+      ?.prepareManagedOpenCodeEnv().catch(() => ({})) ?? {};
+    return { ...managedEnv, ...mcpReconnectEnv, ...gitCredentialEnv };
   },
 });
 
@@ -1968,6 +1972,10 @@ async function main(options = {}) {
     // Dev-server discovery must not offer OpenChamber's own listeners back to
     // the user as something to preview.
     getOwnPorts: () => [port, openCodePort].filter((value) => Number.isInteger(value) && value > 0),
+    getActivePort: () => {
+      const address = server?.address?.();
+      return address && Number.isInteger(address.port) ? address.port : null;
+    },
     devServerScanner,
     buildAugmentedPath,
     projectConfigRuntime,

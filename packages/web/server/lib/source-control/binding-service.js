@@ -471,6 +471,9 @@ export function createBindingService({
 
   return {
     resolveContext: async (directory) => publicContext(await resolve(directory)),
+    // Endpoints and modes only: the caller decides which hosts OpenChamber
+    // answers for, and learns nothing else about any repository.
+    listRemoteGrants: () => store.listRemoteGrants(),
     get: async (directory) => presentRead(await readCurrent(await resolve(directory))),
     present: presentRead,
     validateReadContext: (input) => validateAuthority(input, invalidReadInput, bindingInputError),
