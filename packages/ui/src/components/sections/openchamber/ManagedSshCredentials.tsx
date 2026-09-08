@@ -23,8 +23,9 @@ const initialState = (): InventoryState => ({
   status: 'idle', credentials: [], candidates: [], truncated: false, discoveryAttempted: false,
 });
 
+/** The managed SSH key picker inside the identity editor: inventory, discovery and import in one field. */
 export function ManagedSshCredentials({ selection, disabled = false }: {
-  selection?: { value: string; onChange: (value: string) => void };
+  selection: { value: string; onChange: (value: string) => void };
   disabled?: boolean;
 }) {
   const { t } = useI18n();
@@ -120,15 +121,13 @@ export function ManagedSshCredentials({ selection, disabled = false }: {
   };
   const describeCredential = (credential: GitManagedSshCredential) =>
     [credential.label, credential.fingerprint, credentialReason(credential)].filter(Boolean).join(' · ');
-  const selectedCredential = selection
-    ? state.credentials.find((credential) => credential.credentialId === selection.value) ?? null
-    : null;
+  const selectedCredential = state.credentials.find((credential) => credential.credentialId === selection.value) ?? null;
   const rejection = rejectionMessage();
   const controlsDisabled = disabled || state.status === 'loading' || !git.managedSshCredentials;
 
   const content = <>
 
-    {selection ? <Select value={selection.value} onValueChange={selection.onChange} disabled={disabled || state.status !== 'ready'}>
+    <Select value={selection.value} onValueChange={selection.onChange} disabled={disabled || state.status !== 'ready'}>
       <SelectTrigger size={SETTINGS_SELECT_SIZE} className="w-full" aria-label={t('settings.sourceControl.ssh.title')}>
         <SelectValue placeholder={t('settings.sourceControl.ssh.title')}>
           {/* The value is an opaque reference; only the safe label may be shown. */}
@@ -138,9 +137,7 @@ export function ManagedSshCredentials({ selection, disabled = false }: {
       <SelectContent>{state.credentials.map((credential) => <SelectItem key={credential.credentialId} value={credential.credentialId} disabled={credential.capability.status !== 'ready'}>
         {describeCredential(credential)}
       </SelectItem>)}</SelectContent>
-    </Select> : state.credentials.map((credential) => <p key={credential.credentialId} className={cn(SETTINGS_HELPER_CLASS, 'break-all')}>
-      {describeCredential(credential)}
-    </p>)}
+    </Select>
     <div className="flex flex-wrap gap-2">
       <Button size="sm" variant="outline" disabled={controlsDisabled} onClick={() => void send({ operation: 'inventory' })}>
         {t('settings.sourceControl.ssh.load')}
@@ -179,13 +176,8 @@ export function ManagedSshCredentials({ selection, disabled = false }: {
     {hostSetup || !git.managedSshCredentials ? <p role="status" className={SETTINGS_HELPER_CLASS}>{t('settings.sourceControl.ssh.hostSetup')}</p> : null}
   </>;
 
-  // In picker mode the key select needs its own label; on the Git settings
-  // page the section title already names the block, so the inventory renders
-  // as a plain stack under it.
-  return selection
-    ? <SettingsStackedField className="min-w-0 w-full" controlClassName="max-w-none flex-col items-stretch gap-3"
-      label={t('settings.sourceControl.ssh.title')} info={t('settings.sourceControl.ssh.hostSetup')}>
-      {content}
-    </SettingsStackedField>
-    : <div className="min-w-0 w-full space-y-3">{content}</div>;
+  return <SettingsStackedField className="min-w-0 w-full" controlClassName="max-w-none flex-col items-stretch gap-3"
+    label={t('settings.sourceControl.ssh.title')} info={t('settings.sourceControl.ssh.hostSetup')}>
+    {content}
+  </SettingsStackedField>;
 }

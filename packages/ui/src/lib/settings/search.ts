@@ -571,18 +571,11 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     isAvailable: (ctx) => !ctx.isVSCode,
   },
   {
-    id: 'git.managed-ssh',
-    page: 'git',
-    titleKey: 'settings.sourceControl.ssh.title',
-    keywords: ['ssh', 'transport', 'credentials', 'keys', 'server'],
-    isAvailable: (ctx) => !ctx.isVSCode,
-  },
-  {
     id: 'git.identities',
     page: 'git',
     titleKey: 'settings.gitIdentities.page.section.title',
     descriptionKey: 'settings.gitIdentities.page.empty.description',
-    keywords: ['identity', 'profile', 'author', 'email', 'credentials', 'signing', 'commit signing', 'ssh signing', 'gpg'],
+    keywords: ['identity', 'profile', 'author', 'email', 'credentials', 'account', 'transport', 'ssh', 'ssh key', 'signing', 'commit signing', 'ssh signing', 'gpg'],
   },
   {
     id: 'git.changes-view',

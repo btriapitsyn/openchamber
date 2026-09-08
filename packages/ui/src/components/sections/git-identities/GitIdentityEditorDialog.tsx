@@ -1,7 +1,7 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { SettingsCheckboxRow, SETTINGS_FIELD_LABEL_CLASS } from '@/components/sections/shared/SettingsSection';
+import { SettingsCheckboxRow, SETTINGS_FIELD_LABEL_CLASS, SETTINGS_HELPER_CLASS } from '@/components/sections/shared/SettingsSection';
 import { SettingsInfoHint } from '@/components/sections/shared/SettingsInfoHint';
 import { toast } from '@/components/ui';
 import {
@@ -27,11 +27,18 @@ import { useI18n } from '@/lib/i18n';
 /** Select value for an identity that answers to no connected account. */
 const NO_ACCOUNT = '__none__';
 
-const TRANSPORT_LABEL_KEYS = {
-  account: 'settings.gitIdentities.editor.transport.account',
+/** How an identity authenticates, in the order the chips show it. */
+const AUTH_METHODS = [
+  { transport: 'account', icon: 'user-3', labelKey: 'settings.gitIdentities.editor.auth.account' },
+  { transport: 'ssh', icon: 'lock', labelKey: 'settings.gitIdentities.editor.auth.ssh' },
+  { transport: 'system', icon: 'terminal', labelKey: 'settings.gitIdentities.editor.auth.system' },
+  { transport: 'anonymous', icon: 'global', labelKey: 'settings.gitIdentities.editor.auth.anonymous' },
+] as const satisfies ReadonlyArray<{ transport: GitIdentityTransport; icon: IconName; labelKey: string }>;
+const AUTH_HINT_KEYS = {
+  account: 'settings.gitIdentities.editor.auth.accountHint',
   ssh: 'settings.sourceControl.transport.ssh',
-  anonymous: 'settings.sourceControl.transport.anonymous',
-  system: 'settings.sourceControl.transport.system',
+  system: 'settings.gitIdentities.editor.auth.systemHint',
+  anonymous: 'settings.gitIdentities.editor.auth.anonymousHint',
 } as const;
 
 const PROFILE_COLORS = [
@@ -369,6 +376,7 @@ export const GitIdentityEditorDialog: React.FC<GitIdentityEditorDialogProps> = (
               <>
                 <div className="border-t border-border/40" />
                 <div className="space-y-3">
+
                   <div>
                     <label className={`${SETTINGS_FIELD_LABEL_CLASS} block mb-1.5`}>
                       {t('settings.gitIdentities.editor.field.account')}
@@ -396,29 +404,28 @@ export const GitIdentityEditorDialog: React.FC<GitIdentityEditorDialogProps> = (
                   </div>
 
                   <div>
-                    <label className={`${SETTINGS_FIELD_LABEL_CLASS} block mb-1.5`}>
-                      {t('settings.sourceControl.transport.modeLabel')}
-                    </label>
-                    <Select value={transport} onValueChange={(value) => {
-                      if (!Object.hasOwn(TRANSPORT_LABEL_KEYS, value)) return;
-                      setTransport(value === 'account' || value === 'ssh' || value === 'anonymous' ? value : 'system');
-                      if (value !== 'ssh') setSshCredentialId('');
-                    }}>
-                      <SelectTrigger className="w-full" aria-label={t('settings.sourceControl.transport.modeLabel')}>
-                        <SelectValue>{t(TRANSPORT_LABEL_KEYS[transport])}</SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="account" disabled={!selectedAccount}>{t(TRANSPORT_LABEL_KEYS.account)}</SelectItem>
-                        <SelectItem value="ssh">{t(TRANSPORT_LABEL_KEYS.ssh)}</SelectItem>
-                        <SelectItem value="anonymous">{t(TRANSPORT_LABEL_KEYS.anonymous)}</SelectItem>
-                        <SelectItem value="system">{t(TRANSPORT_LABEL_KEYS.system)}</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <label className={`${SETTINGS_FIELD_LABEL_CLASS} block mb-1.5`}>{t('settings.gitIdentities.editor.auth.label')}</label>
+                    <div className="flex flex-wrap items-center gap-1">
+                      {AUTH_METHODS.map((method) => (
+                        <Button key={method.transport} size="sm" type="button" variant="chip"
+                          aria-pressed={transport === method.transport}
+                          disabled={method.transport === 'account' && !selectedAccount}
+                          onClick={() => {
+                            setTransport(method.transport);
+                            if (method.transport !== 'ssh') setSshCredentialId('');
+                          }}
+                        >
+                          <Icon name={method.icon} className="w-3.5 h-3.5 mr-1" /> {t(method.labelKey)}
+                        </Button>
+                      ))}
+                    </div>
                   </div>
 
                   {transport === 'ssh' ? (
                     <ManagedSshCredentials selection={{ value: sshCredentialId, onChange: setSshCredentialId }} />
-                  ) : null}
+                  ) : (
+                    <p className={SETTINGS_HELPER_CLASS}>{t(AUTH_HINT_KEYS[transport])}</p>
+                  )}
                 </div>
               </>
             )}

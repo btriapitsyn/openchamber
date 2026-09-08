@@ -19,13 +19,11 @@ import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } 
 import { useGitIdentitiesStore, type GitIdentityProfile } from '@/stores/useGitIdentitiesStore';
 import { useShallow } from 'zustand/react/shallow';
 import { GitSettings } from '@/components/sections/openchamber/GitSettings';
-import { ManagedSshCredentials } from '@/components/sections/openchamber/ManagedSshCredentials';
 import { GitIdentityEditorDialog } from './GitIdentityEditorDialog';
 import { Icon } from "@/components/icon/Icon";
 import type { IconName } from "@/components/icon/icons";
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
-import { useIsVSCodeRuntime } from '@/hooks/useRuntimeAPIs';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
 import { SettingsSection } from '@/components/sections/shared/SettingsSection';
 
@@ -50,7 +48,6 @@ const COLOR_MAP: Record<string, string> = {
 
 export const GitPage: React.FC = () => {
   const { t } = useI18n();
-  const isVSCode = useIsVSCodeRuntime();
   const {
     profiles,
     globalIdentity,
@@ -117,14 +114,6 @@ export const GitPage: React.FC = () => {
         showSaveStatus
         className="px-4 @xl:px-6 @3xl:px-12"
       >
-        {/* The page layout strips the divider from whichever section renders first. */}
-        {!isVSCode && <SettingsSection
-          title={t('settings.sourceControl.ssh.title')}
-          info={t('settings.sourceControl.ssh.hostSetup')}
-          settingsItem="git.managed-ssh"
-        >
-          <ManagedSshCredentials />
-        </SettingsSection>}
         <SettingsSection
           title={t('settings.gitIdentities.page.section.title')}
           headerAction={(
