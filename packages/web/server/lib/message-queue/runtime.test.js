@@ -38,6 +38,7 @@ const createOpenCode = () => {
     commands: [],
     sent: [],
     failNext: null,
+    htmlNext: null,
   };
   const fetchImpl = vi.fn(async (url, init = {}) => {
     const { pathname } = new URL(url);
@@ -50,6 +51,13 @@ const createOpenCode = () => {
     if (pathname.endsWith('/message')) return Response.json(state.tail);
     if (pathname === '/command') return Response.json(state.commands);
     if (method === 'POST' && (pathname.endsWith('/prompt_async') || pathname.endsWith('/command'))) {
+      if (state.htmlNext?.test(pathname)) {
+        state.htmlNext = null;
+        return new Response('<!doctype html><title>OpenChamber</title>', {
+          status: 200,
+          headers: { 'Content-Type': 'text/html' },
+        });
+      }
       state.sent.push({ path: pathname, body: JSON.parse(init.body) });
       return new Response(null, { status: 204 });
     }
@@ -218,6 +226,35 @@ describe('message queue runtime', () => {
     await settle(40);
     expect(openCode.state.sent).toHaveLength(1);
     expect(runtime.sessionSnapshot(SESSION).items).toHaveLength(0);
+  });
+
+  it('keeps a queued prompt when the runtime returns an HTML app shell', async () => {
+    const { runtime, openCode, emit, promptSent } = createRuntime({ retryDelayMs: () => 1_000 });
+    runtime.start();
+    await runtime.enqueue(SESSION, DIRECTORY, item());
+    openCode.state.htmlNext = /prompt_async$/;
+    emit({ type: 'session.status', properties: { sessionID: SESSION, status: { type: 'idle' } } });
+    await settle();
+
+    expect(openCode.state.sent).toHaveLength(0);
+    expect(runtime.sessionSnapshot(SESSION).items).toHaveLength(1);
+    expect(promptSent).toEqual([]);
+    runtime.stop();
+  });
+
+  it('keeps a queued command when the runtime returns an HTML app shell', async () => {
+    const { runtime, openCode, emit, promptSent } = createRuntime({ retryDelayMs: () => 1_000 });
+    runtime.start();
+    openCode.state.commands = [{ name: 'review' }];
+    await runtime.enqueue(SESSION, DIRECTORY, item({ content: '/review src', text: '/review src' }));
+    openCode.state.htmlNext = /command$/;
+    emit({ type: 'session.status', properties: { sessionID: SESSION, status: { type: 'idle' } } });
+    await settle();
+
+    expect(openCode.state.sent).toHaveLength(0);
+    expect(runtime.sessionSnapshot(SESSION).items).toHaveLength(1);
+    expect(promptSent).toEqual([]);
+    runtime.stop();
   });
 
   it('holds delivery briefly after a user abort', async () => {

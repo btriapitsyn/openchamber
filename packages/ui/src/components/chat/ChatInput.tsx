@@ -1925,6 +1925,12 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             if (allAttachments.length > 0) {
                 useInputStore.getState().setAttachedFiles(allAttachments);
             }
+
+            if (normalized.includes('returned a web page instead of an api response') || normalized.includes('runtime_unavailable')) {
+                toast.error(t('chat.chatInput.toast.messageSendFailed'));
+                return;
+            }
+
             toast.error(rawMessage || t('chat.chatInput.toast.messageSendFailed'));
         });
 

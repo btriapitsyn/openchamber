@@ -13,6 +13,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import { assertPromptResponse } from '../opencode/prompt-response.js';
 
 const QUEUE_FILE_NAME = 'message-queue.json';
 const QUEUE_FILE_VERSION = 1;
@@ -358,6 +359,9 @@ export function createMessageQueueRuntime({
     if (!response.ok) {
       const detail = await response.text().catch(() => '');
       throw httpError(`OpenCode ${method} ${fetchPath} failed with ${response.status}${detail ? `: ${detail.slice(0, 200)}` : ''}`, response.status);
+    }
+    if (method === 'POST' && (fetchPath.endsWith('/prompt_async') || fetchPath.endsWith('/command'))) {
+      await assertPromptResponse(response, fetchPath.endsWith('/command') ? 'session.command' : 'prompt_async');
     }
     return response.json().catch(() => null);
   };

@@ -11,6 +11,8 @@ const promptAsyncCalls: unknown[][] = [];
 const promptAsyncResults: Array<unknown> = [];
 const pathGetResults: Array<unknown> = [];
 
+const commandResults: Array<unknown> = [];
+
 const promptAsyncMock = mock(async (...args: unknown[]) => {
   promptAsyncCalls.push(args);
   const next = promptAsyncResults.shift();
@@ -26,6 +28,17 @@ const pathGetMock = mock(async () => {
   return next ?? { data: { directory: '/workspace/project' } };
 });
 
+const commandMock = mock(async () => {
+  const next = commandResults.shift();
+  return next ?? { data: true, response: new Response(null, { status: 200 }) };
+});
+
+const htmlPage = '<!doctype html><html><body>OpenChamber</body></html>';
+const htmlResult = () => ({
+  data: htmlPage,
+  response: new Response(htmlPage, { status: 200, headers: { 'content-type': 'text/html; charset=utf-8' } }),
+});
+
 mock.module('@opencode-ai/sdk/v2', () => ({
   createOpencodeClient: mock(() => ({
     config: {
@@ -38,6 +51,7 @@ mock.module('@opencode-ai/sdk/v2', () => ({
     },
     session: {
       promptAsync: promptAsyncMock,
+      command: commandMock,
     },
     path: {
       get: pathGetMock,
@@ -96,6 +110,7 @@ beforeEach(() => {
   runtimeFetchCalls.length = 0;
   runtimeFetchResults.length = 0;
   fsHomeResponses.length = 0;
+  commandResults.length = 0;
 });
 
 describe('opencodeClient directory availability', () => {
@@ -275,6 +290,28 @@ describe('opencodeClient prompt retry behavior', () => {
     expect(error instanceof Error ? error.message : String(error)).toContain('Failed to send message (503)');
   });
 
+  test('does not open the provider circuit for packaged runtime routing failures', async () => {
+    const runtimeUnavailable = () => ({
+      response: new Response(JSON.stringify({ error: { code: 'runtime_unavailable' } }), {
+        status: 503,
+        headers: {
+          'content-type': 'application/json',
+          'x-openchamber-error': 'runtime-unavailable',
+        },
+      }),
+    });
+    promptAsyncResults.push(runtimeUnavailable(), runtimeUnavailable(), runtimeUnavailable());
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await expect(sendPrompt('runtime-routing')).rejects.toThrow('runtime_unavailable');
+    }
+
+    promptAsyncResults.push({ response: new Response(null, { status: 204 }) });
+    const messageId = await sendPrompt('runtime-routing');
+    expect(messageId.startsWith('msg_')).toBe(true);
+    expect(promptAsyncCalls).toHaveLength(4);
+  });
+
   test('does not dispatch after the runtime changes while preparing attachments', async () => {
     runtimeKey = 'runtime-a';
     const pending = opencodeClient.sendMessage({
@@ -303,5 +340,67 @@ describe('opencodeClient prompt retry behavior', () => {
     expect(error).toBeInstanceOf(Error);
     expect(error instanceof Error ? error.message : String(error)).toContain('runtime changed');
     expect(promptAsyncCalls).toHaveLength(0);
+  });
+});
+
+describe('opencodeClient rejects HTML responses', () => {
+  test('a 2xx HTML page fails the prompt because the message never reached OpenCode', async () => {
+    promptAsyncResults.push(htmlResult());
+
+    let error: unknown = null;
+    try {
+      await opencodeClient.sendMessage({
+        id: 'ses_1',
+        providerID: 'anthropic-html',
+        modelID: 'claude-sonnet',
+        text: 'hello',
+      });
+    } catch (caught) {
+      error = caught;
+    }
+
+    const message = error instanceof Error ? error.message : String(error);
+    expect(message).toContain('returned a web page instead of an API response');
+    expect((error as Error & { status?: number }).status).toBe(200);
+  });
+
+  test('a 2xx HTML page fails a slash command send', async () => {
+    commandResults.push(htmlResult());
+
+    let error: unknown = null;
+    try {
+      await opencodeClient.sendCommand({
+        id: 'ses_1',
+        providerID: 'anthropic-html-command',
+        modelID: 'claude-sonnet',
+        command: 'review',
+      });
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error instanceof Error ? error.message : String(error)).toContain('returned a web page instead of an API response');
+  });
+
+  test('accepts the 204 acknowledgement that a healthy prompt returns', async () => {
+    promptAsyncResults.push({ response: new Response(null, { status: 204 }) });
+
+    const messageId = await opencodeClient.sendMessage({
+      id: 'ses_1',
+      providerID: 'anthropic-204',
+      modelID: 'claude-sonnet',
+      text: 'hello',
+      messageId: 'msg_204',
+    });
+
+    expect(messageId).toBe('msg_204');
+  });
+
+  test('a 2xx HTML page fails config reads instead of caching the page as config', async () => {
+    const request = opencodeClient.getConfig('/workspace/html');
+    configResolvers.at(-1)?.(htmlResult() as unknown as ConfigResponse);
+
+    await expect(request).rejects.toThrow('returned a web page instead of an API response');
+    opencodeClient.clearConfigCache();
   });
 });

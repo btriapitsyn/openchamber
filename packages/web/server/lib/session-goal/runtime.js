@@ -18,6 +18,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
+import { assertPromptResponse } from '../opencode/prompt-response.js';
 import { GOAL_OBJECTIVE_CHAR_LIMIT, readObjective } from './objectives.js';
 import { readMergedSettingsSync } from '../opencode/settings-files.js';
 
@@ -328,7 +329,9 @@ export const createSessionGoalRuntime = ({
       ...(body ? { body: JSON.stringify(body) } : {}),
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
-    if (!response.ok) {
+    if (method === 'POST' && fetchPath.endsWith('/prompt_async')) {
+      await assertPromptResponse(response, 'prompt_async');
+    } else if (!response.ok) {
       throw new Error(`OpenCode ${method} ${fetchPath} failed with ${response.status}`);
     }
     return response.json().catch(() => null);

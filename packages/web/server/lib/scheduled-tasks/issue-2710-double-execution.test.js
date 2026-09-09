@@ -16,14 +16,21 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 
 const sdk = vi.hoisted(() => ({
   sessionCreates: [],
+  sessionCommands: [],
+  commands: [],
+  sessionCommandResult: { data: {} },
   createOpencodeClient: () => ({
     session: {
       create: async () => {
         sdk.sessionCreates.push(Date.now());
         return { data: { id: `sess-${sdk.sessionCreates.length}` } };
       },
+      command: async (input) => {
+        sdk.sessionCommands.push(input);
+        return sdk.sessionCommandResult;
+      },
     },
-    command: { list: async () => ({ data: [] }) },
+    command: { list: async () => ({ data: sdk.commands }) },
   }),
 }));
 
@@ -119,6 +126,9 @@ describe('issue 2710: daily scheduled task double execution at the configured ti
   beforeEach(() => {
     vi.useFakeTimers();
     sdk.sessionCreates.length = 0;
+    sdk.sessionCommands.length = 0;
+    sdk.commands = [];
+    sdk.sessionCommandResult = { data: {} };
     globalThis.fetch = vi.fn(async () => ({ ok: true, text: async () => '' }));
   });
 
@@ -483,6 +493,38 @@ describe('issue 2710: daily scheduled task double execution at the configured ti
       .length;
     expect(errorWritesAfter).toBe(errorWrites);
 
+    runtime.stop();
+  });
+
+  it('marks a manual task failed when prompt_async returns an HTML app shell', async () => {
+    const projectConfigRuntime = createSharedProjectConfigRuntime(makeTask({ kind: 'daily', times: ['23:59'] }));
+    const runtime = createScheduledTasksRuntime(createRuntimeDeps(projectConfigRuntime));
+    await runtime.start();
+    globalThis.fetch = vi.fn(async () => new Response('<!doctype html><title>OpenChamber</title>', {
+      status: 200,
+      headers: { 'Content-Type': 'text/html' },
+    }));
+
+    const result = await runtime.runNow('p1', 'task-1');
+
+    expect(result).toMatchObject({ ok: false, status: 'error' });
+    expect(result.error).toContain('runtime returned HTML instead of an API response');
+    runtime.stop();
+  });
+
+  it('marks a manual slash-command task failed when the SDK returns an error result', async () => {
+    const task = makeTask({ kind: 'daily', times: ['23:59'] });
+    task.execution.prompt = '/review src';
+    sdk.commands = [{ name: 'review' }];
+    sdk.sessionCommandResult = { error: { message: 'command rejected' }, response: { status: 503 } };
+    const projectConfigRuntime = createSharedProjectConfigRuntime(task);
+    const runtime = createScheduledTasksRuntime(createRuntimeDeps(projectConfigRuntime));
+    await runtime.start();
+
+    const result = await runtime.runNow('p1', 'task-1');
+
+    expect(sdk.sessionCommands).toHaveLength(1);
+    expect(result).toMatchObject({ ok: false, status: 'error', error: 'session.command failed (503): command rejected' });
     runtime.stop();
   });
 });

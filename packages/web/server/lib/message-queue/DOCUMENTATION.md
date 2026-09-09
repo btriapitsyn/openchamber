@@ -108,8 +108,9 @@ persisted "sending" flag would strand a message forever.
      invocation when there is one, pending project knowledge
      (`sessionKnowledgeRuntime.resolvePendingForSession`, synthetic, recorded
      as delivered only after the prompt is accepted), then the agent mention.
-   Success removes the item, persists, broadcasts, and marks the user
-   message sent for notifications. Failure keeps the item, backs off
+    A 2xx HTML app-shell response is a failed dispatch, not acceptance.
+    Success removes the item, persists, broadcasts, and marks the user
+    message sent for notifications. Failure keeps the item, backs off
    2 s → 60 s (doubling per consecutive failure of that item), and re-arms.
 6. The next item goes out after the next busy → idle cycle.
 
