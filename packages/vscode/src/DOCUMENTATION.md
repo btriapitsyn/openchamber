@@ -82,6 +82,13 @@ The webview build emits each worker as one self-contained file. VS Code webviews
   - Owns the persisted VS Code permission auto-accept policy and its GET/PUT bridge contract.
   - Serializes reads and read-modify-write updates, persists a monotonic policy revision, and broadcasts the exact committed snapshot to every active OpenChamber webview. Permission replies remain foreground UI-owned because VS Code does not run the OpenChamber server runtime.
 
+- `InlineCommentThreads.ts`
+  - Owns the `openchamber.inlineComments` comment controller: the gutter `+` range, the thread opened by `openchamber.addLineComment`, and every thread a submitted comment leaves anchored in the editor until the message goes out.
+  - A thread never owns a draft. It mints the draft id, hands the payload to a chat webview with the same routing as Add to Context (the active session panel when one exists, else the sidebar, revealed if needed), and follows the webview's whole-draft-list `inlineComments:sync` snapshots: present means show, absent after having been seen means dispose. A snapshot is tagged with the surface that produced it (a panel id or `sidebar`) and only decides that surface's own threads, because every webview runs its own draft store.
+  - A comment the composer never confirms holding within 30 s is retracted from every surface's pending hold, its thread disposed, and the user told, so a thread cannot promise a send that will never happen.
+  - `inlineCommentSelection.ts` holds the pure pieces (line ranges, the diff-side and real-path resolution for `git:` documents, the pending hold, removal broadcast, thread fate) without the `vscode` import so they are unit-tested directly.
+  - Webview side: `webview/inlineCommentTarget.ts` decides where a delivered comment is filed. A session panel stamps its session on every comment it delivers and the webview waits until it shows that session; the sidebar files on its current session or open draft. Filing on the first snapshot with a directory put the draft under `draft` while a fresh panel was still loading its session list, a key that composer never reads. `webview/inlineCommentRemovals.ts` remembers removals that arrive before a delayed delivery lands, so a comment dropped while its panel was still booting does not appear as a chip later. The extension is not activated on startup for this; the right-click command activates it, and the gutter `+` appears from then on.
+
 ## Shared webview message ordering
 
 Message and part ordering is owned by [`packages/ui/src/sync/DOCUMENTATION.md`](../../ui/src/sync/DOCUMENTATION.md#session-message-loading). The VS Code webview consumes that shared sync implementation; bridge and proxy runtimes pass OpenCode records through without adding runtime-specific ordering.
@@ -183,3 +190,21 @@ resolves `$XDG_CONFIG_HOME/opencode` at extension startup, falling back to
 No files are migrated. The behavior GET bridge response includes the effective
 `path` for both existing and missing AGENTS.md files; shared Settings uses it
 in the warning.
+
+## Extension localization
+
+Two bundles carry extension-host text: `package.nls*.json` for the manifest
+`%token%` strings and `l10n/bundle.l10n*.json` for the `t(...)` call sites.
+Every locale file must cover the full English key set with the same `{0}`
+placeholders — VS Code silently falls back to English per missing key, so a
+half-translated locale looks like a shipped feature. `localizationBundles.test.ts`
+enforces that, and it is the check to run whenever a feature adds a new string.
+
+The pre-bundle loading splash in `webviewHtml.ts` is separate: its strings are
+inlined in the generated HTML because the splash renders before the webview
+bundle loads. It picks them from OpenChamber's own saved locale
+(`openchamber.i18n.v1` in webview localStorage) and, before the user has
+chosen one, from VS Code's display language, which the HTML exposes as
+`window.__OPENCHAMBER_HOST_LANGUAGE__`. The UI bundle reads the same value as
+its default locale (`detectInitialLocale`), so a fresh install in a supported
+language starts in that language on both the splash and the app.

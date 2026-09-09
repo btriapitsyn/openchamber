@@ -63,8 +63,10 @@ ENV LANG=C.UTF-8
 
 COPY scripts/docker-entrypoint.sh /home/openchamber/openchamber-entrypoint.sh
 
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/packages/web/node_modules ./packages/web/node_modules
+# From builder, not deps: builder is where patch-package ran, so a patched
+# server-side dependency reaches the image instead of only the bundled dist.
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/packages/web/node_modules ./packages/web/node_modules
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/packages/web/package.json ./packages/web/package.json
 COPY --from=builder /app/packages/web/bin ./packages/web/bin

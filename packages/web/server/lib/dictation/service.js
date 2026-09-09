@@ -87,7 +87,7 @@ export function createDictationService({ modelsDir }) {
    *
    * @param {{ provider?: string, language?: string, localModel?: string,
    *           openaiCompatible?: { baseUrl?: string, model?: string, apiKey?: string },
-   *           funasrWebsocket?: { url?: string, apiKey?: string } }} options
+   *           funasrWebsocket?: { url?: string, apiKey?: string, protocol?: 'python' | 'cpp-2pass' | 'cpp-offline' } }} options
    */
   const createSttSession = async (options = {}) => {
     const provider = options.provider === 'funasr-websocket'
@@ -116,12 +116,14 @@ export function createDictationService({ modelsDir }) {
 
     if (provider === 'funasr-websocket') {
       const config = options.funasrWebsocket || {};
-      const session = new FunASRWebSocketTranscriptionSession({
-        url: config.url,
-        apiKey: config.apiKey || undefined,
-      });
       try {
+        const session = new FunASRWebSocketTranscriptionSession({
+          url: config.url,
+          apiKey: config.apiKey || undefined,
+          protocol: config.protocol,
+        });
         await session.connect();
+        return { session };
       } catch (error) {
         return {
           error: error?.message || String(error),
@@ -129,7 +131,6 @@ export function createDictationService({ modelsDir }) {
           reasonCode: 'stt_not_configured',
         };
       }
-      return { session };
     }
 
     const modelId = resolveLocalModelId(options.localModel);

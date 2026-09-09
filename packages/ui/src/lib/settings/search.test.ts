@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import type { I18nKey } from '@/lib/i18n/store';
 import { buildSettingsSearchResults } from './search';
+import { useConfigStore } from '@/stores/useConfigStore';
 
 const t = (key: I18nKey): string => key;
 
@@ -17,6 +18,23 @@ const runtimeCtx = {
 };
 
 describe('settings search', () => {
+  test('only indexes the FunASR protocol when its control is visible', () => {
+    const previous = useConfigStore.getState();
+    const hasProtocol = () => buildSettingsSearchResults({
+      query: 'funasr', runtimeCtx, t, getPageTitle: (page) => page,
+    }).some((result) => result.id === 'voice.funasr-protocol');
+    try {
+      useConfigStore.setState({ dictationEnabled: true, sttProvider: 'funasr-websocket' });
+      expect(hasProtocol()).toBe(true);
+      useConfigStore.setState({ sttProvider: 'local' });
+      expect(hasProtocol()).toBe(false);
+      useConfigStore.setState({ sttProvider: 'funasr-websocket', dictationEnabled: false });
+      expect(hasProtocol()).toBe(false);
+    } finally {
+      useConfigStore.setState({ dictationEnabled: previous.dictationEnabled, sttProvider: previous.sttProvider });
+    }
+  });
+
   test('finds Linear connect on the integrations page', () => {
     const results = buildSettingsSearchResults({
       query: 'linear',
@@ -28,6 +46,28 @@ describe('settings search', () => {
     expect(results.some((result) => result.id === 'integrations.linear')).toBe(true);
     expect(results.some((result) => result.id === 'integrations.linear.add-workspace')).toBe(true);
     expect(results.some((result) => result.id === 'integrations.linear.mapping')).toBe(true);
+  });
+
+  test('finds the chat input history scope setting', () => {
+    const results = buildSettingsSearchResults({
+      query: 'input history scope',
+      runtimeCtx,
+      t,
+      getPageTitle: (page) => page,
+    });
+
+    expect(results.some((result) => result.id === 'chat.input-history-scope')).toBe(true);
+  });
+
+  test('finds the chat input history limit setting by recall keywords', () => {
+    const results = buildSettingsSearchResults({
+      query: 'remember prompts',
+      runtimeCtx,
+      t,
+      getPageTitle: (page) => page,
+    });
+
+    expect(results.some((result) => result.id === 'chat.input-history-limit')).toBe(true);
   });
 
   test('hides Linear connect in VS Code', () => {

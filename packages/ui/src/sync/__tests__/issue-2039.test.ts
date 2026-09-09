@@ -70,6 +70,7 @@ const deferredStorage: Storage = {
 
 mock.module("@/stores/utils/safeStorage", () => ({
   getDeferredSafeStorage: () => deferredStorage,
+  getSafeSessionStorage: () => deferredStorage,
   createDeferredSafeJSONStorage: () => ({
     getItem: async () => null,
     setItem: async () => undefined,
@@ -81,6 +82,7 @@ mock.module("@/lib/opencode/client", () => ({
   opencodeClient: {
     getDirectory: () => null,
     getFilesystemHome: mock(async () => "/home/test"),
+    getFilesystemHomeInfo: async () => ({ home: "/home/test" }),
     createDirectory: mock(async (path: string) => ({ success: true, path })),
     setDirectory: mock(() => undefined),
   },

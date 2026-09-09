@@ -10,6 +10,7 @@ import { getRuntimeUrlResolver } from '@/lib/runtime-url';
 import { refreshRuntimeUrlAuthToken } from '@/lib/runtime-auth';
 import { openRuntimeWebSocket } from '@/lib/relay/runtime-socket';
 import { type RelayTunnelWebSocket } from '@/lib/relay/tunnel-client';
+import type { FunasrProtocol } from './funasr-protocol';
 
 export interface DictationStartOptions {
     provider?: 'local' | 'openai-compatible' | 'funasr-websocket';
@@ -23,6 +24,7 @@ export interface DictationStartOptions {
     funasrWebsocket?: {
         url?: string;
         apiKey?: string;
+        protocol?: FunasrProtocol;
     };
 }
 

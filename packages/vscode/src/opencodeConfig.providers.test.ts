@@ -10,6 +10,7 @@ import {
   upsertProviderConfig,
   validateCustomProviderConfig,
 } from './opencodeConfig';
+import { OPENCODE_CONFIG_DIR } from './opencodeConfigPaths';
 
 let projectDir: string;
 
@@ -284,6 +285,28 @@ describe('custom provider config persistence (VS Code parity)', () => {
     });
   });
 
+  test('migrating one legacy providers entry keeps the other legacy entries', () => {
+    const configPath = path.join(projectDir, 'opencode.json');
+    writeJson(configPath, {
+      providers: {
+        legacy: { name: 'Legacy provider', options: { baseURL: 'https://old.example.com/v1' }, models: { model: { name: 'Old model' } } },
+        untouched: { name: 'Untouched', options: { baseURL: 'https://other.example.com/v1' }, models: { model: { name: 'Other model' } } },
+      },
+    });
+
+    upsertProviderConfig('legacy', {
+      name: 'Updated provider',
+      options: { baseURL: 'https://new.example.com/v1' },
+      models: { model: { name: 'Updated model' } },
+    }, projectDir, 'project', { hasStoredAuth: true });
+
+    const written = readJson(configPath);
+    assert.deepEqual(written.providers, {
+      untouched: { name: 'Untouched', options: { baseURL: 'https://other.example.com/v1' }, models: { model: { name: 'Other model' } } },
+    });
+    assert.equal(written.provider.legacy.name, 'Updated provider');
+  });
+
   test('upsert then remove restores absence', () => {
     upsertProviderConfig('temp-provider', {
       name: 'Temp',
@@ -355,8 +378,8 @@ describe('custom provider config persistence (VS Code parity)', () => {
     assert.equal(sources.custom.exists, false);
 
     for (const userPath of [
-      path.join(os.homedir(), '.config', 'opencode', 'opencode.json'),
-      path.join(os.homedir(), '.config', 'opencode', 'config.json'),
+      path.join(OPENCODE_CONFIG_DIR, 'opencode.json'),
+      path.join(OPENCODE_CONFIG_DIR, 'config.json'),
     ]) {
       if (!fs.existsSync(userPath)) continue;
       const userConfig = readJson(userPath);
@@ -394,8 +417,8 @@ describe('custom provider config persistence (VS Code parity)', () => {
       assert.equal(sources.project.exists, false);
 
       for (const userPath of [
-        path.join(os.homedir(), '.config', 'opencode', 'opencode.json'),
-        path.join(os.homedir(), '.config', 'opencode', 'config.json'),
+        path.join(OPENCODE_CONFIG_DIR, 'opencode.json'),
+        path.join(OPENCODE_CONFIG_DIR, 'config.json'),
       ]) {
         if (!fs.existsSync(userPath)) continue;
         const userConfig = readJson(userPath);

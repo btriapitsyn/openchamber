@@ -1,7 +1,9 @@
 import { z } from 'zod';
+import type { FunasrProtocol } from '@/lib/dictation/funasr-protocol';
 import type { ProjectEntry, RuntimeAPIs, TerminalShell } from '@/lib/api/types';
 import { getInjectedBootOutcome } from '@/lib/desktopBoot';
 import type { DraftStarterRef } from '@/lib/draftStarters';
+import type { InputHistoryScope } from '@/lib/inputHistoryScope';
 import type { MobileKeyboardMode } from '@/lib/mobileKeyboardMode';
 import { getRuntimeApiBaseUrl, getRuntimeKey } from '@/lib/runtime-switch';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
@@ -159,6 +161,8 @@ export type DesktopSettings = {
   desktopWindowControlsPosition?: DesktopWindowControlsPosition;
   desktopWindowControlsStyle?: DesktopWindowControlsStyle;
   inputSpellcheckEnabled?: boolean;
+  enterToSend?: boolean;
+  enterToSendConfigured?: boolean;
   showOpenCodeUpdateNotifications?: boolean;
   agentControlToolEnabled?: boolean;
   agentWebToolEnabled?: boolean;
@@ -175,6 +179,8 @@ export type DesktopSettings = {
   weekStartPreference?: 'auto' | 'sunday' | 'monday';
   chatRenderMode?: 'sorted' | 'live';
   messageStreamTransport?: 'auto' | 'ws' | 'sse';
+  inputHistoryScope?: InputHistoryScope;
+  inputHistoryLimit?: number;
   activityRenderMode?: 'collapsed' | 'summary';
   mermaidRenderingMode?: 'svg' | 'ascii';
   userMessageRenderingMode?: 'markdown' | 'plain';
@@ -203,6 +209,7 @@ export type DesktopSettings = {
   recentEfforts?: Record<string, string[]>;
   diffLayoutPreference?: 'dynamic' | 'inline' | 'side-by-side';
   gitChangesViewMode?: 'flat' | 'tree';
+  toolJsonViewMode?: 'summary' | 'formatted' | 'raw';
   directoryShowHidden?: boolean;
   filesViewShowGitignored?: boolean;
 
@@ -221,6 +228,7 @@ export type DesktopSettings = {
   responseStyleCustomInstructions?: string;
   dictationEnabled?: boolean;
   sttProvider?: 'local' | 'openai-compatible' | 'funasr-websocket';
+  sttFunasrProtocol?: FunasrProtocol;
   sttServerUrl?: string;
   sttModel?: string;
   sttLocalModel?: string;

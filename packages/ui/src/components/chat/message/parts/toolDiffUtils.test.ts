@@ -223,6 +223,18 @@ describe('toolDiffUtils', () => {
         expect(preview.length).toBe(TOOL_DIFF_PREVIEW_MAX_CHARS + 2);
     });
 
+    test('does not cut an astral character in half at the character limit', () => {
+        // The boundary lands between the two halves of the emoji, which would
+        // otherwise leave a lone surrogate rendering as the replacement glyph.
+        const patch = `+${'x'.repeat(TOOL_DIFF_PREVIEW_MAX_CHARS - 2)}\u{1F600}${'y'.repeat(100)}`;
+        const preview = getToolDiffPreviewText(patch);
+        const body = preview.slice(0, -2);
+
+        expect(isToolDiffPreviewOversized(patch)).toBe(true);
+        expect(body).toBe(`+${'x'.repeat(TOOL_DIFF_PREVIEW_MAX_CHARS - 2)}`);
+        expect(/[\uD800-\uDFFF]/.test(body)).toBe(false);
+    });
+
     test('preserves diff previews at the character and line limits', () => {
         const characterLimit = 'x'.repeat(TOOL_DIFF_PREVIEW_MAX_CHARS);
         const lineLimit = Array.from({ length: TOOL_DIFF_PREVIEW_MAX_LINES }, () => '+line').join('\n');

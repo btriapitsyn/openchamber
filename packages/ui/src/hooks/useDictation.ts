@@ -68,7 +68,8 @@ const getDictationStartOptions = (): DictationStartOptions => {
             provider: 'funasr-websocket',
             funasrWebsocket: {
                 url: state.sttServerUrl,
-                ...(state.sttApiKey ? { apiKey: state.sttApiKey } : {}),
+                apiKey: state.sttApiKey || undefined,
+                protocol: state.sttFunasrProtocol,
             },
         };
     }

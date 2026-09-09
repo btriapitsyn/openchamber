@@ -267,6 +267,28 @@ describe('custom provider config persistence', () => {
     });
   });
 
+  test('migrating one legacy providers entry keeps the other legacy entries', () => {
+    const configPath = path.join(projectDir, 'opencode.json');
+    writeJson(configPath, {
+      providers: {
+        legacy: { name: 'Legacy provider', options: { baseURL: 'https://old.example.com/v1' }, models: { model: { name: 'Old model' } } },
+        untouched: { name: 'Untouched', options: { baseURL: 'https://other.example.com/v1' }, models: { model: { name: 'Other model' } } },
+      },
+    });
+
+    upsertProviderConfig('legacy', {
+      name: 'Updated provider',
+      options: { baseURL: 'https://new.example.com/v1' },
+      models: { model: { name: 'Updated model' } },
+    }, projectDir, 'project', { hasStoredAuth: true });
+
+    const written = readJson(configPath);
+    expect(written.providers).toEqual({
+      untouched: { name: 'Untouched', options: { baseURL: 'https://other.example.com/v1' }, models: { model: { name: 'Other model' } } },
+    });
+    expect(written.provider.legacy.name).toBe('Updated provider');
+  });
+
   test('upsert then remove restores absence', () => {
     upsertProviderConfig('temp-provider', {
       name: 'Temp',
