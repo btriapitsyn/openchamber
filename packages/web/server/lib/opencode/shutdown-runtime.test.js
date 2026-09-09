@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createGracefulShutdownRuntime } from './shutdown-runtime.js';
 
-const createRuntime = (server) => createGracefulShutdownRuntime({
+const createRuntime = (server, featureRoutesRuntime) => createGracefulShutdownRuntime({
   process: { exit: vi.fn() },
   shutdownTimeoutMs: 1000,
   getExitOnShutdown: () => false,
@@ -12,6 +12,7 @@ const createRuntime = (server) => createGracefulShutdownRuntime({
   openCodeWatcherRuntime: { stop: vi.fn() },
   sessionRuntime: { dispose: vi.fn() },
   scheduledTasksRuntime: { stop: vi.fn() },
+  featureRoutesRuntime,
   getHealthCheckInterval: () => null,
   clearHealthCheckInterval: vi.fn(),
   getTerminalRuntime: () => null,
@@ -54,5 +55,14 @@ describe('graceful shutdown runtime', () => {
 
     expect(warnSpy).not.toHaveBeenCalledWith('Server close timeout reached, forcing shutdown');
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('disposes feature route resources', async () => {
+    const featureRoutesRuntime = { dispose: vi.fn() };
+    const server = { close: vi.fn((callback) => callback()) };
+
+    await createRuntime(server, featureRoutesRuntime).gracefulShutdown({ exitProcess: false });
+
+    expect(featureRoutesRuntime.dispose).toHaveBeenCalledTimes(1);
   });
 });

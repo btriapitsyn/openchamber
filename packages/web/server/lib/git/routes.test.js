@@ -5,6 +5,9 @@ const gitLibraries = {
   unstageFiles: vi.fn(),
   isGitRepository: vi.fn(),
   getStatus: vi.fn(),
+  getWorktrees: vi.fn(),
+  resolveGitCommonDirectory: vi.fn(),
+  watchWorktreeChanges: vi.fn(),
 };
 
 vi.mock('./index.js', () => ({
@@ -12,6 +15,9 @@ vi.mock('./index.js', () => ({
   unstageFiles: gitLibraries.unstageFiles,
   isGitRepository: gitLibraries.isGitRepository,
   getStatus: gitLibraries.getStatus,
+  getWorktrees: gitLibraries.getWorktrees,
+  resolveGitCommonDirectory: gitLibraries.resolveGitCommonDirectory,
+  watchWorktreeChanges: gitLibraries.watchWorktreeChanges,
 }));
 
 const { registerGitRoutes } = await import('./routes.js');
@@ -138,6 +144,64 @@ describe('git routes index mutations', () => {
     expect(response.statusCode).toBe(400);
     expect(response.body).toEqual({ error: 'path parameter is required' });
     expect(gitLibraries.stageFiles).not.toHaveBeenCalled();
+  });
+});
+
+describe('git worktree routes', () => {
+  beforeEach(() => {
+    gitLibraries.getWorktrees.mockReset();
+    gitLibraries.resolveGitCommonDirectory.mockReset();
+    gitLibraries.watchWorktreeChanges.mockReset();
+  });
+
+  it('starts one watcher before listing and emits changes for every repository directory', async () => {
+    gitLibraries.getWorktrees.mockResolvedValue([]);
+    gitLibraries.resolveGitCommonDirectory.mockResolvedValue('/repo/.git');
+    let notifyChange;
+    let watcherOptions;
+    const disposeWatcher = vi.fn();
+    gitLibraries.watchWorktreeChanges.mockImplementation(async (_directory, onChange, options) => {
+      notifyChange = onChange;
+      watcherOptions = options;
+      return disposeWatcher;
+    });
+    const emitWorktreeChanged = vi.fn();
+    const { app, getRoute } = createRouteRegistry();
+    const disposeRoutes = registerGitRoutes(app, { emitWorktreeChanged });
+    const route = getRoute('GET', '/api/git/worktrees');
+
+    await route({ query: { directory: '/repo' } }, createMockResponse());
+    await route({ query: { directory: '/repo-linked' } }, createMockResponse());
+    await Promise.resolve();
+    notifyChange({ directory: '/repo', at: 123 });
+
+    expect(gitLibraries.watchWorktreeChanges).toHaveBeenCalledTimes(1);
+    expect(gitLibraries.watchWorktreeChanges.mock.invocationCallOrder[0])
+      .toBeLessThan(gitLibraries.getWorktrees.mock.invocationCallOrder[0]);
+    expect(emitWorktreeChanged).toHaveBeenCalledWith('/repo', 123);
+    expect(emitWorktreeChanged).toHaveBeenCalledWith('/repo-linked', 123);
+
+    watcherOptions.onError();
+    await route({ query: { directory: '/repo' } }, createMockResponse());
+    expect(gitLibraries.watchWorktreeChanges).toHaveBeenCalledTimes(2);
+
+    disposeRoutes();
+    expect(disposeWatcher).toHaveBeenCalledTimes(2);
+  });
+
+  it('returns a failure instead of clearing topology when git cannot list worktrees', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    gitLibraries.resolveGitCommonDirectory.mockRejectedValue(new Error('not available'));
+    gitLibraries.getWorktrees.mockRejectedValue(new Error('git failed'));
+    const { app, getRoute } = createRouteRegistry();
+    registerGitRoutes(app, { emitWorktreeChanged: vi.fn() });
+    const response = createMockResponse();
+
+    await getRoute('GET', '/api/git/worktrees')({ query: { directory: '/repo' } }, response);
+
+    expect(response.statusCode).toBe(500);
+    expect(response.body).toEqual({ error: 'git failed' });
+    errorSpy.mockRestore();
   });
 });
 

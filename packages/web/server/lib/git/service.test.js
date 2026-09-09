@@ -38,6 +38,7 @@ import {
   getUntrackedDiffs,
   getFileDiff,
   validateWorktreeCreate,
+  watchWorktreeChanges,
   parseBranchCreationSource,
   getRangeFiles,
 } from './service.js';
@@ -680,6 +681,43 @@ describe('getWorktrees', () => {
     expect(Array.isArray(result)).toBe(true);
     expect(warnSpy).not.toHaveBeenCalled();
   });
+
+  it('watches worktrees created by another git process', async () => {
+    const repo = createTempDir();
+    runGit(repo, ['init', '-b', 'main']);
+    runGit(repo, ['config', 'user.email', 'test@example.com']);
+    runGit(repo, ['config', 'user.name', 'Test User']);
+    runGit(repo, ['commit', '--allow-empty', '-m', 'init']);
+    const worktreeParent = createTempDir();
+    const worktreePath = path.join(worktreeParent, 'feature');
+
+    const changeWaiters = [];
+    const nextChange = () => new Promise((resolve) => changeWaiters.push(resolve));
+    const waitForChange = (change) => new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('Watcher did not fire')), 3_000);
+      void change.then((event) => {
+        clearTimeout(timeout);
+        resolve(event);
+      });
+    });
+    const dispose = await watchWorktreeChanges(repo, (event) => changeWaiters.shift()?.(event), { debounceMs: 10 });
+    try {
+      let changed = nextChange();
+      runGit(repo, ['worktree', 'add', worktreePath, '-b', 'feature']);
+      await expect(waitForChange(changed)).resolves.toMatchObject({ directory: repo });
+
+      changed = nextChange();
+      runGit(repo, ['worktree', 'remove', worktreePath]);
+      await expect(waitForChange(changed)).resolves.toMatchObject({ directory: repo });
+
+      changed = nextChange();
+      runGit(repo, ['worktree', 'add', worktreePath, '-b', 'feature-again']);
+      await expect(waitForChange(changed)).resolves.toMatchObject({ directory: repo });
+    } finally {
+      dispose();
+    }
+  });
+
   it('flags a worktree whose directory was deleted outside git as prunable', async () => {
     const repo = createTempDir();
     runGit(repo, ['init', '-b', 'main']);

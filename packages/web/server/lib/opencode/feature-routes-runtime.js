@@ -76,6 +76,7 @@ export const createFeatureRoutesRuntime = (dependencies) => {
   };
 
   let walkthroughService = null;
+  let disposeGitRoutes = () => undefined;
   const getWalkthroughService = async () => {
     if (!walkthroughService) {
       const [service, pullRequest] = await Promise.all([
@@ -307,7 +308,22 @@ export const createFeatureRoutesRuntime = (dependencies) => {
     registerSessionGoalRoutes(app);
     registerGitHubRoutes(app);
     registerLinearRoutes(app);
-    registerGitRoutes(app);
+    disposeGitRoutes();
+    disposeGitRoutes = registerGitRoutes(app, {
+      emitWorktreeChanged: (directory, at) => {
+        const clients = getOpenChamberEventClients();
+        for (const client of clients) {
+          try {
+            writeSseEvent(client, {
+              type: 'openchamber:worktree-changed',
+              properties: { directory, at },
+            });
+          } catch {
+            clients.delete(client);
+          }
+        }
+      },
+    });
     registerDevServerRoutes(app, { scanner: devServerScanner, getOwnPorts });
     registerMagicPromptRoutes(app, {
       fsPromises,
@@ -341,5 +357,6 @@ export const createFeatureRoutesRuntime = (dependencies) => {
 
   return {
     registerRoutes,
+    dispose: () => disposeGitRoutes(),
   };
 };

@@ -384,6 +384,48 @@ export const partitionWorktreesByRegisteredProject = (
   return partitioned;
 };
 
+export const replaceRepositoryWorktrees = (
+  worktreesByProject: ReadonlyMap<string, WorktreeMetadata[]>,
+  projectPath: string,
+  refreshedWorktrees: WorktreeMetadata[],
+  fallbackRepositoryRoot?: string | null,
+): Map<string, WorktreeMetadata[]> => {
+  const normalizedProjectPath = normalizePath(projectPath);
+  const existingProjectWorktrees = worktreesByProject.get(normalizedProjectPath) ?? [];
+  const refreshedRepositoryRoot = refreshedWorktrees.find(
+    (worktree) => normalizePath(worktree.projectDirectory ?? null),
+  )?.projectDirectory;
+  const existingRepositoryRoot = existingProjectWorktrees.find(
+    (worktree) => normalizePath(worktree.projectDirectory ?? null),
+  )?.projectDirectory;
+  const repositoryRoot = normalizePath(
+    refreshedRepositoryRoot
+      ?? existingRepositoryRoot
+      ?? fallbackRepositoryRoot
+      ?? normalizedProjectPath,
+  );
+
+  const next = new Map(worktreesByProject);
+  const matchingProjectPaths = new Set<string>([normalizedProjectPath]);
+  for (const [candidatePath, worktrees] of next) {
+    const candidateRepositoryRoot = normalizePath(
+      worktrees.find((worktree) => normalizePath(worktree.projectDirectory ?? null))?.projectDirectory ?? candidatePath,
+    );
+    if (repositoryRoot && candidateRepositoryRoot === repositoryRoot) {
+      matchingProjectPaths.add(candidatePath);
+    }
+  }
+
+  for (const candidatePath of matchingProjectPaths) {
+    if (refreshedWorktrees.length === 0) {
+      next.delete(candidatePath);
+    } else {
+      next.set(candidatePath, refreshedWorktrees.map((worktree) => ({ ...worktree })));
+    }
+  }
+  return next;
+};
+
 // Cache worktree listings to avoid repeated git worktree list + rev-parse calls
 const _worktreeListCache = new Map<string, { value: WorktreeMetadata[]; at: number }>();
 const _worktreeListInflight = new Map<string, { generation: number; promise: Promise<WorktreeMetadata[]> }>();
@@ -566,14 +608,33 @@ export async function createWorktree(project: ProjectRef, args: CreateWorktreeAr
   invalidateResolvedProjectRootCache();
 
   // Update sidebar store so new worktree appears immediately
-  const sidebarProjectKey = projectDirectory;
-  const currentByProject = useSessionUIStore.getState().availableWorktreesByProject;
-  const updatedByProject = new Map(currentByProject);
-  const existing = updatedByProject.get(sidebarProjectKey) ?? [];
-  updatedByProject.set(sidebarProjectKey, [...existing, metadata]);
-  useSessionUIStore.setState({
-    availableWorktreesByProject: updatedByProject,
-    availableWorktrees: [...useSessionUIStore.getState().availableWorktrees, metadata],
+  useSessionUIStore.setState((state) => {
+    const updatedByProject = new Map(state.availableWorktreesByProject);
+    const createdWorktreePath = normalizePath(metadata.path);
+    let ownerProjectPath = projectDirectory;
+    for (const [candidateProjectPath, worktrees] of updatedByProject) {
+      const remaining = worktrees.filter((worktree) => normalizePath(worktree.path) !== createdWorktreePath);
+      if (remaining.length !== worktrees.length) {
+        ownerProjectPath = candidateProjectPath;
+      }
+      if (remaining.length === 0) {
+        updatedByProject.delete(candidateProjectPath);
+      } else {
+        updatedByProject.set(candidateProjectPath, remaining);
+      }
+    }
+    const existing = updatedByProject.get(ownerProjectPath) ?? [];
+    updatedByProject.set(ownerProjectPath, [
+      ...existing.filter((worktree) => normalizePath(worktree.path) !== createdWorktreePath),
+      metadata,
+    ]);
+    return {
+      availableWorktreesByProject: updatedByProject,
+      availableWorktrees: [
+        ...state.availableWorktrees.filter((worktree) => normalizePath(worktree.path) !== createdWorktreePath),
+        metadata,
+      ],
+    };
   });
 
   return metadata;

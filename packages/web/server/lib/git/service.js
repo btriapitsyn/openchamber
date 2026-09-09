@@ -4065,11 +4065,109 @@ export async function getWorktrees(directory) {
     // exits with "fatal: not a git repository ...". Treat that as an
     // authoritative empty result so the route handler can still respond
     // 200 [] and the desktop main.log stays free of noise.
-    if (!isNotGitRepositoryError(error)) {
-      console.warn('Failed to list worktrees, returning empty list:', error?.message || error);
-    }
-    return [];
+    if (isNotGitRepositoryError(error)) return [];
+    throw error;
   }
+}
+
+export async function resolveGitCommonDirectory(directory) {
+  const directoryPath = normalizeDirectoryPath(directory);
+  if (!directoryPath) throw new Error('Directory is required');
+
+  const topLevelResult = await runGitCommandOrThrow(
+    directoryPath,
+    ['rev-parse', '--show-toplevel'],
+    'Failed to resolve git top-level directory'
+  );
+  const repositoryRoot = path.resolve(directoryPath, topLevelResult.stdout.trim());
+  const commonDirResult = await runGitCommandOrThrow(
+    repositoryRoot,
+    ['rev-parse', '--git-common-dir'],
+    'Failed to resolve git common directory'
+  );
+  const commonDir = path.resolve(repositoryRoot, commonDirResult.stdout.trim());
+  try {
+    return fs.realpathSync(commonDir);
+  } catch {
+    return commonDir;
+  }
+}
+
+export async function watchWorktreeChanges(directory, onChange, options = {}) {
+  const directoryPath = normalizeDirectoryPath(directory);
+  if (!directoryPath || !onChange) {
+    throw new Error('Directory and change callback are required');
+  }
+  const commonDir = options.commonDir || await resolveGitCommonDirectory(directoryPath);
+  const worktreesDir = path.join(commonDir, 'worktrees');
+  const debounceMs = Number.isFinite(options.debounceMs) ? Math.max(0, options.debounceMs) : 250;
+
+  let disposed = false;
+  let failed = false;
+  let debounceTimer = null;
+  let commonDirWatcher = null;
+  let worktreesWatcher = null;
+  let worktreesDirInode = null;
+
+  const scheduleChange = () => {
+    if (disposed) return;
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      debounceTimer = null;
+      if (!disposed) onChange({ directory: directoryPath, at: Date.now() });
+    }, debounceMs);
+  };
+
+  const closeWorktreesWatcher = () => {
+    worktreesWatcher?.close();
+    worktreesWatcher = null;
+    worktreesDirInode = null;
+  };
+
+  const failWatcher = () => {
+    if (failed || disposed) return;
+    failed = true;
+    commonDirWatcher?.close();
+    closeWorktreesWatcher();
+    options.onError?.();
+  };
+
+  const refreshWorktreesWatcher = (force = false) => {
+    const hadWatcher = worktreesWatcher !== null;
+    let inode = null;
+    try {
+      inode = fs.statSync(worktreesDir).ino;
+    } catch {
+      closeWorktreesWatcher();
+      return hadWatcher;
+    }
+
+    if (!force && worktreesWatcher && worktreesDirInode === inode) return false;
+    closeWorktreesWatcher();
+    try {
+      worktreesWatcher = fs.watch(worktreesDir, scheduleChange);
+      worktreesDirInode = inode;
+      worktreesWatcher.on('error', failWatcher);
+      return true;
+    } catch {
+      closeWorktreesWatcher();
+      return false;
+    }
+  };
+
+  refreshWorktreesWatcher();
+  commonDirWatcher = fs.watch(commonDir, (_eventType, filename) => {
+    const watcherChanged = refreshWorktreesWatcher(filename === 'worktrees');
+    if (watcherChanged || filename === 'worktrees') scheduleChange();
+  });
+  commonDirWatcher.on('error', failWatcher);
+
+  return () => {
+    disposed = true;
+    if (debounceTimer) clearTimeout(debounceTimer);
+    commonDirWatcher?.close();
+    closeWorktreesWatcher();
+  };
 }
 
 export async function validateWorktreeCreate(directory, input = {}) {

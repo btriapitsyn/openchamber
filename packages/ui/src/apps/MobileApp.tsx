@@ -28,6 +28,7 @@ import type { ProjectRef } from '@/lib/projectContextApi';
 import { readTabletLayout, useOrientation, useTabletLayout } from '@/lib/device';
 import { useHardwareKeyboard } from '@/lib/hardwareKeyboard';
 import { useI18n } from '@/lib/i18n';
+import { subscribeOpenchamberEvents } from '@/lib/openchamberEvents';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { getRuntimeApiBaseUrl, getRuntimeKey, subscribeRuntimeEndpointChanged, switchRuntimeEndpoint, MOBILE_DISCONNECTED_RUNTIME_KEY } from '@/lib/runtime-switch';
 import { refreshGlobalSessions, resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
@@ -44,6 +45,7 @@ import { useProjectsStore } from '@/stores/useProjectsStore';
 import {
   listProjectWorktrees,
   partitionWorktreesByRegisteredProject,
+  replaceRepositoryWorktrees,
   worktreeMapsEqual,
 } from '@/lib/worktrees/worktreeManager';
 import { useUIStore } from '@/stores/useUIStore';
@@ -1112,6 +1114,39 @@ export function MobileApp({ apis }: MobileAppProps) {
 
     return () => {
       cancelled = true;
+    };
+  }, [isConnected, projects]);
+
+  React.useEffect(() => {
+    if (!isConnected) return;
+    let cancelled = false;
+    const unsubscribe = subscribeOpenchamberEvents((event) => {
+      if (event.type !== 'worktree-changed') return;
+      const eventPath = event.directory.replace(/\\/g, '/').replace(/\/+$/, '');
+      const project = projects.find((candidate) => (
+        candidate.path.replace(/\\/g, '/').replace(/\/+$/, '') === eventPath
+      ));
+      if (!project) return;
+
+      void listProjectWorktrees(project, { force: true }).then((worktrees) => {
+        if (cancelled) return;
+        const worktreesByProject = replaceRepositoryWorktrees(
+          useSessionUIStore.getState().availableWorktreesByProject,
+          eventPath,
+          worktrees,
+        );
+        const partitioned = partitionWorktreesByRegisteredProject(projects, worktreesByProject);
+        if (!worktreeMapsEqual(partitioned, useSessionUIStore.getState().availableWorktreesByProject)) {
+          useSessionUIStore.setState({
+            availableWorktrees: [...partitioned.values()].flat(),
+            availableWorktreesByProject: partitioned,
+          });
+        }
+      }).catch(() => undefined);
+    });
+    return () => {
+      cancelled = true;
+      unsubscribe();
     };
   }, [isConnected, projects]);
 

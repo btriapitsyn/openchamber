@@ -1,10 +1,82 @@
-export function registerGitRoutes(app) {
+import path from 'node:path';
+
+const MAX_WORKTREE_WATCHERS = 50;
+const MAX_DIRECTORIES_PER_WORKTREE_WATCHER = 100;
+
+export function registerGitRoutes(app, { emitWorktreeChanged } = {}) {
   let gitLibraries = null;
   const getGitLibraries = async () => {
     if (!gitLibraries) {
       gitLibraries = await import('./index.js');
     }
     return gitLibraries;
+  };
+
+  const worktreeWatchers = new Map();
+  const stopWorktreeWatcher = (entry) => {
+    entry.stopped = true;
+    entry.dispose?.();
+  };
+
+  const ensureWorktreeWatcher = async (directory, { resolveGitCommonDirectory, watchWorktreeChanges }) => {
+    if (!emitWorktreeChanged) return;
+    let commonDir;
+    try {
+      commonDir = await resolveGitCommonDirectory(directory);
+    } catch {
+      return;
+    }
+    const key = String(commonDir).replace(/\\/g, '/');
+
+    const watchedDirectory = path.resolve(String(directory));
+    const existing = worktreeWatchers.get(key);
+    if (existing) {
+      if (existing.directories.size < MAX_DIRECTORIES_PER_WORKTREE_WATCHER) {
+        existing.directories.add(watchedDirectory);
+      }
+      worktreeWatchers.delete(key);
+      worktreeWatchers.set(key, existing);
+      return;
+    }
+
+    const entry = { directories: new Set([watchedDirectory]), dispose: null, stopped: false };
+    worktreeWatchers.set(key, entry);
+    while (worktreeWatchers.size > MAX_WORKTREE_WATCHERS) {
+      const oldestKey = worktreeWatchers.keys().next().value;
+      if (!oldestKey) break;
+      const oldest = worktreeWatchers.get(oldestKey);
+      worktreeWatchers.delete(oldestKey);
+      stopWorktreeWatcher(oldest);
+    }
+
+    try {
+      const dispose = await watchWorktreeChanges(directory, (event) => {
+        for (const watchedDirectory of entry.directories) {
+          emitWorktreeChanged(watchedDirectory, event.at);
+        }
+      }, {
+        commonDir,
+        onError: () => {
+          if (worktreeWatchers.get(key) !== entry) return;
+          worktreeWatchers.delete(key);
+          stopWorktreeWatcher(entry);
+        },
+      });
+      if (entry.stopped) {
+        dispose();
+        return;
+      }
+      entry.dispose = dispose;
+    } catch {
+      if (worktreeWatchers.get(key) === entry) worktreeWatchers.delete(key);
+    }
+  };
+
+  const disposeWorktreeWatchers = () => {
+    for (const entry of worktreeWatchers.values()) {
+      stopWorktreeWatcher(entry);
+    }
+    worktreeWatchers.clear();
   };
 
   const resolveDirectoryQuery = (value, preserveWhitespace = false) => {
@@ -1078,21 +1150,19 @@ export function registerGitRoutes(app) {
   });
 
   app.get('/api/git/worktrees', async (req, res) => {
-    const { getWorktrees } = await getGitLibraries();
+    const { getWorktrees, resolveGitCommonDirectory, watchWorktreeChanges } = await getGitLibraries();
     try {
       const directory = req.query.directory;
       if (!directory) {
         return res.status(400).json({ error: 'directory parameter is required' });
       }
 
+      await ensureWorktreeWatcher(directory, { resolveGitCommonDirectory, watchWorktreeChanges });
       const worktrees = await getWorktrees(directory);
       res.json(worktrees);
     } catch (error) {
-      // Worktrees are an optional feature. Avoid repeated 500s (and repeated client retries)
-      // when the directory isn't a git repo or uses shell shorthand like "~/".
-      console.warn('Failed to get worktrees, returning empty list:', error?.message || error);
-      res.setHeader('X-OpenChamber-Warning', 'git worktrees unavailable');
-      res.json([]);
+      console.error('Failed to get worktrees:', error);
+      res.status(500).json({ error: error.message || 'Failed to get worktrees' });
     }
   });
 
@@ -1346,4 +1416,5 @@ export function registerGitRoutes(app) {
     }
   });
 
+  return disposeWorktreeWatchers;
 }
