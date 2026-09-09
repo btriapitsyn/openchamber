@@ -446,18 +446,18 @@ describe('message stream websocket runtime', () => {
     const socket = new FakeSocket();
     runtime.wsServer.emit('connection', socket, { url: '/api/global/event/ws' });
 
-    await new Promise((resolve) => setTimeout(resolve, 35));
-
-    const readyFrames = socket.sent.filter((frame) => frame.type === 'ready');
-    const eventFrames = socket.sent.filter((frame) => frame.type === 'event' && frame.payload?.type === 'server.connected');
-
-    expect(readyFrames.length).toBeGreaterThanOrEqual(2);
-    expect(eventFrames.length).toBeGreaterThanOrEqual(2);
-    expect(fetchCalls.slice(0, 2)).toEqual([null, 'evt-1']);
-    expect(triggerHealthCheckCalls).toBe(0);
-
-    socket.close();
-    await runtime.close();
+    try {
+      // Wait for the reconnect event itself; a 35ms sleep raced the event
+      // loop when the workspace build and test workers ran together.
+      await expect.poll(() => socket.sent.filter((frame) => frame.type === 'ready').length).toBeGreaterThanOrEqual(2);
+      const eventFrames = socket.sent.filter((frame) => frame.type === 'event' && frame.payload?.type === 'server.connected');
+      expect(eventFrames.length).toBeGreaterThanOrEqual(2);
+      expect(fetchCalls.slice(0, 2)).toEqual([null, 'evt-1']);
+      expect(triggerHealthCheckCalls).toBe(0);
+    } finally {
+      socket.close();
+      await runtime.close();
+    }
   });
 
   it('keeps synthetic event processing on forwarded upstream events', async () => {

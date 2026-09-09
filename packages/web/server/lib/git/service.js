@@ -2629,7 +2629,7 @@ export async function getStatus(directory, options = {}) {
 }
 
 const getNoIndexDiff = async (repoRoot, repoPath, contextLines) => {
-  const args = ['diff', '--no-color'];
+  const args = ['diff', '--no-color', '--full-index'];
   if (Number.isFinite(contextLines)) {
     args.push(`-U${Math.max(0, contextLines)}`);
   }
@@ -2647,7 +2647,7 @@ export async function getDiff(directory, { path: filePath, staged = false, conte
   const { directoryPath, directoryGit, repoRoot, git } = await createRepositoryGitContext(directory);
 
   try {
-    const args = ['diff', '--no-color'];
+    const args = ['diff', '--no-color', '--full-index'];
     const fileContext = filePath ? await resolveGitFileContext(directoryPath, directoryGit, filePath, repoRoot) : null;
 
     if (typeof contextLines === 'number' && !Number.isNaN(contextLines)) {
@@ -3262,11 +3262,13 @@ const normalizePatchTargetPath = (value) => {
 };
 
 const extractPatchTargetPath = (patch) => {
-  const matches = [...patch.matchAll(/^(?:-{3}|\+{3})\s+.+$/gm)];
+  const firstHunk = patch.search(/^@@\s/m);
+  const header = firstHunk < 0 ? patch : patch.slice(0, firstHunk);
+  const matches = [...header.matchAll(/^(?:-{3}|\+{3})\s+.+$/gm)];
   const realTargets = matches
     .map((match) => normalizePatchTargetPath(parsePatchPathToken(match[0])))
     .filter(Boolean);
-  return realTargets[0] || null;
+  return realTargets.at(-1) || null;
 };
 
 const writeTempPatchFile = async (patch) => {
@@ -3294,9 +3296,21 @@ export async function applyHunk(directory, filePath, options = {}) {
     const fileContext = await resolveGitFileContext(directoryPath, directoryGit, filePath, repoRoot);
     validateRepositoryFilePaths(repoRoot, [fileContext.repoPath]);
 
-    const targetPath = extractPatchTargetPath(patch);
-    if (targetPath && targetPath !== fileContext.repoPath && targetPath !== filePath) {
-      throw new Error('patch target path does not match the requested file');
+    // Applicability alone is insufficient: a previously staged or committed
+    // hunk may still reverse cleanly against the working tree. Accept only a
+    // canonical hunk from this file's current working/index diff.
+    const current = await getDiff(directory, { path: filePath, staged: action === 'unstage', contextLines: 3 });
+    const starts = [...current.matchAll(/^@@\s/gm)].map((match) => match.index);
+    const header = current.slice(0, starts[0] ?? 0);
+    const isCurrentHunk = starts.some((start, index) => (
+      header + current.slice(start, starts[index + 1] ?? current.length) === patch
+    ));
+    if (!isCurrentHunk) {
+      const targetPath = extractPatchTargetPath(patch);
+      if (targetPath && targetPath !== fileContext.repoPath && targetPath !== filePath) {
+        throw new Error('patch target path does not match the requested file');
+      }
+      throw new Error('Hunk no longer applies — refresh and try again.');
     }
 
     const flags = HUNK_ACTION_FLAGS[action];

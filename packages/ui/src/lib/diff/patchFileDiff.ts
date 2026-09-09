@@ -13,6 +13,21 @@ const patchFileDiffCache = new Map<string, FileDiffMetadata>();
 export const isBinaryPatch = (patch: string): boolean =>
   /^Binary files .+ differ$/m.test(patch) || /^GIT binary patch$/m.test(patch);
 
+const patchVersionHeader = (patch: string): string | null => {
+  const firstHunk = patch.search(/^@@\s/m);
+  if (firstHunk < 0) return null;
+  const header = patch.slice(0, firstHunk);
+  // getDiff requests full object IDs. Do not infer identity from abbreviated
+  // hashes or from changed-line totals, which survive partial staging.
+  return /^index (?:[a-f0-9]{40}|[a-f0-9]{64})\.\.(?:[a-f0-9]{40}|[a-f0-9]{64})(?: [0-7]+)?$/m.test(header)
+    ? header : null;
+};
+
+export const haveMatchingPatchVersions = (displayPatch: string, actionPatch: string): boolean => {
+  const displayHeader = patchVersionHeader(displayPatch);
+  return displayHeader !== null && displayHeader === patchVersionHeader(actionPatch);
+};
+
 export const fileDiffFromPatch = (
   file: string,
   patch: string,
@@ -141,32 +156,15 @@ const emptyFileDiff = (file: string): FileDiffMetadata =>
 export const splitPatchIntoHunks = (patch: string): string[] => {
   if (!patch) return [];
 
-  const lines = patch.split(/\r?\n/);
-  const hunkHeaderRegex = /^@@\s/;
-  const headerLines: string[] = [];
-  let firstHunk = 0;
-  while (firstHunk < lines.length && !hunkHeaderRegex.test(lines[firstHunk] ?? '')) {
-    headerLines.push(lines[firstHunk]);
-    firstHunk += 1;
-  }
-
-  if (firstHunk >= lines.length) {
-    return [];
-  }
-
-  const hunks: string[][] = [];
-  for (let index = firstHunk; index < lines.length; index += 1) {
-    const line = lines[index];
-    if (hunkHeaderRegex.test(line ?? '')) {
-      hunks.push([...headerLines, line]);
-    } else if (hunks.length > 0) {
-      hunks[hunks.length - 1].push(line ?? '');
-    }
-  }
-
-  return hunks.map((hunkLines) => hunkLines.join('\n'))
-    .filter((hunk) => hunk.trim().length > 0)
-    .map((hunk) => (hunk.endsWith('\n') ? hunk : `${hunk}\n`));
+  // Git's structural newlines are LF. A CR before LF inside a hunk belongs
+  // to the file contents and must survive an apply/reverse round trip.
+  const starts = [...patch.matchAll(/^@@\s/gm)].map((match) => match.index);
+  if (starts.length === 0) return [];
+  const header = patch.slice(0, starts[0]);
+  return starts.map((start, index) => {
+    const hunk = header + patch.slice(start, starts[index + 1] ?? patch.length);
+    return hunk.endsWith('\n') ? hunk : `${hunk}\n`;
+  });
 };
 
 /**
