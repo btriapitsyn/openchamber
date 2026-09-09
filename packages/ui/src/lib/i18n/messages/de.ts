@@ -801,7 +801,7 @@ export const dict = {
   'gitView.empty.pullBehindSingle': '{count} Commit abrufen',
   'gitView.header.identityTooltip': 'Git-Identität',
   'gitView.context.configure': 'Repository konfigurieren',
-  'gitView.context.description': 'Was die Identität nicht entscheidet: die Agenten-Shell, Submodul- und LFS-Freigaben und der Neuanfang. Identitäten werden in den Git-Einstellungen verwaltet.',
+  'gitView.context.description': 'Was die Identität nicht entscheidet: die Agenten-Shell und die eigenen Freigaben für Submodule und Git LFS. Identitäten werden in den Git-Einstellungen verwaltet.',
   'gitView.context.needsAttention': 'Handlungsbedarf',
   'gitView.identity.system': 'System-Identität',
   'gitView.identity.systemNoAuthor': 'Auf diesem Computer ist kein Autor konfiguriert',

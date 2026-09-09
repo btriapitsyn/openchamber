@@ -726,7 +726,7 @@ export const dict = {
   'gitView.empty.pullBehindSingle': 'Extraire le commit {count}',
   'gitView.header.identityTooltip': 'Identité Git',
   'gitView.context.configure': 'Configurer le dépôt',
-  'gitView.context.description': 'Ce que l\'identité ne décide pas : le shell de l\'agent, les accès aux sous-modules et à LFS, et la remise à zéro. Les identités se gèrent dans les paramètres Git.',
+  'gitView.context.description': 'Ce que l\'identité ne décide pas : le shell de l\'agent et les accès distincts dont ont besoin les sous-modules et Git LFS. Les identités se gèrent dans les paramètres Git.',
   'gitView.context.needsAttention': 'À vérifier',
   'gitView.identity.system': 'Identité système',
   'gitView.identity.systemNoAuthor': 'Aucun auteur configuré sur cet ordinateur',

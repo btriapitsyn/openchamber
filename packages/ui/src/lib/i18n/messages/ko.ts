@@ -904,7 +904,7 @@ export const dict: Record<I18nKey, string> = {
   'gitView.empty.pullBehindSingle': '커밋 {count}개 가져오기',
   'gitView.header.identityTooltip': 'Git 인증 정보',
   'gitView.context.configure': '저장소 구성',
-  'gitView.context.description': '아이덴티티가 결정하지 않는 항목: 에이전트 셸, 서브모듈 및 LFS 권한, 그리고 처음부터 다시 시작. 아이덴티티는 Git 설정에서 관리합니다.',
+  'gitView.context.description': '아이덴티티가 결정하지 않는 항목: 에이전트 셸과, 서브모듈 및 Git LFS에 필요한 별도 권한. 아이덴티티는 Git 설정에서 관리합니다.',
   'gitView.context.needsAttention': '확인 필요',
   'gitView.identity.system': '시스템 아이덴티티',
   'gitView.identity.systemNoAuthor': '이 컴퓨터에는 작성자가 설정되어 있지 않습니다',

@@ -904,7 +904,7 @@ export const dict: Record<I18nKey, string> = {
   'gitView.empty.pullBehindSingle': '拉取 {count} 个提交',
   'gitView.header.identityTooltip': 'Git 身份',
   'gitView.context.configure': '配置仓库',
-  'gitView.context.description': '身份不决定的内容：代理 Shell、子模块与 LFS 授权，以及重新开始。身份在 Git 设置中管理。',
+  'gitView.context.description': '身份不决定的内容：代理 Shell，以及子模块与 Git LFS 需要的单独授权。身份在 Git 设置中管理。',
   'gitView.context.needsAttention': '需要处理',
   'gitView.identity.system': '系统身份',
   'gitView.identity.systemNoAuthor': '本机未配置提交作者',

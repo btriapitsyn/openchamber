@@ -7,7 +7,7 @@ export const dict: Record<I18nKey, string> = {
   'sessions.sidebar.projectAction.active': 'Acción del proyecto en curso',
   ...settingsDict,
   'gitView.context.configure': 'Configurar repositorio',
-  'gitView.context.description': 'Lo que la identidad no decide: la shell del agente, los permisos de submódulos y LFS, y empezar de cero. Las identidades se gestionan en la configuración de Git.',
+  'gitView.context.description': 'Lo que la identidad no decide: la shell del agente y los permisos aparte que necesitan los submódulos y Git LFS. Las identidades se gestionan en la configuración de Git.',
   'gitView.context.needsAttention': 'Requiere atención',
   'gitView.identity.system': 'Identidad del sistema',
   'gitView.identity.systemNoAuthor': 'No hay autor configurado en este equipo',

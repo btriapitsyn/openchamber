@@ -903,7 +903,7 @@ export const dict = {
   'gitView.empty.pullBehindSingle': 'Pull {count} commit',
   'gitView.header.identityTooltip': 'Git identity',
   'gitView.context.configure': 'Configure repository',
-  'gitView.context.description': 'What the identity does not decide: the agent shell, submodule and LFS grants, and starting over. Identities are managed in Git Settings.',
+  'gitView.context.description': 'What the identity does not decide: the agent shell, and the separate grants submodules and Git LFS need. Identities are managed in Git Settings.',
   'gitView.context.needsAttention': 'Needs attention',
   'gitView.identity.system': 'System identity',
   'gitView.identity.systemNoAuthor': 'No author configured on this computer',

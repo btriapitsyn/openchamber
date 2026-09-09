@@ -7,7 +7,7 @@ export const dict: Record<I18nKey, string> = {
   'sessions.sidebar.projectAction.active': 'Виконується дія проєкту',
   ...settingsDict,
   'gitView.context.configure': 'Налаштувати репозиторій',
-  'gitView.context.description': 'Те, чого ідентичність не вирішує: оболонка агента, доступи для підмодулів і LFS та початок з чистого аркуша. Ідентичностями керують у налаштуваннях Git.',
+  'gitView.context.description': 'Те, чого ідентичність не вирішує: оболонка агента та окремі доступи, потрібні підмодулям і Git LFS. Ідентичностями керують у налаштуваннях Git.',
   'gitView.context.needsAttention': 'Потребує уваги',
   'gitView.identity.system': 'Системна ідентичність',
   'gitView.identity.systemNoAuthor': 'На цьому комп’ютері не налаштовано автора',

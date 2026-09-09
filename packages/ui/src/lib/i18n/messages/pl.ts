@@ -2249,7 +2249,7 @@ export const dict: Record<I18nKey, string> = {
   'gitView.gitmoji.title': 'Insert gitmoji',
   'gitView.header.identityTooltip': 'Git identity',
   'gitView.context.configure': 'Skonfiguruj repozytorium',
-  'gitView.context.description': 'To, czego tożsamość nie rozstrzyga: powłoka agenta, uprawnienia do submodułów i LFS oraz rozpoczęcie od nowa. Tożsamościami zarządzasz w ustawieniach Git.',
+  'gitView.context.description': 'To, czego tożsamość nie rozstrzyga: powłoka agenta oraz osobne uprawnienia potrzebne submodułom i Git LFS. Tożsamościami zarządzasz w ustawieniach Git.',
   'gitView.context.needsAttention': 'Wymaga uwagi',
   'gitView.identity.system': 'Tożsamość systemowa',
   'gitView.identity.systemNoAuthor': 'Na tym komputerze nie skonfigurowano autora',

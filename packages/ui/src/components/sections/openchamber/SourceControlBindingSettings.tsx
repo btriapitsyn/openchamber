@@ -94,8 +94,9 @@ const AgentAuthorityEditor = ({ directory, className }: { directory: string; cla
  *
  * The identity carries the account, the transport and the signature, and the
  * panel names it on its own button, so this holds only what an identity does
- * not say: the separate grants for submodules and Git LFS, whether OpenChamber
- * answers Git in agent shells here. Starting over is choosing the System identity.
+ * not say: whether the repository's identity is applied in agent shells here,
+ * and the separate grants submodules and Git LFS need. Starting over is
+ * choosing the System identity.
  */
 export const RepositoryConfigurationDialog: React.FC<RepositoryConfigurationDialogProps> = ({ open, onOpenChange, directory }) => {
   const { t } = useI18n();
