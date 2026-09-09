@@ -386,6 +386,25 @@ describe('terminal state reconciliation', () => {
     expect(tab.purpose).toEqual({ type: 'project-action', actionId: 'build', executionId: secondExecution });
   });
 
+  // Regression for openchamber/openchamber#3448: a rerun reuses the tab id as
+  // the server session id, and the recreated server session restarts its
+  // sequence counter at zero. If allocateActionExecution kept the old buffer,
+  // the stale lastSequence would reject the new run's attach snapshot and its
+  // later output would be appended over the previous run's screen.
+  test('starting a rerun drops prior output so its sequence-zero snapshot is accepted', () => {
+    const tabId = setup();
+    useTerminalStore.getState().setTabPurpose('/repo', tabId, { type: 'project-action', actionId: 'build', executionId: 'exec-old' });
+    useTerminalStore.getState().setTabSessionId('/repo', tabId, tabId, { expectedExecutionId: 'exec-old' });
+    useTerminalStore.getState().appendToBuffer('/repo', tabId, 'old output', 5);
+
+    useTerminalStore.getState().allocateActionExecution('/repo', tabId, 'build');
+
+    expect(buffer(tabId).chunks).toEqual([]);
+    useTerminalStore.getState().replaceBuffer('/repo', tabId, 'new snapshot', 0);
+    expect(buffer(tabId).chunks.map((chunk) => chunk.data)).toEqual(['new snapshot']);
+    expect(buffer(tabId).lastSequence).toBe(0);
+  });
+
   test('applies snapshots atomically and deduplicates output by sequence', () => {
     const tabId = setup();
     useTerminalStore.getState().replaceBuffer('/repo', tabId, 'prompt', 4);
