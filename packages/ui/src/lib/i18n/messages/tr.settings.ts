@@ -1981,7 +1981,7 @@ export const settingsDict = {
   'settings.openchamber.visual.field.inputBarOffset': 'Giriş Çubuğu Ofseti',
   'settings.openchamber.visual.field.inputBarOffsetTooltip': 'Ana ekran çubuğu gibi işletim sistemi düzeyindeki ekran engellerinden kaçınmak için giriş çubuğunu yukarı kaldırır.',
   'settings.openchamber.visual.field.inputHistoryScope': 'Girdi geçmişi kapsamı',
-  'settings.openchamber.visual.field.inputHistoryScopeDescription': 'Gönderilen istemlerin bu çalışma zamanına bağlı tüm projelerde mi yoksa yalnızca geçerli oturumda mı geri çağrılacağını seçin.',
+  'settings.openchamber.visual.field.inputHistoryScopeDescription': 'Gönderilen promptların bu çalışma zamanına bağlı tüm projelerde mi yoksa yalnızca geçerli oturumda mı geri çağrılacağını seçin.',
   'settings.openchamber.visual.section.inputHistoryScopeAria': 'Girdi geçmişi kapsamı',
   'settings.openchamber.visual.option.inputHistoryScope.global.label': 'Tüm projeler',
   'settings.openchamber.visual.option.inputHistoryScope.session.label': 'Geçerli oturum',
