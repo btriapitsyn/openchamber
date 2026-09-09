@@ -37,6 +37,8 @@ export const dict: Record<I18nKey, string> = {
   'gitView.hydration.parentRemote': 'Nadrzędne repozytorium zdalne',
   'gitView.hydration.retry': 'Ponów uzupełnianie',
   'gitView.hydration.endpoint': 'Pomocniczy punkt końcowy',
+  'gitView.hydration.identity': 'Tożsamość dla tego punktu końcowego',
+  'gitView.hydration.authorizationNeeded': 'Hydratacja została zatrzymana, bo te punkty końcowe nie mają jeszcze tożsamości. Wybierz jedną dla każdego i ponów hydratację.',
   'gitView.hydration.chooseEndpoint': 'Wybierz punkt końcowy',
   'gitView.hydration.systemConfirmation': 'Zezwól Gitowi na użycie danych logowania ze środowiska systemowego dla tego punktu końcowego. OpenChamber nie może sprawdzić, których danych logowania użyje Git.',
   'gitView.hydration.lfsMissing': 'Git LFS nie jest zainstalowany. Zainstaluj git-lfs i ponów uzupełnianie.',

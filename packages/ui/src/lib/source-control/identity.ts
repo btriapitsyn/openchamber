@@ -147,15 +147,6 @@ export const getManagedCredentialSourceLabelKey = (source: 'oauth' | 'pat' | 'cl
       : 'settings.gitlab.token.label'
 );
 
-/** Origin of a provider instance, or null when the instance is not a valid host or URL. */
-export const getSourceControlIdentityOrigin = (identity: SourceControlIdentity): string | null => {
-  try {
-    return new URL(identity.instance.includes('://') ? identity.instance : `https://${identity.instance}`).origin;
-  } catch {
-    return null;
-  }
-};
-
 /**
  * The host a git remote points at, for `https://host/owner/repo.git` and for
  * the scp-like `git@host:owner/repo.git` alike. A provider association is
@@ -186,7 +177,6 @@ export const isSshRemoteUrl = (remoteUrl: string): boolean => {
   return !value.includes('://') && /^(?:[^@/:\s]+@)?[^/:\s]+:[^\s]+$/.test(value);
 };
 
-/** True only when every endpoint parses and shares the given origin. */
 /** What a remote URL allows: which host answers for it and how it can be reached. */
 export type RemoteTraits = { host: string | null; https: boolean; ssh: boolean };
 
@@ -301,14 +291,6 @@ export const proposeIdentityForHost = <T extends { id: string; account?: { insta
     || identities.find((identity) => identity.id === GLOBAL_IDENTITY_ID)
     || null;
 };
-
-export const endpointsShareOrigin = (endpoints: string[], origin: string): boolean => endpoints.every((endpoint) => {
-  try {
-    return new URL(endpoint).origin === origin;
-  } catch {
-    return false;
-  }
-});
 
 type ManagedAccountOption = {
   key: string;

@@ -47,6 +47,8 @@ export const dict: Record<I18nKey, string> = {
   'gitView.hydration.parentRemote': 'Батьківський віддалений репозиторій',
   'gitView.hydration.retry': 'Повторити підготовку',
   'gitView.hydration.endpoint': 'Допоміжна адреса',
+  'gitView.hydration.identity': 'Ідентичність для цієї адреси',
+  'gitView.hydration.authorizationNeeded': 'Гідрацію зупинено, бо ці адреси ще не мають ідентичності. Оберіть по одній для кожної та повторіть гідрацію.',
   'gitView.hydration.chooseEndpoint': 'Виберіть адресу',
   'gitView.hydration.systemConfirmation': 'Дозволити Git використовувати облікові дані із системного середовища для цієї адреси. OpenChamber не може перевірити, які облікові дані використає Git.',
   'gitView.hydration.lfsMissing': 'Git LFS не встановлено. Установіть git-lfs і повторіть підготовку.',

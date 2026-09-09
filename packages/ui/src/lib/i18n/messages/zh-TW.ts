@@ -37,6 +37,8 @@ export const dict: Record<I18nKey, string> = {
   'gitView.hydration.parentRemote': '上層遠端儲存庫',
   'gitView.hydration.retry': '重試內容補全',
   'gitView.hydration.endpoint': '輔助端點',
+  'gitView.hydration.identity': '此端點使用的身分',
+  'gitView.hydration.authorizationNeeded': '這些端點還沒有身分，水合已停止。請分別為它們選擇身分，然後重試水合。',
   'gitView.hydration.chooseEndpoint': '選擇端點',
   'gitView.hydration.systemConfirmation': '允許 Git 對此端點使用系統環境中的憑證。OpenChamber 無法驗證 Git 將使用哪些憑證。',
   'gitView.hydration.lfsMissing': '尚未安裝 Git LFS。請安裝 git-lfs，然後重試內容補全。',

@@ -36,6 +36,8 @@ export const dict = {
   'gitView.hydration.parentRemote': 'Dépôt distant parent',
   'gitView.hydration.retry': 'Réessayer la préparation',
   'gitView.hydration.endpoint': 'Destination auxiliaire',
+  'gitView.hydration.identity': 'Identité pour cette destination',
+  'gitView.hydration.authorizationNeeded': "L'hydratation s'est arrêtée car ces destinations n'ont pas encore d'identité. Choisissez-en une pour chacune, puis relancez l'hydratation.",
   'gitView.hydration.chooseEndpoint': 'Choisir une destination',
   'gitView.hydration.systemConfirmation': 'Autoriser Git à utiliser les identifiants de l’environnement système pour cette destination. OpenChamber ne peut pas vérifier quels identifiants Git utilisera.',
   'gitView.hydration.lfsMissing': 'Git LFS n’est pas installé. Installez git-lfs, puis réessayez la préparation.',

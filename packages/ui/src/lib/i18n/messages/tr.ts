@@ -3354,6 +3354,8 @@ export const dict = {
   'gitView.hydration.parentRemote': 'Üst remote',
   'gitView.hydration.retry': 'Tamamlamayı yeniden dene',
   'gitView.hydration.endpoint': 'Yardımcı endpoint',
+  'gitView.hydration.identity': 'Bu endpoint için kimlik',
+  'gitView.hydration.authorizationNeeded': 'Bu endpointlerin henüz bir kimliği olmadığı için hydration durdu. Her biri için bir kimlik seç ve hydration işlemini yeniden dene.',
   'gitView.hydration.chooseEndpoint': 'Bir endpoint seçin',
   'gitView.hydration.systemConfirmation': 'Git\'in bu endpoint için sistem ortamındaki kimlik bilgilerini kullanmasına izin verin. OpenChamber, Git\'in hangi kimlik bilgilerini kullanacağını doğrulayamaz.',
   'gitView.hydration.lfsMissing': 'Git LFS kurulu değil. git-lfs kurun, ardından tamamlamayı yeniden deneyin.',

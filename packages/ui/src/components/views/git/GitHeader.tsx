@@ -206,7 +206,10 @@ export const IdentityDropdown: React.FC<IdentityDropdownProps> = ({
         </TooltipTrigger>
         <TooltipContent sideOffset={8}>{attention ?? t('gitView.header.identityTooltip')}</TooltipContent>
       </Tooltip>
-      <DropdownMenuContent align={menuAlign} className="w-64">
+      {/* The list grows with the person's identities, and a trigger low on a
+          form leaves little room beneath it, so the menu scrolls inside
+          whatever height it is given rather than running past its own edge. */}
+      <DropdownMenuContent align={menuAlign} className="w-64 overflow-y-auto">
         {identities.length === 0 ? (
           <div className="px-2 py-1.5">
             <p className="typography-meta text-muted-foreground">

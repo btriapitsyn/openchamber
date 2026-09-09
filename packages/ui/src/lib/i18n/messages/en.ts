@@ -36,6 +36,8 @@ export const dict = {
   'gitView.hydration.parentRemote': 'Parent remote',
   'gitView.hydration.retry': 'Retry hydration',
   'gitView.hydration.endpoint': 'Auxiliary endpoint',
+  'gitView.hydration.identity': 'Identity for this endpoint',
+  'gitView.hydration.authorizationNeeded': 'Hydration stopped because these endpoints have no identity yet. Choose one for each, then retry hydration.',
   'gitView.hydration.chooseEndpoint': 'Choose an endpoint',
   'gitView.hydration.systemConfirmation': 'Allow Git to use credentials from the system environment for this endpoint. OpenChamber cannot verify which credentials Git will use.',
   'gitView.hydration.lfsMissing': 'Git LFS is not installed. Install git-lfs, then retry hydration.',

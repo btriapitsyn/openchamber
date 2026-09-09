@@ -36,6 +36,8 @@ export const dict = {
   'gitView.hydration.parentRemote': 'Übergeordnetes Remote',
   'gitView.hydration.retry': 'Vervollständigung wiederholen',
   'gitView.hydration.endpoint': 'Zusätzlicher Endpunkt',
+  'gitView.hydration.identity': 'Identität für diesen Endpunkt',
+  'gitView.hydration.authorizationNeeded': 'Die Hydration wurde angehalten, weil diese Endpunkte noch keine Identität haben. Wähle für jeden eine aus und starte die Hydration erneut.',
   'gitView.hydration.chooseEndpoint': 'Endpunkt auswählen',
   'gitView.hydration.systemConfirmation': 'Git darf für diesen Endpunkt Anmeldedaten aus der Systemumgebung verwenden. OpenChamber kann nicht prüfen, welche Anmeldedaten Git verwendet.',
   'gitView.hydration.lfsMissing': 'Git LFS ist nicht installiert. Installieren Sie git-lfs und wiederholen Sie die Vervollständigung.',

@@ -1,10 +1,10 @@
 import React from 'react';
 import {
-  buildManagedAccountOptions,
-  endpointsShareOrigin,
-  getManagedCredentialSourceLabelKey,
-  getSourceControlIdentityOrigin,
-  isSshRemoteUrl,
+  identityAccountConnected,
+  instanceHost,
+  remoteTraits,
+  selectableIdentities,
+  type RemoteTraits,
 } from '@/lib/source-control/identity';
 import { Button } from '@/components/ui/button';
 import {
@@ -20,12 +20,17 @@ import { cn } from '@/lib/utils';
 import type {
   GitAuxiliaryBindingIntent,
   GitCheckoutHydrationRequirement,
+  GitIdentityProfile,
   GitNetworkOperation,
 } from '@/lib/api/types';
+import { identityTransport, isCompleteIdentity } from '@/lib/api/git-identity';
+import { identityApplicability, type IdentityApplicability } from '@/lib/source-control/applyIdentity';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { GitOperationResultError, runCheckoutHydration } from '@/lib/boundGitNetworkOperation';
 import { repositoryBindingOwner, useRepositoryBinding } from '@/lib/source-control/repository-binding';
-import { getSourceControlAuthKey, useSourceControlAuthStore } from '@/stores/useSourceControlAuthStore';
+import { useConnectedAccountIds, useSourceControlAuthStore } from '@/stores/useSourceControlAuthStore';
+import { useGitIdentitiesStore } from '@/stores/useGitIdentitiesStore';
+import { useGitIdentity } from '@/stores/useGitStore';
 import {
   SETTINGS_FIELDS_STACK_CLASS,
   SETTINGS_HELPER_CLASS,
@@ -37,7 +42,7 @@ import {
 } from '../shared/SettingsSection';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Icon } from '@/components/icon/Icon';
-import { ManagedSshCredentials } from './ManagedSshCredentials';
+import { IdentityDropdown } from '@/components/views/git/GitHeader';
 import { useGitOperationRecovery } from '@/components/views/git/useGitOperationRecovery';
 import { GitOperationStatus } from '@/components/views/git/GitOperationStatus';
 
@@ -82,16 +87,19 @@ export const AuxiliaryBindingSettings: React.FC<SourceControlBindingSettingsProp
   const recovery = useGitOperationRecovery(directory, git, sourceControl);
   const [parentRemote, setParentRemote] = React.useState('');
   const [selectedRequirement, setSelectedRequirement] = React.useState('');
-  const [transport, setTransport] = React.useState<'system' | 'https' | 'ssh' | 'anonymous' | ''>('');
-  const [accountKey, setAccountKey] = React.useState('');
-  const [sshCredential, setSshCredential] = React.useState('');
+  const [identityChoice, setIdentityChoice] = React.useState<{ endpoint: string; id: string } | null>(null);
   const [unverifiedConfirmed, setUnverifiedConfirmed] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState(false);
   const [open, setOpen] = React.useState(false);
   const requestRef = React.useRef(0);
-  const identities = useSourceControlAuthStore((state) => state.identities);
-  const authEntries = useSourceControlAuthStore((state) => state.entries);
+  const gitIdentityProfiles = useGitIdentitiesStore((state) => state.profiles);
+  const globalGitIdentity = useGitIdentitiesStore((state) => state.globalIdentity);
+  const loadGitIdentityProfiles = useGitIdentitiesStore((state) => state.loadProfiles);
+  const loadGlobalGitIdentity = useGitIdentitiesStore((state) => state.loadGlobalIdentity);
+  const connectedAccountIds = useConnectedAccountIds();
+  const refreshIdentityAccounts = useSourceControlAuthStore((state) => state.refreshIdentityAccounts);
+  const repositoryAuthor = useGitIdentity(directory);
   const latest = recovery.entry?.reads.at(-1)?.operation;
   const requirements = latest?.target.operation === 'checkout-hydration'
     && latest.target.remote.name === parentRemote ? hydrationRequirements(latest) : [];
@@ -105,9 +113,7 @@ export const AuxiliaryBindingSettings: React.FC<SourceControlBindingSettingsProp
     requestRef.current += 1;
     setParentRemote('');
     setSelectedRequirement('');
-    setTransport('');
-    setAccountKey('');
-    setSshCredential('');
+    setIdentityChoice(null);
     setUnverifiedConfirmed(false);
     setSaving(false);
     setError(false);
@@ -116,28 +122,59 @@ export const AuxiliaryBindingSettings: React.FC<SourceControlBindingSettingsProp
   }, [binding.scope, git, sourceControl]);
 
   React.useLayoutEffect(() => {
-    setTransport('');
-    setAccountKey('');
-    setSshCredential('');
     setUnverifiedConfirmed(false);
   }, [selected?.endpoint.fingerprint]);
 
-  const accountOptions = identities.flatMap((identity) => {
-    const entry = authEntries[getSourceControlAuthKey(identity)];
-    if (!selected?.endpoint.displayUrl.startsWith('https://') || entry?.status?.status !== 'connected') return [];
-    const origin = getSourceControlIdentityOrigin(identity);
-    if (!origin || !endpointsShareOrigin([selected.endpoint.displayUrl], origin)) return [];
-    return buildManagedAccountOptions(identity, entry.status.accounts, (account) => t(getManagedCredentialSourceLabelKey(account.source)));
-  });
-  const account = accountOptions.find((entry) => entry.key === accountKey);
-  const isHttps = selected?.endpoint.displayUrl.startsWith('https://');
-  const isSsh = Boolean(selected && isSshRemoteUrl(selected.endpoint.displayUrl));
+  React.useEffect(() => {
+    if (!open) return;
+    void loadGitIdentityProfiles();
+    void loadGlobalGitIdentity();
+  }, [loadGitIdentityProfiles, loadGlobalGitIdentity, open]);
+
+  // A submodule or LFS server is authenticated the same way a remote is, so it
+  // is answered with an identity rather than with a transport and a credential
+  // chosen apart from it. Identities kept from an earlier release name no
+  // account and no transport, so they have nothing to grant an endpoint with
+  // and are not offered here.
+  const availableIdentities = React.useMemo(
+    () => selectableIdentities(gitIdentityProfiles, globalGitIdentity,
+      (identity) => isCompleteIdentity(identity) && identityAccountConnected(identity, connectedAccountIds)),
+    [connectedAccountIds, gitIdentityProfiles, globalGitIdentity],
+  );
+  const endpointUrl = selected?.endpoint.displayUrl ?? '';
+  const endpoint = React.useMemo((): RemoteTraits | null => endpointUrl ? remoteTraits(endpointUrl) : null, [endpointUrl]);
+  const applicabilityOf = React.useCallback((identity: GitIdentityProfile): IdentityApplicability =>
+    endpoint ? identityApplicability(identity, endpoint) : { applicable: true }, [endpoint]);
+
+  /**
+   * The identity this endpoint is proposed with.
+   *
+   * A submodule on the repository's own host is the ordinary case, and the
+   * repository already answered who it acts as there, so that identity is
+   * offered and only has to be confirmed. An endpoint on another host is a
+   * question OpenChamber cannot answer — no identity on file speaks for it —
+   * so nothing is proposed and the person names one.
+   */
+  const proposedIdentity = React.useMemo(() => {
+    const applicable = availableIdentities.filter((identity) => applicabilityOf(identity).applicable);
+    const signedAs = repositoryAuthor?.userName && repositoryAuthor.userEmail
+      ? applicable.find((identity) => identity.userName === repositoryAuthor.userName
+        && identity.userEmail === repositoryAuthor.userEmail)
+      : undefined;
+    return signedAs
+      ?? applicable.find((identity) => identity.account && endpoint?.host
+        && instanceHost(identity.account.instance) === endpoint.host)
+      ?? null;
+  }, [applicabilityOf, availableIdentities, endpoint, repositoryAuthor]);
+  const identity = (identityChoice?.endpoint === selected?.endpoint.fingerprint
+    ? availableIdentities.find((entry) => entry.id === identityChoice?.id)
+    : null) ?? proposedIdentity;
+  const transport = identity ? identityTransport(identity) : null;
   const canSave = Boolean(binding.status === 'ready' && read?.binding && remote && selected
-    && git.configureAuxiliaryBinding && !saving && transport
+    && git.configureAuxiliaryBinding && !saving && identity && applicabilityOf(identity).applicable
     && (transport !== 'system' || unverifiedConfirmed)
-    && (transport !== 'https' || isHttps && account)
-    && (transport !== 'ssh' || isSsh && sshCredential)
-    && (transport !== 'anonymous' || isHttps));
+    && (transport !== 'account' || identity?.account)
+    && (transport !== 'ssh' || identity?.sshCredentialId));
   const canRemove = Boolean(binding.status === 'ready' && currentGrant && remote && git.configureAuxiliaryBinding && !saving);
 
   const retryHydration = async () => {
@@ -173,12 +210,16 @@ export const AuxiliaryBindingSettings: React.FC<SourceControlBindingSettingsProp
       path: selected.path,
       expectedEndpointFingerprint: selected.endpoint.fingerprint,
     };
+    // The identity names how this endpoint authenticates; the grant records it
+    // in the terms the binding is written in.
     let intent: GitAuxiliaryBindingIntent;
     if (operation === 'remove') intent = { ...authority, operation };
     else if (transport === 'system') intent = { ...authority, operation, transport, unverifiedConfirmed: true };
-    else if (transport === 'https' && account) intent = { ...authority, operation, transport, credentialAccount: account.reference };
-    else if (transport === 'ssh') intent = { ...authority, operation, transport, sshCredentialId: sshCredential };
-    else if (transport === 'anonymous') intent = { ...authority, operation, transport };
+    else if (transport === 'account' && identity?.account) {
+      intent = { ...authority, operation, transport: 'https', credentialAccount: identity.account };
+    } else if (transport === 'ssh' && identity?.sshCredentialId) {
+      intent = { ...authority, operation, transport, sshCredentialId: identity.sshCredentialId };
+    } else if (transport === 'anonymous') intent = { ...authority, operation, transport };
     else return;
     const mutationScope = repositoryBindingOwner.captureMutation(binding.scope, read);
     setSaving(true);
@@ -188,12 +229,7 @@ export const AuxiliaryBindingSettings: React.FC<SourceControlBindingSettingsProp
       if (!repositoryBindingOwner.setMutationResult(mutationScope, result.binding)) {
         await repositoryBindingOwner.reconcile(mutationScope, sourceControl);
       }
-      if (isCurrent()) {
-        setTransport('');
-        setAccountKey('');
-        setSshCredential('');
-        setUnverifiedConfirmed(false);
-      }
+      if (isCurrent()) setUnverifiedConfirmed(false);
     } catch {
       if (isCurrent()) setError(true);
       await repositoryBindingOwner.reconcile(mutationScope, sourceControl);
@@ -202,6 +238,12 @@ export const AuxiliaryBindingSettings: React.FC<SourceControlBindingSettingsProp
       if (isCurrent()) setSaving(false);
     }
   };
+
+  // The operation card carries the server's own code and message, which names
+  // the mechanism rather than the next step. Beside the endpoints it stopped
+  // on, this says what to do about them.
+  const authorizationNeeded = Boolean(requirements.length && latest && 'error' in latest
+    && latest.error.code === 'AUTHENTICATION_REQUIRED');
 
   const kindLabel = (kind: GitCheckoutHydrationRequirement['kind']) => t(kind === 'submodule' ? 'gitView.hydration.kind.submodule' : 'gitView.hydration.kind.lfs');
 
@@ -224,9 +266,7 @@ export const AuxiliaryBindingSettings: React.FC<SourceControlBindingSettingsProp
         <Select value={parentRemote} onValueChange={(value) => {
           setParentRemote(value);
           setSelectedRequirement('');
-          setTransport('');
-          setAccountKey('');
-          setSshCredential('');
+          setIdentityChoice(null);
           setUnverifiedConfirmed(false);
         }} disabled={!read?.binding || saving || recovery.blocked}>
           <SelectTrigger size={SETTINGS_SELECT_SIZE} className="w-full" aria-label={t('gitView.hydration.parentRemote')}>
@@ -238,6 +278,7 @@ export const AuxiliaryBindingSettings: React.FC<SourceControlBindingSettingsProp
         </Select>
       </SettingsStackedField>
       <GitOperationStatus entry={recovery.entry} onRefresh={() => void recovery.refresh()} onCancel={() => void recovery.cancel()} />
+      {authorizationNeeded ? <p className={SETTINGS_HELPER_CLASS}>{t('gitView.hydration.authorizationNeeded')}</p> : null}
       {requirements.length ? <SettingsStackedField label={t('gitView.hydration.endpoint')} controlClassName={EDITOR_CONTROL_CLASS}>
         <Select value={selectedRequirement} onValueChange={setSelectedRequirement} disabled={saving}>
           <SelectTrigger size={SETTINGS_SELECT_SIZE} className="w-full" aria-label={t('gitView.hydration.endpoint')}>
@@ -252,30 +293,21 @@ export const AuxiliaryBindingSettings: React.FC<SourceControlBindingSettingsProp
         </Select>
       </SettingsStackedField> : null}
       {selected ? <>
-        <SettingsStackedField label={t('settings.sourceControl.transport.modeLabel')} controlClassName={EDITOR_CONTROL_CLASS}>
-          <Select value={transport} onValueChange={(value) => {
-            if (value === 'system' || value === 'https' || value === 'ssh' || value === 'anonymous') setTransport(value);
-          }} disabled={saving}>
-            <SelectTrigger size={SETTINGS_SELECT_SIZE} className="w-full" aria-label={t('settings.sourceControl.transport.modeAriaLabel')}>
-              <SelectValue placeholder={t('settings.sourceControl.transport.choose')} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="system">{t('settings.sourceControl.transport.system')}</SelectItem>
-              <SelectItem value="anonymous" disabled={!isHttps}>{t('settings.sourceControl.transport.anonymous')}</SelectItem>
-              <SelectItem value="https" disabled={!isHttps}>{t('settings.sourceControl.transport.https')}</SelectItem>
-              <SelectItem value="ssh" disabled={!isSsh}>{t('settings.sourceControl.transport.ssh')}</SelectItem>
-            </SelectContent>
-          </Select>
+        <SettingsStackedField label={t('gitView.hydration.identity')} controlClassName={EDITOR_CONTROL_CLASS}>
+          <IdentityDropdown
+            activeProfile={identity}
+            identities={availableIdentities}
+            onSelect={(profile) => {
+              setIdentityChoice({ endpoint: selected.endpoint.fingerprint, id: profile.id });
+              setUnverifiedConfirmed(false);
+            }}
+            isApplying={saving}
+            applicability={applicabilityOf}
+            triggerClassName="w-full max-w-none border border-border"
+            menuAlign="start"
+            onOpen={() => void refreshIdentityAccounts(sourceControl, gitIdentityProfiles.map((profile) => profile.account))}
+          />
         </SettingsStackedField>
-        {transport === 'https' ? <SettingsStackedField label={t('settings.sourceControl.transport.credentialAccount')} controlClassName={EDITOR_CONTROL_CLASS}>
-          <Select value={accountKey} onValueChange={setAccountKey} disabled={saving}>
-            <SelectTrigger size={SETTINGS_SELECT_SIZE} className="w-full" aria-label={t('settings.sourceControl.transport.credentialAccount')}>
-              <SelectValue placeholder={t('settings.sourceControl.binding.noAccounts')}>{account?.label}</SelectValue>
-            </SelectTrigger>
-            <SelectContent>{accountOptions.map((entry) => <SelectItem key={entry.key} value={entry.key}>{entry.label}</SelectItem>)}</SelectContent>
-          </Select>
-        </SettingsStackedField> : null}
-        {transport === 'ssh' ? <ManagedSshCredentials selection={{ value: sshCredential, onChange: setSshCredential }} disabled={saving} /> : null}
         {transport === 'system' ? <SettingsCheckboxRow checked={unverifiedConfirmed} onChange={setUnverifiedConfirmed} disabled={saving}
           label={t('gitView.hydration.systemConfirmation')} /> : null}
       </> : null}

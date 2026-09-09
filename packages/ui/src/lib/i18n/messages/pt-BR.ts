@@ -47,6 +47,8 @@ export const dict: Record<I18nKey, string> = {
   'gitView.hydration.parentRemote': 'Remoto principal',
   'gitView.hydration.retry': 'Tentar preparação novamente',
   'gitView.hydration.endpoint': 'Destino auxiliar',
+  'gitView.hydration.identity': 'Identidade para este destino',
+  'gitView.hydration.authorizationNeeded': 'A hidratação parou porque esses destinos ainda não têm identidade. Escolha uma para cada um e tente novamente.',
   'gitView.hydration.chooseEndpoint': 'Escolha um destino',
   'gitView.hydration.systemConfirmation': 'Permitir que o Git use credenciais do ambiente do sistema para este destino. O OpenChamber não pode verificar quais credenciais o Git usará.',
   'gitView.hydration.lfsMissing': 'O Git LFS não está instalado. Instale o git-lfs e tente a preparação novamente.',

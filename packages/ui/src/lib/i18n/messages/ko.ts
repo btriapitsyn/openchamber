@@ -37,6 +37,8 @@ export const dict: Record<I18nKey, string> = {
   'gitView.hydration.parentRemote': '상위 원격 저장소',
   'gitView.hydration.retry': '준비 다시 시도',
   'gitView.hydration.endpoint': '보조 엔드포인트',
+  'gitView.hydration.identity': '이 엔드포인트의 아이덴티티',
+  'gitView.hydration.authorizationNeeded': '이 엔드포인트에 아직 아이덴티티가 없어 하이드레이션이 중단되었습니다. 각각에 아이덴티티를 선택한 뒤 다시 시도하세요.',
   'gitView.hydration.chooseEndpoint': '엔드포인트 선택',
   'gitView.hydration.systemConfirmation': 'Git이 이 엔드포인트에 시스템 환경의 인증 정보를 사용하도록 허용합니다. OpenChamber는 Git이 어떤 인증 정보를 사용하는지 확인할 수 없습니다.',
   'gitView.hydration.lfsMissing': 'Git LFS가 설치되어 있지 않습니다. git-lfs를 설치한 후 준비를 다시 시도하세요.',
