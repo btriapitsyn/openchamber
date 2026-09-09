@@ -479,7 +479,7 @@ describe('updateDesktopSettings', () => {
     expect(useUIStore.getState().toolJsonViewMode).toBe('raw');
     expect(useUIStore.getState().globalDraftStarters).toEqual([{ type: 'command', name: 'runtime-a' }]);
     expect(useUIStore.getState().draftStartersVisible).toBe(false);
-    expect(useMessageQueueStore.getState().followUpBehavior).toBe('steer');
+    expect(useMessageQueueStore.getState().followUpBehavior).toBe('queue');
   });
 
   test('treats settings save responses as partial patches', async () => {
