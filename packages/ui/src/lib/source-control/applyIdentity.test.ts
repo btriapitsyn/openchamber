@@ -6,7 +6,7 @@ import type {
   SourceControlProviderBindingMutation,
   SourceControlRepositoryBinding,
 } from '@/lib/api/types';
-import { applyIdentityToRepository, describeIdentityApplicability, identityApplicability, needsSystemAcknowledgement } from './applyIdentity';
+import { applyIdentityToRepository, describeIdentityApplicability, identityApplicability, isSignatureOnlyIdentity, needsSystemAcknowledgement } from './applyIdentity';
 import { repositoryBindingOwner } from './repository-binding';
 import { usePendingOpenCodeRestartStore } from '@/stores/usePendingOpenCodeRestartStore';
 
@@ -105,10 +105,13 @@ describe('identityApplicability', () => {
 });
 
 describe('needsSystemAcknowledgement', () => {
-  test('asks before an identity that uses whatever the machine holds', () => {
-    expect(needsSystemAcknowledgement(identity({ transport: 'system' }), true)).toBe(true);
-    // An identity written before identities carried a transport means the same.
-    expect(needsSystemAcknowledgement(identity(), true)).toBe(true);
+  const system = identity({ id: 'global', transport: 'system' });
+
+  test('asks before the identity that uses whatever the machine holds', () => {
+    expect(needsSystemAcknowledgement(system, true)).toBe(true);
+    // A stored identity that names no account is a signature, not a claim on
+    // the machine's credentials, so it asks nothing.
+    expect(needsSystemAcknowledgement(identity(), true)).toBe(false);
   });
 
   test('asks nothing when the identity names its own credentials', () => {
@@ -207,16 +210,16 @@ describe('applyIdentityToRepository', () => {
   test('asks before trusting whatever the machine holds', async () => {
     const unacknowledged = harness();
     expect(await applyIdentityToRepository(
-      { directory: '/repo', remoteName: 'origin', identity: identity({ transport: 'system' }) },
+      { directory: '/repo', remoteName: 'origin', identity: identity({ id: 'global', transport: 'system' }) },
       unacknowledged.apis,
     )).toEqual({ status: 'acknowledgement-required' });
     expect(unacknowledged.transportCalls).toEqual([]);
     // The signature is still written: it is about who commits, not about trust.
-    expect(unacknowledged.authorCalls).toEqual(['/repo:work']);
+    expect(unacknowledged.authorCalls).toEqual(['/repo:global']);
 
     const acknowledged = harness();
     expect(await applyIdentityToRepository({
-      directory: '/repo', remoteName: 'origin', identity: identity({ transport: 'system' }), acknowledgedSystem: true,
+      directory: '/repo', remoteName: 'origin', identity: identity({ id: 'global', transport: 'system' }), acknowledgedSystem: true,
     }, acknowledged.apis)).toEqual({ status: 'applied' });
     expect(acknowledged.transportCalls[0]).toEqual({
       directory: '/repo', expectedRepositoryId: 'repo_one', expectedRevision: 2, expectedConfigRevision: 'config_one',
@@ -301,5 +304,35 @@ describe('applyIdentityToRepository', () => {
     expect(authorCalls).toEqual(['/repo:work']);
     expect(providerCalls).toEqual([]);
     expect(transportCalls).toEqual([]);
+  });
+});
+
+describe('signature-only identities from an earlier release', () => {
+  const legacy = identity({ id: 'profile-1', name: 'Work' });
+
+  test('writes the author and leaves the repository account and transport alone', async () => {
+    const bound = {
+      provider: 'github' as const, instance: 'github.com', accountId: 'occred:v1:github:one:r1',
+      primaryRemote: 'origin', readiness: 'ready' as const, endpoint: endpoint('fetch-one'),
+    };
+    const { apis, providerCalls, transportCalls, authorCalls } = harness(read([bound]));
+
+    expect(await applyIdentityToRepository({ directory: '/repo', remoteName: 'origin', identity: legacy }, apis))
+      .toEqual({ status: 'applied' });
+    expect(authorCalls).toEqual(['/repo:profile-1']);
+    // In the release that made these, choosing one wrote the author and nothing
+    // else. Removing the repository's account here would be a new behaviour.
+    expect(providerCalls).toEqual([]);
+    expect(transportCalls).toEqual([]);
+  });
+
+  test('is not the System identity, so it asks for no acknowledgement', () => {
+    expect(isSignatureOnlyIdentity(legacy)).toBe(true);
+    expect(needsSystemAcknowledgement(legacy, true)).toBe(false);
+    // The System identity still asks: it does claim the machine's credentials.
+    expect(isSignatureOnlyIdentity(identity({ id: 'global', transport: 'system' }))).toBe(false);
+    expect(needsSystemAcknowledgement(identity({ id: 'global', transport: 'system' }), true)).toBe(true);
+    // An identity that names an account is complete, not a signature.
+    expect(isSignatureOnlyIdentity(identity({ account, transport: 'account' }))).toBe(false);
   });
 });

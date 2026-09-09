@@ -717,6 +717,7 @@ export const settingsDict = {
   'settings.gitIdentities.editor.auth.anonymousHint': 'Öffentliches HTTPS ohne Zugangsdaten, nur lesend. Für Issues und Änderungsanfragen gilt weiterhin das Konto.',
   'settings.gitIdentities.page.incomplete': 'Braucht ein Konto, bevor ein Repository sie nutzen kann',
   'settings.gitIdentities.page.accountGone': 'Das Konto dieser Identität ist nicht mehr verbunden',
+  'settings.gitIdentities.page.signatureOnly': 'Nur Signatur, aus einer früheren Version',
   'settings.gitIdentities.editor.toast.accountRequired': 'Wähle das Konto, als das diese Identität handelt, oder eine andere Anmeldung.',
   'settings.gitIdentities.editor.toast.sshKeyRequired': 'Wähle den verwalteten SSH-Schlüssel dieser Identität.',
   'settings.gitIdentities.editor.actions.close': 'Schließen',

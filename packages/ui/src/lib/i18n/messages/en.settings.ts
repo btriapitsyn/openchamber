@@ -771,6 +771,7 @@ export const settingsDict = {
   'settings.gitIdentities.editor.auth.anonymousHint': 'Public HTTPS without credentials, read-only. The account still answers for issues and change requests.',
   'settings.gitIdentities.page.incomplete': 'Needs an account before a repository can use it',
   'settings.gitIdentities.page.accountGone': 'The account this identity uses is no longer connected',
+  'settings.gitIdentities.page.signatureOnly': 'Signature only, from an earlier release',
   'settings.gitIdentities.editor.toast.accountRequired': 'Choose the account this identity acts as, or another way to authenticate.',
   'settings.gitIdentities.editor.toast.sshKeyRequired': 'Choose the managed SSH key this identity uses.',
   'settings.gitIdentities.editor.actions.close': 'Close',

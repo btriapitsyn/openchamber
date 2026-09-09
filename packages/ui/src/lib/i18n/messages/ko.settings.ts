@@ -739,6 +739,7 @@ export const settingsDict = {
   'settings.gitIdentities.editor.auth.anonymousHint': '자격 증명 없는 공개 HTTPS, 읽기 전용. 이슈와 변경 요청에는 여전히 계정을 사용합니다.',
   'settings.gitIdentities.page.incomplete': '저장소에서 사용하려면 계정이 필요합니다',
   'settings.gitIdentities.page.accountGone': '이 아이덴티티가 사용하는 계정이 더 이상 연결되어 있지 않습니다',
+  'settings.gitIdentities.page.signatureOnly': '서명만, 이전 버전에서',
   'settings.gitIdentities.editor.toast.accountRequired': '이 ID가 사용할 계정을, 또는 다른 인증 방법을 선택하세요.',
   'settings.gitIdentities.editor.toast.sshKeyRequired': '이 ID가 사용할 관리형 SSH 키를 선택하세요.',
   'settings.gitIdentities.editor.actions.close': '닫기',

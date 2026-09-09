@@ -5,6 +5,7 @@ import ts from 'typescript';
 import type { GitIdentityProfile } from '@/lib/api/types';
 import { isCompleteIdentity } from '@/lib/api/git-identity';
 import { identityAccountConnected, selectableIdentities } from '@/lib/source-control/identity';
+import { isSignatureOnlyIdentity } from '@/lib/source-control/applyIdentity';
 
 // Execute the component's actual author callbacks without mocking React or exporting UI internals.
 const readAuthorCallback = (file: URL, name: string): string => {
@@ -46,7 +47,7 @@ const plain: GitIdentityProfile = { id: 'plain', name: 'Author', userName: 'Plai
 const incomplete: GitIdentityProfile = { id: 'legacy', name: 'Legacy', userName: 'Legacy Author', userEmail: 'legacy@example.com' };
 // The callback also asks whether the identity's account is still connected;
 // an instance that has not been read answers null, which keeps it offered.
-const helpers = { selectableIdentities, isCompleteIdentity, identityAccountConnected, connectedAccountIds: () => null };
+const helpers = { selectableIdentities, isCompleteIdentity, isSignatureOnlyIdentity, identityAccountConnected, connectedAccountIds: () => null };
 const profiles = [work, signed, plain];
 
 // The clone screen no longer chooses an author on its own: it proposes one
@@ -61,9 +62,9 @@ describe('Git view authors', () => {
     expect(runInNewContext(availableAuthors, { profiles: [signed, work, signed], globalIdentity, ...helpers }))
       .toEqual([globalIdentity, signed, work]);
     expect(runInNewContext(availableAuthors, { profiles: [signed], globalIdentity: null, ...helpers })[0]).toBe(signed);
-    // An identity that names no account cannot be given to a repository.
+    // An identity from an earlier release is a signature, and still offered.
     expect(runInNewContext(availableAuthors, { profiles: [incomplete, work], globalIdentity: null, ...helpers }))
-      .toEqual([work]);
+      .toEqual([incomplete, work]);
   });
 
   test('prefers a matching stored author over a matching global author and preserves signing', () => {

@@ -18,7 +18,7 @@ import { GitOperationStatus } from '@/components/views/git/GitOperationStatus';
 import { useExistingRepositorySummary } from './useExistingRepositorySummary';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { identityTransport, isCompleteIdentity } from '@/lib/api/git-identity';
-import { applyIdentityToRepository, identityApplicability, type IdentityApplicability } from '@/lib/source-control/applyIdentity';
+import { applyIdentityToRepository, identityApplicability, type IdentityApplicability, isSignatureOnlyIdentity } from '@/lib/source-control/applyIdentity';
 import type { GitIdentityProfile } from '@/lib/api/types';
 import { useSourceControlAuthStore, useConnectedAccountIds } from '@/stores/useSourceControlAuthStore';
 import { IdentityDropdown } from '@/components/views/git/GitHeader';
@@ -271,7 +271,8 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
   const connectedAccountIds = useConnectedAccountIds();
   const availableGitIdentities = React.useMemo(
     () => selectableIdentities(gitIdentityProfiles, globalGitIdentity,
-      (identity) => isCompleteIdentity(identity) && identityAccountConnected(identity, connectedAccountIds)),
+      (identity) => (isCompleteIdentity(identity) || isSignatureOnlyIdentity(identity))
+        && identityAccountConnected(identity, connectedAccountIds)),
     [gitIdentityProfiles, globalGitIdentity, connectedAccountIds],
   );
 

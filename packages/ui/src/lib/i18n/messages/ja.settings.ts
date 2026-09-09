@@ -772,6 +772,7 @@ export const settingsDict = {
   'settings.gitIdentities.editor.auth.anonymousHint': '資格情報なしの公開 HTTPS、読み取り専用。Issue や変更リクエストにはアカウントを使います。',
   'settings.gitIdentities.page.incomplete': 'リポジトリで使うにはアカウントが必要です',
   'settings.gitIdentities.page.accountGone': 'このアイデンティティが使うアカウントは接続されていません',
+  'settings.gitIdentities.page.signatureOnly': '署名のみ（以前のバージョンから）',
   'settings.gitIdentities.editor.toast.accountRequired': 'このアイデンティティが名乗るアカウント、または別の認証方法を選んでください。',
   'settings.gitIdentities.editor.toast.sshKeyRequired': 'このアイデンティティが使う管理対象 SSH キーを選んでください。',
   'settings.gitIdentities.editor.actions.close': '閉じる',

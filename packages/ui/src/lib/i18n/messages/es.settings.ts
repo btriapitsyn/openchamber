@@ -739,6 +739,7 @@ export const settingsDict = {
   'settings.gitIdentities.editor.auth.anonymousHint': 'HTTPS público sin credenciales, solo lectura. La cuenta sigue respondiendo por issues y solicitudes de cambios.',
   'settings.gitIdentities.page.incomplete': 'Necesita una cuenta antes de que un repositorio pueda usarla',
   'settings.gitIdentities.page.accountGone': 'La cuenta que usa esta identidad ya no está conectada',
+  'settings.gitIdentities.page.signatureOnly': 'Solo firma, de una versión anterior',
   "settings.gitIdentities.editor.toast.accountRequired": "Elige la cuenta con la que actúa esta identidad, u otra forma de autenticarse.",
   "settings.gitIdentities.editor.toast.sshKeyRequired": "Elige la clave SSH gestionada que usa esta identidad.",
   "settings.gitIdentities.editor.actions.close": "Cerrar",

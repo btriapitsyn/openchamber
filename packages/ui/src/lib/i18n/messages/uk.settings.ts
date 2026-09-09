@@ -739,6 +739,7 @@ export const settingsDict = {
   'settings.gitIdentities.editor.auth.anonymousHint': 'Публічний HTTPS без облікових даних, лише читання. За задачі та запити змін і далі відповідає акаунт.',
   'settings.gitIdentities.page.incomplete': 'Потрібен акаунт, перш ніж репозиторій зможе її використати',
   'settings.gitIdentities.page.accountGone': 'Акаунт, який використовує ця ідентичність, більше не підключений',
+  'settings.gitIdentities.page.signatureOnly': 'Лише підпис, із попередньої версії',
   "settings.gitIdentities.editor.toast.accountRequired": "Обери обліковий запис, яким діє ця ідентичність, або інший спосіб автентифікації.",
   "settings.gitIdentities.editor.toast.sshKeyRequired": "Обери керований ключ SSH, яким користується ця ідентичність.",
   "settings.gitIdentities.editor.actions.close": "Закрити",

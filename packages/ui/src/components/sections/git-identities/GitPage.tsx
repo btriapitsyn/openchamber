@@ -1,5 +1,6 @@
 import { isCompleteIdentity } from '@/lib/api/git-identity';
 import { identityAccountConnected, identityDisplayName } from '@/lib/source-control/identity';
+import { isSignatureOnlyIdentity } from '@/lib/source-control/applyIdentity';
 import React from 'react';
 import { toast } from '@/components/ui';
 import {
@@ -234,12 +235,16 @@ const IdentityRow: React.FC<IdentityRowProps> = ({
   const connectedAccountIds = useConnectedAccountIds();
   const [contextMenuOpen, setContextMenuOpen] = React.useState(false);
   const iconName = ICON_MAP[profile.icon || 'branch'] || 'git-branch';
-  // Why a repository cannot be given this identity, if it cannot.
-  const unusableReason = !isCompleteIdentity(profile)
-    ? 'settings.gitIdentities.page.incomplete' as const
-    : !identityAccountConnected(profile, connectedAccountIds)
-      ? 'settings.gitIdentities.page.accountGone' as const
-      : null;
+  // What this identity is, when it is not a complete one: a signature kept
+  // from an older release, or one whose account was disconnected.
+  const noteKey = isSignatureOnlyIdentity(profile)
+    ? 'settings.gitIdentities.page.signatureOnly' as const
+    : !isCompleteIdentity(profile)
+      ? 'settings.gitIdentities.page.incomplete' as const
+      : !identityAccountConnected(profile, connectedAccountIds)
+        ? 'settings.gitIdentities.page.accountGone' as const
+        : null;
+  const noteIsWarning = noteKey !== null && noteKey !== 'settings.gitIdentities.page.signatureOnly';
   const iconColor = COLOR_MAP[profile.color || ''];
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -304,8 +309,8 @@ const IdentityRow: React.FC<IdentityRowProps> = ({
             )}
           </div>
           <div className="typography-micro text-muted-foreground/60 truncate leading-tight">
-            {!isReadOnly && unusableReason
-              ? <span className="text-[var(--status-warning)]">{t(unusableReason)}</span>
+            {!isReadOnly && noteKey
+              ? <span className={noteIsWarning ? 'text-[var(--status-warning)]' : undefined}>{t(noteKey)}</span>
               : profile.userEmail}
           </div>
         </div>

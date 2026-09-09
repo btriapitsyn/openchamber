@@ -15,7 +15,7 @@ import { useContributorDestinationChooser } from '@/components/views/git/contrib
 import { RepositoryConfigurationDialog } from '@/components/sections/openchamber/SourceControlBindingSettings';
 import { IdentityDropdown } from '@/components/views/git/GitHeader';
 import { useGitIdentitiesStore } from '@/stores/useGitIdentitiesStore';
-import { applyIdentityToRepository, identityApplicability, needsSystemAcknowledgement } from '@/lib/source-control/applyIdentity';
+import { applyIdentityToRepository, identityApplicability, needsSystemAcknowledgement, isSignatureOnlyIdentity } from '@/lib/source-control/applyIdentity';
 import { remoteTraits,
   selectableIdentities,
   identityDisplayName,
@@ -108,7 +108,8 @@ export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onCl
   const refreshIdentityAccounts = useSourceControlAuthStore((state) => state.refreshIdentityAccounts);
   const availableIdentities = React.useMemo(
     () => selectableIdentities(gitIdentityProfiles, globalGitIdentity,
-      (identity) => isCompleteIdentity(identity) && identityAccountConnected(identity, connectedAccountIds)),
+      (identity) => (isCompleteIdentity(identity) || isSignatureOnlyIdentity(identity))
+        && identityAccountConnected(identity, connectedAccountIds)),
     [gitIdentityProfiles, globalGitIdentity, connectedAccountIds],
   );
   // The repository's own author decides which identity it is already acting as.

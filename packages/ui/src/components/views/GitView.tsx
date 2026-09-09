@@ -90,7 +90,7 @@ import { PublishDialog } from './git/PublishDialog';
 import { ContributorDestinationDialog } from './git/ContributorDestinationDialog';
 import { useContributorDestinationChooser } from './git/contributorDestination';
 import { RepositoryConfigurationDialog } from '@/components/sections/openchamber/SourceControlBindingSettings';
-import { applyIdentityToRepository, identityApplicability, needsSystemAcknowledgement, type IdentityApplicability } from '@/lib/source-control/applyIdentity';
+import { applyIdentityToRepository, identityApplicability, needsSystemAcknowledgement, type IdentityApplicability, isSignatureOnlyIdentity } from '@/lib/source-control/applyIdentity';
 import { remoteTraits,
   selectableIdentities,
   identityDisplayName,
@@ -1574,7 +1574,8 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
   const connectedAccountIds = useConnectedAccountIds();
   const availableIdentities = React.useMemo(
     () => selectableIdentities(profiles, globalIdentity,
-      (identity) => isCompleteIdentity(identity) && identityAccountConnected(identity, connectedAccountIds)),
+      (identity) => (isCompleteIdentity(identity) || isSignatureOnlyIdentity(identity))
+        && identityAccountConnected(identity, connectedAccountIds)),
     [profiles, globalIdentity, connectedAccountIds],
   );
 

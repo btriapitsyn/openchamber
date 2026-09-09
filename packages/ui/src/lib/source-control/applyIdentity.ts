@@ -6,7 +6,7 @@ import type {
   SourceControlBindingRead,
 } from '@/lib/api/types';
 import { identityTransport } from '@/lib/api/git-identity';
-import { instanceHost, type RemoteTraits } from './identity';
+import { instanceHost, type RemoteTraits, GLOBAL_IDENTITY_ID } from './identity';
 import { repositoryBindingOwner } from './repository-binding';
 import { recordDeferredOpenCodeRestart } from '@/lib/opencode/deferredRestart';
 
@@ -109,6 +109,18 @@ export const describeIdentityApplicability = (
 };
 
 /**
+ * An identity written before identities carried an account.
+ *
+ * In the release that made them, choosing one wrote the repository's author
+ * and nothing else — no provider association, no transport grant. That is
+ * exactly what it keeps doing here: a signature, offered as it always was.
+ * New identities cannot be made this way; the completeness rule owns those.
+ */
+export const isSignatureOnlyIdentity = (
+  identity: Pick<GitIdentityProfile, 'id' | 'account' | 'transport'>,
+): boolean => identity.id !== GLOBAL_IDENTITY_ID && !identity.account && identityTransport(identity) === 'system';
+
+/**
  * Whether applying this identity has to be confirmed first.
  *
  * A System Git identity says "use whatever this machine holds", and
@@ -117,9 +129,12 @@ export const describeIdentityApplicability = (
  * A repository with no remote binds nothing, so there is nothing to confirm.
  */
 export const needsSystemAcknowledgement = (
-  identity: Pick<GitIdentityProfile, 'transport'>,
+  identity: Pick<GitIdentityProfile, 'id' | 'account' | 'transport'>,
   hasBindableRemote: boolean,
-): boolean => hasBindableRemote && identityTransport(identity) === 'system';
+): boolean => hasBindableRemote && identityTransport(identity) === 'system'
+  // A signature-only identity claims no credentials at all, so it binds
+  // nothing and there is nothing to confirm.
+  && !isSignatureOnlyIdentity(identity);
 
 /**
  * Writes one identity onto a repository.
@@ -137,8 +152,10 @@ export const applyIdentityToRepository = async (
   { git, sourceControl }: ApplyIdentityAPIs,
 ): Promise<ApplyIdentityOutcome> => {
   // The transfer half needs a remote to answer for and a runtime that holds
-  // bindings — VS Code holds none. The signature is written either way.
-  let outcome: ApplyIdentityOutcome = remoteName && git.configureTransportBinding
+  // bindings — VS Code holds none — and an identity that actually names a way
+  // to authenticate. A signature-only identity has none, so it writes the
+  // author and leaves the repository's account and transport as they were.
+  let outcome: ApplyIdentityOutcome = remoteName && git.configureTransportBinding && !isSignatureOnlyIdentity(identity)
     ? await applyBinding(
       { directory, identity, remoteName, acknowledgedSystem },
       { configureTransportBinding: git.configureTransportBinding, sourceControl },

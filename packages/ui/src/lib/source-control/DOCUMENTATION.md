@@ -154,12 +154,18 @@ menu re-reads the accounts when it opens, the Git Settings row says why the
 identity cannot be used, and nothing binds a repository to a credential that
 is gone.
 
-Every other identity is complete or it is not offered: `isCompleteIdentity`
-requires an account, a transport that is the account's credential (OAuth or
-token), a managed SSH key, or anonymous HTTPS, and a signature. The editor
-creates nothing else; the server refuses anything else from a client. Records
-written before identities carried an account stay in Git Settings flagged as
-needing one, and no picker lists them.
+Every identity made from now on is complete or it is not offered:
+`isCompleteIdentity` requires an account, a transport that is the account's
+credential (OAuth or token), a managed SSH key, or anonymous HTTPS, and a
+signature. The editor creates nothing else and the server refuses anything else
+from a client.
+
+Records written before identities carried an account are the exception, and
+`isSignatureOnlyIdentity` names them: in the release that made them, choosing
+one wrote the repository's author and nothing else, so that is exactly what it
+keeps doing — the account and transport a repository already has are left
+untouched, and nothing is confirmed, because nothing is claimed. Git Settings
+says "Signature only, from an earlier release" beside them.
 
 Checkout repair first runs `checkout-hydration` against a user-selected ready parent fetch remote. The immutable public plan exposes bounded repository-relative submodule/LFS paths and redacted endpoints, never raw URLs, absolute paths, or credential references. Failed hydration stays visible through `GitOperationStatus`. The user selects one discovered endpoint, explicitly chooses System, anonymous HTTPS, managed HTTPS account, or managed SSH key, and saves or removes only that grant through the narrow CAS API. Retry plans a new inspection; it never reclones the retained repository. Missing `git-lfs` has a specific install-and-retry warning. Runtime and directory changes clear all repair drafts, and late mutation results reconcile through the captured binding owner scope.
 

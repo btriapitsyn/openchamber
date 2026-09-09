@@ -290,6 +290,7 @@ export const settingsDict = {
   'settings.gitIdentities.editor.auth.anonymousHint': 'Publiczne HTTPS bez poświadczeń, tylko do odczytu. Za zgłoszenia i prośby o zmiany nadal odpowiada konto.',
   'settings.gitIdentities.page.incomplete': 'Potrzebuje konta, zanim repozytorium będzie mogło jej użyć',
   'settings.gitIdentities.page.accountGone': 'Konto używane przez tę tożsamość nie jest już połączone',
+  'settings.gitIdentities.page.signatureOnly': 'Tylko podpis, z wcześniejszej wersji',
   'settings.gitIdentities.editor.toast.accountRequired': 'Wybierz konto, którym działa ta tożsamość, albo inny sposób uwierzytelnienia.',
   'settings.gitIdentities.editor.toast.sshKeyRequired': 'Wybierz zarządzany klucz SSH używany przez tę tożsamość.',
   'settings.gitIdentities.editor.field.userName': 'Nazwa użytkownika',
