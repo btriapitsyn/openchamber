@@ -1502,6 +1502,23 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                     </SettingsSection>
                 )}
 
+                {shouldShow('animatedActivityIndicators') && (
+                    <SettingsSection
+                        title={t('settings.openchamber.visual.section.sessionActivity')}
+                        settingsItem="appearance.session-activity"
+                        contentClassName={SETTINGS_OPTION_STACK_CLASS}
+                    >
+                        <SettingsCheckboxRow
+                            checked={animatedActivityIndicators}
+                            onChange={setAnimatedActivityIndicators}
+                            label={t('settings.openchamber.visual.field.animatedActivityIndicators')}
+                            ariaLabel={t('settings.openchamber.visual.field.animatedActivityIndicatorsAria')}
+                            info={t('settings.openchamber.visual.field.animatedActivityIndicatorsInfo')}
+                            settingsItem="appearance.animated-activity-indicators"
+                        />
+                    </SettingsSection>
+                )}
+
                 {/* --- Navigation --- */}
                 {hasNavigationSettings && (
                     <SettingsSection title={t('settings.openchamber.visual.section.navigation')} contentClassName="space-y-4">
@@ -1993,23 +2010,6 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                         settingsItem="chat.streaming-auto-follow"
                                     />
                                 </SettingsSection>
-
-                                {shouldShow('animatedActivityIndicators') && (
-                                    <SettingsSection
-                                        title={t('settings.openchamber.visual.section.sessionActivity')}
-                                        settingsItem="appearance.session-activity"
-                                        contentClassName={SETTINGS_OPTION_STACK_CLASS}
-                                    >
-                                        <SettingsCheckboxRow
-                                            checked={animatedActivityIndicators}
-                                            onChange={setAnimatedActivityIndicators}
-                                            label={t('settings.openchamber.visual.field.animatedActivityIndicators')}
-                                            ariaLabel={t('settings.openchamber.visual.field.animatedActivityIndicatorsAria')}
-                                            info={t('settings.openchamber.visual.field.animatedActivityIndicatorsInfo')}
-                                            settingsItem="appearance.animated-activity-indicators"
-                                        />
-                                    </SettingsSection>
-                                )}
 
                                 {(shouldShow('collapsibleUserMessages') || shouldShow('stickyUserHeader') || (shouldShow('promptNavigatorEnabled') && !isVSCode) || shouldShow('wideChatLayout') || shouldShow('splitAssistantMessageActions') || shouldShow('codeBlockLineWrap')) && (
                                 <SettingsSection
