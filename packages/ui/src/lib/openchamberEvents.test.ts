@@ -1,12 +1,4 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
-
-mock.module('./runtime-url', () => ({
-  getRuntimeUrlResolver: () => ({ sse: (path: string) => `http://runtime.test${path}` }),
-}));
-
-mock.module('./runtime-switch', () => ({
-  subscribeRuntimeEndpointChanged: () => () => undefined,
-}));
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 
 class MockEventSource {
   static CLOSED = 2;
@@ -29,20 +21,37 @@ class MockEventSource {
 describe('openchamber events', () => {
   beforeEach(() => {
     MockEventSource.instances = [];
-    globalThis.window = {} as Window & typeof globalThis;
-    globalThis.EventSource = MockEventSource as unknown as typeof EventSource;
+    Object.defineProperty(globalThis, 'window', {
+      value: Object.assign(new EventTarget(), { location: new URL('http://runtime.test') }),
+      configurable: true,
+      writable: true,
+    });
+    Object.defineProperty(globalThis, 'EventSource', { value: MockEventSource, configurable: true, writable: true });
   });
 
   afterEach(() => {
-    delete (globalThis as { window?: unknown }).window;
-    delete (globalThis as { EventSource?: unknown }).EventSource;
+    Reflect.deleteProperty(globalThis, 'window');
+    Reflect.deleteProperty(globalThis, 'EventSource');
+  });
+
+  test('does not open the server-only event stream in VS Code', async () => {
+    Object.defineProperty(window, '__VSCODE_CONFIG__', {
+      value: { workspaceFolder: 'C:/repo', workspaceFolders: [] },
+      configurable: true,
+    });
+    const { subscribeOpenchamberEvents } = await import('./openchamberEvents');
+    const unsubscribe = subscribeOpenchamberEvents(() => undefined);
+    try {
+      expect(MockEventSource.instances).toHaveLength(0);
+    } finally {
+      unsubscribe();
+    }
   });
 
   test('dispatches externally created session events', async () => {
     const { subscribeOpenchamberEvents } = await import('./openchamberEvents');
     const events: unknown[] = [];
-    const listener = (event: unknown) => events.push(event);
-    const unsubscribe = subscribeOpenchamberEvents(listener);
+    const unsubscribe = subscribeOpenchamberEvents((event) => events.push(event));
     const source = MockEventSource.instances[0];
 
     source.onmessage?.({

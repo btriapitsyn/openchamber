@@ -54,6 +54,18 @@ only changes priority. Row mounts must not start bootstrap work. Selection and
 activity subscriptions stay session-scoped so a structural list update does not
 make every row observe unrelated streaming updates.
 
+## Search
+
+Sidebar and Recent queries beginning with `ses_` match only the full session ID,
+case-insensitively and ignoring surrounding whitespace. Partial IDs and typos
+return no matches, without falling back to titles, directories, group labels,
+or folder names. Ancestors remain as tree context for a matching child. A matched
+node keeps its subtree for rendering and subtree actions. Only exact ID matches
+count toward the result total.
+ID search does not include archived sessions. `ArchiveView` applies the same
+exact-ID rule to its own archived list. Other queries keep each view's existing
+matching and ordering. Search does not fetch sessions or broaden list membership.
+
 ## Loading rules
 
 - Always publish every known project root and worktree directory. Collapse/visibility changes priority only; they do not opt a directory out of authoritative refresh.

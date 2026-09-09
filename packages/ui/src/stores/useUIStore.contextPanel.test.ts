@@ -13,6 +13,13 @@ beforeEach(() => {
 });
 
 describe('useUIStore context panel tabs', () => {
+  test('preserves Commit mode when context tabs are normalized', () => {
+    useUIStore.getState().openContextPanelTab('/repo', { mode: 'diff', diffScope: 'commit' });
+    useUIStore.getState().openContextPanelTab('/repo', { mode: 'file', targetPath: '/repo/README.md' });
+    const diffTab = getContextPanelTabs('/repo').find((tab) => tab.mode === 'diff');
+    expect(diffTab?.diffScope).toBe('commit');
+  });
+
   test('updates readOnly when an existing chat tab is reopened', () => {
     const directory = '/repo';
 

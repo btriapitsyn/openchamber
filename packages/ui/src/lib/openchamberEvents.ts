@@ -1,5 +1,6 @@
 import { getRuntimeUrlResolver } from './runtime-url';
 import { subscribeRuntimeEndpointChanged } from './runtime-switch';
+import { isVSCodeRuntime } from './desktop';
 
 type ScheduledTaskRanEvent = {
   type: 'scheduled-task-ran';
@@ -284,6 +285,10 @@ const cleanupRuntimeChangeSubscription = () => {
 };
 
 export const subscribeOpenchamberEvents = (listener: Listener): (() => void) => {
+  // VS Code runs OpenCode through its bridge, not the OpenChamber server that
+  // owns this stream. Opening it here retries against vscode-webview:// forever.
+  if (isVSCodeRuntime()) return () => undefined;
+
   listeners.add(listener);
   ensureRuntimeChangeSubscription();
   connect();

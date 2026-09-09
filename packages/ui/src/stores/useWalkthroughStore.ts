@@ -45,6 +45,7 @@ const EMPTY_ENTRY: WalkthroughEntry = {
 export const walkthroughSourceKey = (source: WalkthroughSource): string => {
   if (source.kind === 'working-tree') return `working-tree:${source.scope}`;
   if (source.kind === 'branch') return `branch:${source.baseRef}...${source.headRef}`;
+  if (source.kind === 'commit') return `commit:${source.hash}`;
   return `pr:${source.number}`;
 };
 

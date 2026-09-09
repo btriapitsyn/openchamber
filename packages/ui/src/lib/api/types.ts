@@ -231,18 +231,22 @@ export interface GetGitDiffOptions {
 
 /**
  * Diff between two refs. Uses three-dot (`base...head`) semantics server-side, so changes
- * pulled into `head` by merging `base` are excluded — only the branch's own work is returned.
+ * pulled into `head` by merging `base` are excluded. Refs are used as selected.
+ * includeWorkingTree compares that merge base with the checked-out branch's
+ * current files, including staged, unstaged, and untracked changes.
  */
 export interface GetGitRangeDiffOptions {
   base: string;
   head: string;
   path?: string;
   contextLines?: number;
+  includeWorkingTree?: boolean;
 }
 
 export interface GetGitRangeFilesOptions {
   base: string;
   head: string;
+  includeWorkingTree?: boolean;
 }
 
 /** One changed file in a `base...head` range, with its change letter (A/M/D/R/C). */
@@ -792,6 +796,7 @@ export interface GitLogResponse {
 
 export interface CommitFileEntry {
   path: string;
+  previousPath?: string;
   insertions: number;
   deletions: number;
   isBinary: boolean;
@@ -800,6 +805,13 @@ export interface CommitFileEntry {
 
 export interface GitCommitFilesResponse {
   files: CommitFileEntry[];
+}
+
+export interface GetGitCommitDiffOptions {
+  hash: string;
+  path?: string;
+  previousPath?: string;
+  contextLines?: number;
 }
 
 export interface CommitFileDiffResponse {
@@ -1033,6 +1045,7 @@ export interface GitAPI {
   renameBranch(directory: string, oldName: string, newName: string): Promise<{ success: boolean; branch: string }>;
   getGitLog(directory: string, options?: GitLogOptions): Promise<GitLogResponse>;
   getCommitFiles(directory: string, hash: string): Promise<GitCommitFilesResponse>;
+  getGitCommitDiff?(directory: string, options: GetGitCommitDiffOptions): Promise<GitDiffResponse>;
   getCommitFileDiff?(directory: string, hash: string, filePath: string, isBinary: boolean): Promise<CommitFileDiffResponse>;
   getCurrentGitIdentity(directory: string): Promise<GitIdentitySummary | null>;
   hasLocalIdentity?(directory: string): Promise<boolean>;

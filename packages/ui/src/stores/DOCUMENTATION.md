@@ -30,7 +30,36 @@ These are the most performance-sensitive.
 
 These stores act like centralized keyed caches. UI should consume narrow slices from them instead of re-fetching the same data in multiple places.
 
+`useQuotaStore` keeps the last authoritative provider results separately from
+`refreshErrors`. Transport failures and configured-provider errors preserve the
+last usage sample and its timestamp. An explicit unconfigured response replaces
+old configuration; a first-load transport failure leaves it unknown. Concurrent
+refreshes share one request per provider. Runtime reset aborts those requests,
+and generation checks prevent their completions from changing the next runtime.
+`lib/quota/fetchQuota.ts` validates response payloads and bounds the complete
+request, including JSON body delivery. Compact usage cards and Settings display
+refresh errors alongside retained data. The mobile popover makes at most one
+refresh attempt per opening, so a failed first load cannot create a retry loop.
+
 ### UI state stores
+
+`useCommitSelectionStore.ts` shares the selected commit between desktop/mobile
+Changes and walkthrough. Choices are session-only and keyed by runtime, directory, and
+checked-out branch, with at most 100 remembered choices. The picker history
+belongs to `useCommitComparison`, loads only while Commit mode is active, and
+is limited to the latest 50 commits. History failure stays distinct from an
+empty list; stale directory/runtime requests cannot replace current history or
+selection. A refreshed list preserves an explicit selection even when newer
+commits have pushed it beyond the latest 50.
+
+`hooks/useGitComparison.ts` owns the local file-list state used by desktop and
+mobile comparisons. Its key contains runtime, directory, and the complete
+branch/commit source. A source change hides the old list immediately; failed
+reads remain errors, and manual retries cannot publish into a superseded scope.
+The hook also resolves per-file patch requests, including a commit rename's
+previous path. Views own their lazy patch caches through `useRangeKeyedCache`.
+Mobile requests only the active detail path and suspends reads while its
+keep-alive workspace pane is hidden.
 
 Examples:
 

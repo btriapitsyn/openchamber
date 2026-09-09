@@ -10,6 +10,9 @@ const PATCH_DIFF_CACHE_LIMIT = 64;
 const DEFAULT_PATCH_CONTEXT_LINES = 3;
 const patchFileDiffCache = new Map<string, FileDiffMetadata>();
 
+export const isBinaryPatch = (patch: string): boolean =>
+  /^Binary files .+ differ$/m.test(patch) || /^GIT binary patch$/m.test(patch);
+
 export const fileDiffFromPatch = (
   file: string,
   patch: string,

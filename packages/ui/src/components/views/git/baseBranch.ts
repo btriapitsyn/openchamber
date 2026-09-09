@@ -1,3 +1,5 @@
+export const branchRefLabel = (ref: string): string => ref.replace(/^refs\/(heads|remotes)\//, '').replace(/^remotes\//, '');
+
 /**
  * Derives the base ("target") branch a feature branch should compare and
  * merge against. Shared by GitView and the standalone pull-request surface so
@@ -123,4 +125,39 @@ export const hasResolvableBaseBranch = (options: {
     const slashIndex = branch.indexOf('/');
     return slashIndex > 0 && branch.slice(slashIndex + 1) === baseBranch;
   });
+};
+
+/**
+ * The ref a comparison should actually name, for a base the person chose or
+ * the repository's reflog reported.
+ *
+ * The range API honors refs literally: it never substitutes `origin/main` for
+ * `main`, so a caller has to say which one it means. And a repository answers
+ * to the remote it is bound to, so a base on any other remote is not a
+ * comparison this repository can make — it is a different project's branch
+ * with a familiar name. Null means exactly that: no ref here is the base.
+ */
+export const qualifyBaseRef = (candidate: string | null | undefined, options: {
+  localBranches: readonly string[];
+  /** Remote-relative names, as `origin/main`. */
+  remoteBranches: readonly string[];
+  /** Every remote the repository configures, used to recognise a qualified hint. */
+  remoteNames: ReadonlySet<string>;
+  /** The remote this repository is bound to, if any. */
+  primaryRemote: string | null | undefined;
+}): string | null => {
+  const { localBranches, remoteBranches, remoteNames, primaryRemote } = options;
+  let branch = candidate?.trim()
+    .replace(/^refs\/heads\//, '')
+    .replace(/^refs\/remotes\//, '')
+    .replace(/^remotes\//, '') ?? '';
+  if (!branch) return null;
+  if (localBranches.includes(branch)) return `refs/heads/${branch}`;
+  const slashIndex = branch.indexOf('/');
+  if (slashIndex > 0 && remoteNames.has(branch.slice(0, slashIndex))) {
+    if (branch.slice(0, slashIndex) !== primaryRemote) return null;
+    branch = branch.slice(slashIndex + 1);
+  }
+  if (primaryRemote && remoteBranches.includes(`${primaryRemote}/${branch}`)) return `${primaryRemote}/${branch}`;
+  return null;
 };

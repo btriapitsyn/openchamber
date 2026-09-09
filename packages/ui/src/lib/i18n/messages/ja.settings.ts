@@ -81,7 +81,6 @@ export const settingsDict = {
   'settings.view.pendingRestart.confirm.dontShowAgain': '今後表示しない',
   'settings.view.pendingRestart.confirm.cancel': 'キャンセル',  'settings.view.actions.backToSettings': '設定に戻る',
   'settings.view.actions.closeSettings': '設定を閉じる',
-  'settings.view.actions.openSectionList': 'セクション一覧を開く',
   'settings.view.actions.closeSettingsWithShortcut': '設定を閉じる ({shortcut}+,)',
   'settings.view.actions.back': '戻る',
   'settings.view.actions.resizeNavigation': '設定ナビゲーションのサイズ変更',

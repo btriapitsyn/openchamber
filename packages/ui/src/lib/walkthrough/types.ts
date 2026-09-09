@@ -13,6 +13,7 @@ export type WalkthroughWorkingTreeScope = 'all' | 'staged' | 'working';
 export type WalkthroughSource =
   | { kind: 'working-tree'; scope: WalkthroughWorkingTreeScope }
   | { kind: 'branch'; baseRef: string; headRef: string }
+  | { kind: 'commit'; hash: string }
   | { kind: 'pr'; number: number };
 
 type WalkthroughLocalSource = Exclude<WalkthroughSource, { kind: 'pr' }>;

@@ -80,7 +80,6 @@ export const settingsDict = {
   'settings.view.pendingRestart.confirm.cancel': 'Cancel',
   'settings.view.actions.backToSettings': 'Back to Settings',
   'settings.view.actions.closeSettings': 'Close settings',
-  'settings.view.actions.openSectionList': 'Open section list',
   'settings.view.actions.closeSettingsWithShortcut': 'Close Settings ({shortcut}+,)',
   'settings.view.actions.back': 'Back',
   'settings.view.actions.resizeNavigation': 'Resize settings navigation',

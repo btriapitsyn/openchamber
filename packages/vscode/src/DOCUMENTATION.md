@@ -110,6 +110,17 @@ Provider authentication, capabilities, issues, change requests, contributor dest
 
 Message and part ordering is owned by [`packages/ui/src/sync/DOCUMENTATION.md`](../../ui/src/sync/DOCUMENTATION.md#session-message-loading). The VS Code webview consumes that shared sync implementation; bridge and proxy runtimes pass OpenCode records through without adding runtime-specific ordering.
 
+The OpenChamber control stream (`/api/openchamber/events`) requires the
+OpenChamber server, which the extension does not run. `subscribeOpenchamberEvents`
+therefore returns a no-op subscription in VS Code before resolving URLs or
+opening a connection. Session sync still uses the OpenCode SSE bridge and
+global session polling. Sending the control stream to the webview origin caused
+repeated `403` responses and URL-token requests to `/auth/url-token`.
+
+Shared lazy imports retry a failed chunk load, but skip browser-navigation
+recovery in VS Code. `window.location.reload()` is unsupported inside webviews;
+the original import error must reach the UI error boundary instead.
+
 ## Extension guideline
 
 When adding new bridge route families:

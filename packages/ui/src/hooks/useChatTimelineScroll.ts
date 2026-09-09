@@ -9,7 +9,7 @@ import {
     getRowBottom,
     resolveRealContentEndOffset,
     resolveTimelineIsAtEnd,
-    resolveFollowRearmThresholdPx,
+    TIMELINE_FOLLOW_REARM_THRESHOLD_PX,
     type TimelineListMeasurementState,
     type TimelineScrollMode,
 } from '@/components/chat/lib/scroll/timelineScrollAnchoring';
@@ -496,7 +496,7 @@ export const useChatTimelineScroll = ({
                 const lastBottom = lastIndex >= 0 ? getRowBottom(state, lastIndex) : null;
                 if (lastBottom !== null) {
                     const visibleBottom = state.scroll + state.scrollLength - composerOverlayHeightRef.current;
-                    if (lastBottom - visibleBottom > resolveFollowRearmThresholdPx(state.scrollLength)) {
+                    if (lastBottom - visibleBottom > TIMELINE_FOLLOW_REARM_THRESHOLD_PX) {
                         isAtEndRef.current = false;
                         setIsPinned(false);
                         scheduleShowScrollButton();

@@ -81,7 +81,6 @@ export const settingsDict = {
   "settings.view.pendingRestart.confirm.dontShowAgain": "Більше не показувати",
   "settings.view.pendingRestart.confirm.cancel": "Скасувати",  "settings.view.actions.backToSettings": "Назад до налаштувань",
   "settings.view.actions.closeSettings": "Закрити налаштування",
-  "settings.view.actions.openSectionList": "Відкрити список розділів",
   "settings.view.actions.closeSettingsWithShortcut": "Закрити налаштування ({shortcut}+,)",
   "settings.view.actions.back": "Назад",
   "settings.view.actions.resizeNavigation": "Змінити розмір навігації налаштувань",

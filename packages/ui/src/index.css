@@ -917,11 +917,26 @@ html:not(.dark) .chat-scroll {
   }
 }
 
-/* Assistant message footer: collapse text labels only on very narrow layouts. */
-@container message-footer (max-width: 16rem) {
-  .message-footer__label {
-    display: none;
-  }
+/* Assistant message footer: one line of facts, in priority order. Which of
+   them fit is decided by useFactsFit, which hides the least important ones
+   until the model name stops being truncated — CSS can only guess at the
+   model's width, and a wrapped-away fact leaves its width behind as a hole. */
+.message-footer__facts {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+/* Each fact carries its own leading separator and spacing. */
+.message-footer__fact {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding-inline-start: 0.375rem;
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 /* Animated tabs: collapse labels based on local container width. */

@@ -75,7 +75,6 @@ export const settingsDict = {
   'settings.view.pendingRestart.confirm.cancel': 'Abbrechen',
   'settings.view.actions.backToSettings': 'Zurück zu Einstellungen',
   'settings.view.actions.closeSettings': 'Einstellungen schließen',
-  'settings.view.actions.openSectionList': 'Abschnittsliste öffnen',
   'settings.view.actions.closeSettingsWithShortcut': 'Einstellungen schließen ({shortcut}+,)',
   'settings.view.actions.back': 'Zurück',
   'settings.view.actions.resizeNavigation': 'Einstellungsnavigation skalieren',

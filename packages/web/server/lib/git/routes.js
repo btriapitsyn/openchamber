@@ -30,13 +30,13 @@ export function registerGitRoutes(app, {
     return gitLibraries;
   };
 
-  const resolveDirectoryQuery = (value) => {
+  const resolveDirectoryQuery = (value, preserveWhitespace = false) => {
     const raw = Array.isArray(value) ? value[0] : value;
     if (typeof raw !== 'string') {
       return null;
     }
-    const trimmed = raw.trim();
-    return trimmed || null;
+    const normalized = preserveWhitespace ? raw : raw.trim();
+    return normalized || null;
   };
 
   const extractGitErrorText = (error) => {
@@ -730,6 +730,7 @@ export function registerGitRoutes(app, {
       const diff = await getRangeDiff(directory, {
         base,
         head,
+        includeWorkingTree: req.query.includeWorkingTree === 'true',
         path: pathParam,
         contextLines: Number.isFinite(context) ? context : 3,
       });
@@ -776,7 +777,7 @@ export function registerGitRoutes(app, {
         return res.status(400).json({ error: 'base and head parameters are required' });
       }
 
-      const files = await getRangeFiles(directory, { base, head });
+      const files = await getRangeFiles(directory, { base, head, includeWorkingTree: req.query.includeWorkingTree === 'true' });
       res.json({ files });
     } catch (error) {
       console.error('Failed to get git range files:', error);
@@ -1682,6 +1683,25 @@ export function registerGitRoutes(app, {
     } catch (error) {
       console.error('Failed to get commit files:', error);
       res.status(500).json({ error: error.message || 'Failed to get commit files' });
+    }
+  });
+
+  app.get('/api/git/commit-diff', async (req, res) => {
+    const { getCommitDiff } = await getGitLibraries();
+    try {
+      const directory = resolveDirectoryQuery(req.query.directory);
+      const hash = resolveDirectoryQuery(req.query.hash);
+      if (!directory || !hash) return res.status(400).json({ error: 'directory and hash are required' });
+      const context = Number(req.query.context ?? 3);
+      const diff = await getCommitDiff(directory, {
+        hash,
+        path: resolveDirectoryQuery(req.query.path, true) ?? undefined,
+        previousPath: resolveDirectoryQuery(req.query.previousPath, true) ?? undefined,
+        contextLines: Number.isFinite(context) ? context : 3,
+      });
+      res.json({ diff });
+    } catch (error) {
+      res.status(500).json({ error: error.message || 'Failed to get commit diff' });
     }
   });
 

@@ -79,7 +79,6 @@ export const settingsDict = {
   'settings.view.pendingRestart.confirm.dontShowAgain': '不要再顯示',
   'settings.view.pendingRestart.confirm.cancel': '取消',  'settings.view.actions.backToSettings': '返回設定頁',
   'settings.view.actions.closeSettings': '關閉設定',
-  'settings.view.actions.openSectionList': '開啟群組清單',
   'settings.view.actions.closeSettingsWithShortcut': '關閉設定（{shortcut}+,）',
   'settings.view.actions.back': '返回',
   'settings.view.actions.resizeNavigation': '調整設定導覽寬度',

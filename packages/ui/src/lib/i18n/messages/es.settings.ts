@@ -81,7 +81,6 @@ export const settingsDict = {
   "settings.view.pendingRestart.confirm.dontShowAgain": "No volver a mostrar",
   "settings.view.pendingRestart.confirm.cancel": "Cancelar",  "settings.view.actions.backToSettings": "Volver a Configuración",
   "settings.view.actions.closeSettings": "Cerrar configuración",
-  "settings.view.actions.openSectionList": "Abrir lista de secciones",
   "settings.view.actions.closeSettingsWithShortcut": "Cerrar configuración ({shortcut}+,)",
   "settings.view.actions.back": "Atrás",
   "settings.view.actions.resizeNavigation": "Ajustar tamaño de la navegación",

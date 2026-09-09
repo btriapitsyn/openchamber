@@ -81,7 +81,6 @@ export const settingsDict = {
   'settings.view.pendingRestart.confirm.dontShowAgain': '不再显示',
   'settings.view.pendingRestart.confirm.cancel': '取消',  'settings.view.actions.backToSettings': '返回设置',
   'settings.view.actions.closeSettings': '关闭设置',
-  'settings.view.actions.openSectionList': '打开分组列表',
   'settings.view.actions.closeSettingsWithShortcut': '关闭设置（{shortcut}+,）',
   'settings.view.actions.back': '返回',
   'settings.view.actions.resizeNavigation': '调整设置导航宽度',

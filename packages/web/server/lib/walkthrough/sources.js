@@ -1,4 +1,4 @@
-import { getDiff, getRangeDiff, getUntrackedDiffs, listUntrackedPaths } from '../git/service.js';
+import { getDiff, getRangeDiff, getCommitDiff, getUntrackedDiffs, listUntrackedPaths } from '../git/service.js';
 
 // A walkthrough source resolves to one or more diff *sections*. A section is a
 // patch plus the scope its hunk ids live in; keeping staged and working-tree
@@ -48,6 +48,18 @@ export function parseSource(raw) {
     return { kind: 'pr', number };
   }
 
+  if (raw.kind === 'commit') {
+    // Sources are content-addressed: accept a full object id, never a moving ref.
+    if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i.test(raw.hash)) {
+      throw new WalkthroughSourceError('commit sources require a full commit hash');
+    }
+    try {
+      return { kind: 'commit', hash: raw.hash.toLowerCase() };
+    } catch {
+      throw new WalkthroughSourceError('commit sources require a full commit hash');
+    }
+  }
+
   throw new WalkthroughSourceError(`Unknown source kind "${String(raw.kind)}"`);
 }
 
@@ -58,6 +70,7 @@ export function parseSource(raw) {
 export function sourceKey(source) {
   if (source.kind === 'working-tree') return `working-tree:${source.scope}`;
   if (source.kind === 'branch') return `branch:${source.baseRef}...${source.headRef}`;
+  if (source.kind === 'commit') return `commit:${source.hash}`;
   return `pr:${source.number}`;
 }
 
@@ -97,10 +110,18 @@ export async function loadSourceSections(directory, source, { getPullRequestDiff
   }
 
   if (source.kind === 'branch') {
-    const patch = await getRangeDiff(directory, { base: source.baseRef, head: source.headRef });
+    const patch = await getRangeDiff(directory, { base: source.baseRef, head: source.headRef, includeWorkingTree: true });
     return {
       sections: patch && patch.trim() ? [{ scope: 'branch', patch }] : [],
       meta: { baseRef: source.baseRef, headRef: source.headRef },
+    };
+  }
+
+  if (source.kind === 'commit') {
+    const patch = await getCommitDiff(directory, { hash: source.hash });
+    return {
+      sections: patch.trim() ? [{ scope: 'commit', patch }] : [],
+      meta: { hash: source.hash },
     };
   }
 
