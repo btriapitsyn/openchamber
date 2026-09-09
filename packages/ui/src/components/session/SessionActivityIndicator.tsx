@@ -29,7 +29,7 @@ export const SessionActivityIndicator: React.FC<{
   if (state === 'running' && animated) {
     return (
       <span
-        className={cn('inline-flex items-center justify-center', className)}
+        className={cn('inline-flex shrink-0 items-center justify-center', className)}
         aria-label={label}
         title={label}
         data-session-activity-indicator={state}
@@ -43,7 +43,7 @@ export const SessionActivityIndicator: React.FC<{
   return (
     <span
       className={cn(
-        'h-1.5 w-1.5 rounded-full',
+        'h-1.5 w-1.5 shrink-0 rounded-full',
         state === 'running' ? cn('bg-primary', runningDotClassName) : 'bg-[var(--status-info)]',
         className,
       )}
