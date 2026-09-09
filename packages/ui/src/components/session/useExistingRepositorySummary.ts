@@ -41,6 +41,11 @@ const PROBE_DELAY_MS = 250;
 /**
  * Reads the repository at `directory` without binding anything.
  *
+ * A repository with no remote is still reported: an identity says who commits
+ * as well as which account a repository answers to, and a local-only
+ * repository commits like any other. It simply has no remote to associate, so
+ * `primaryRemote` is null and the add screen writes the signature alone.
+ *
  * A directory that is not a repository, or that cannot be read, resolves to
  * null: the add screen then behaves exactly as it did before. The probe is
  * delayed because `directory` follows what is typed in the path field.
@@ -69,9 +74,6 @@ export const useExistingRepositorySummary = (
             https: [remote.fetch, remote.push].every((endpoint) => endpoint.displayUrl.startsWith('https://')),
             ssh: [remote.fetch, remote.push].every((endpoint) => isSshRemoteUrl(endpoint.displayUrl)),
           }));
-          // A repository with no remote has nothing to associate and nothing to
-          // warn about, so it is reported as no repository at all.
-          if (!remotes.length) throw new Error('Repository has no remotes');
           const [author, authorIsLocal] = await Promise.all([
             git.getCurrentGitIdentity(directory).catch(() => null),
             git.hasLocalIdentity?.(directory).catch(() => false) ?? Promise.resolve(false),

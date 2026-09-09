@@ -116,9 +116,13 @@ describe('useExistingRepositorySummary', () => {
     expect(probe.summary).toBeNull();
   });
 
-  test('reports nothing for a repository without remotes', async () => {
+  test('reports a repository without remotes, with nothing to anchor a binding to', async () => {
+    // A local-only repository still commits, so the add screen has to be able
+    // to offer it an identity; it just has no remote to associate.
     const probe = await mount({ repositoryContext: async () => ({ ...context, remotes: [] }) });
-    expect(probe.summary).toBeNull();
+    expect(probe.summary?.repositoryId).toBe('repo_one');
+    expect(probe.summary?.remotes).toEqual([]);
+    expect(probe.summary?.primaryRemote).toBeNull();
   });
 
   test('keeps a single remote as the anchor and survives an unreadable author', async () => {

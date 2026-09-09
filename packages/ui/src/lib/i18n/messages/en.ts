@@ -909,6 +909,7 @@ export const dict = {
   'gitView.context.needsAttention': 'Needs attention',
   'gitView.identity.system': 'System identity',
   'gitView.identity.systemNoAuthor': 'No author configured on this computer',
+  'gitView.identity.configChanged': "The repository's Git configuration changed after this identity was applied. Choose the identity again to bring it up to date.",
   'gitView.identity.systemConfirmTitle': 'Use this machine’s own Git credentials?',
   'gitView.identity.systemConfirmAction': 'Use it',
   'gitView.identity.unavailableHost': 'Answers for {host}',

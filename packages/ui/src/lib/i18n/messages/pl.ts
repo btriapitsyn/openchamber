@@ -2255,6 +2255,7 @@ export const dict: Record<I18nKey, string> = {
   'gitView.context.needsAttention': 'Wymaga uwagi',
   'gitView.identity.system': 'Tożsamość systemowa',
   'gitView.identity.systemNoAuthor': 'Na tym komputerze nie skonfigurowano autora',
+  'gitView.identity.configChanged': 'Konfiguracja Git repozytorium zmieniła się po zastosowaniu tej tożsamości. Wybierz tożsamość ponownie, aby ją zaktualizować.',
   'gitView.identity.systemConfirmTitle': 'Użyć własnych poświadczeń Git tego komputera?',
   'gitView.identity.systemConfirmAction': 'Użyj',
   'gitView.identity.unavailableHost': 'Odpowiada za {host}',

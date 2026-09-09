@@ -923,6 +923,7 @@ export const dict: Record<I18nKey, string> = {
   'gitView.context.needsAttention': '需要處理',
   'gitView.identity.system': '系統身分',
   'gitView.identity.systemNoAuthor': '本機未設定提交作者',
+  'gitView.identity.configChanged': '套用這個身分之後，儲存庫的 Git 設定發生了變化。再選一次該身分即可更新。',
   'gitView.identity.systemConfirmTitle': '使用本機自己的 Git 憑證？',
   'gitView.identity.systemConfirmAction': '使用',
   'gitView.identity.unavailableHost': '適用於 {host}',

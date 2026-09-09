@@ -807,6 +807,7 @@ export const dict = {
   'gitView.context.needsAttention': 'Handlungsbedarf',
   'gitView.identity.system': 'System-Identität',
   'gitView.identity.systemNoAuthor': 'Auf diesem Computer ist kein Autor konfiguriert',
+  'gitView.identity.configChanged': 'Die Git-Konfiguration des Repositorys hat sich geändert, nachdem diese Identität angewendet wurde. Wähle die Identität erneut, um sie zu aktualisieren.',
   'gitView.identity.systemConfirmTitle': 'Die eigenen Git-Zugangsdaten dieses Computers verwenden?',
   'gitView.identity.systemConfirmAction': 'Verwenden',
   'gitView.identity.unavailableHost': 'Gilt für {host}',

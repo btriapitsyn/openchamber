@@ -368,10 +368,16 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
    * does what it claims. Everything else about the configuration is the
    * identity, so this is all that is left to surface.
    */
-  const identityAttention = binding.read?.binding && binding.status === 'ready'
-    && binding.read.binding.state !== 'bound'
-    ? t('gitView.context.needsAttention')
-    : null;
+  const identityAttention = React.useMemo(() => {
+    const read = binding.read;
+    if (!read?.binding || binding.status !== 'ready' || read.binding.state === 'bound') return null;
+    // The commonest way a binding stops matching is a remote added, renamed or
+    // repointed after the identity was applied. That has a remedy the generic
+    // words do not name — choose the identity again — so it is said here.
+    return read.binding.configRevision !== read.repository.configRevision
+      ? t('gitView.identity.configChanged')
+      : t('gitView.context.needsAttention');
+  }, [binding.read, binding.status, t]);
   const bindingRemoteName = binding.read?.binding?.remotes[0]?.name
     ?? binding.read?.repository.remotes.find((remote) => remote.name === 'origin')?.name
     ?? binding.read?.repository.remotes[0]?.name

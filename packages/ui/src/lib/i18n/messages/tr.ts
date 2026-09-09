@@ -3392,6 +3392,7 @@ export const dict = {
   'gitView.context.needsAttention': 'Dikkat gerektiriyor',
   'gitView.identity.system': 'Sistem kimliği',
   'gitView.identity.systemNoAuthor': 'Bu bilgisayarda yazar tanımlı değil',
+  'gitView.identity.configChanged': 'Bu kimlik uygulandıktan sonra deponun Git yapılandırması değişti. Güncellemek için kimliği yeniden seç.',
   'gitView.identity.systemConfirmTitle': 'Bu bilgisayarın kendi Git kimlik bilgileri kullanılsın mı?',
   'gitView.identity.systemConfirmAction': 'Kullan',
   'gitView.identity.unavailableHost': '{host} için',

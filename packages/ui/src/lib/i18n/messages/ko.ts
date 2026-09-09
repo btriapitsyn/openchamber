@@ -910,6 +910,7 @@ export const dict: Record<I18nKey, string> = {
   'gitView.context.needsAttention': '확인 필요',
   'gitView.identity.system': '시스템 아이덴티티',
   'gitView.identity.systemNoAuthor': '이 컴퓨터에는 작성자가 설정되어 있지 않습니다',
+  'gitView.identity.configChanged': '이 아이덴티티를 적용한 뒤 저장소의 Git 설정이 바뀌었습니다. 아이덴티티를 다시 선택하면 최신 상태가 됩니다.',
   'gitView.identity.systemConfirmTitle': '이 컴퓨터 자체의 Git 자격 증명을 사용할까요?',
   'gitView.identity.systemConfirmAction': '사용',
   'gitView.identity.unavailableHost': '{host} 전용',

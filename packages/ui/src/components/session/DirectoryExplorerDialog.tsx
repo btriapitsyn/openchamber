@@ -18,7 +18,7 @@ import { GitOperationStatus } from '@/components/views/git/GitOperationStatus';
 import { useExistingRepositorySummary } from './useExistingRepositorySummary';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { identityTransport, isCompleteIdentity } from '@/lib/api/git-identity';
-import { applyIdentityToRepository, identityApplicability, type IdentityApplicability, isSignatureOnlyIdentity } from '@/lib/source-control/applyIdentity';
+import { applyIdentityToRepository, identityApplicability, type IdentityApplicability, isSignatureOnlyIdentity, needsSystemAcknowledgement } from '@/lib/source-control/applyIdentity';
 import type { GitIdentityProfile } from '@/lib/api/types';
 import { useSourceControlAuthStore, useConnectedAccountIds } from '@/stores/useSourceControlAuthStore';
 import { IdentityDropdown } from '@/components/views/git/GitHeader';
@@ -450,7 +450,12 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
       : null;
     return chosen ?? proposedIdentity;
   }, [availableGitIdentities, identityChoice, identityChoiceKey, proposedIdentity]);
-  const identityNeedsAcknowledgement = identityTransport(selectedGitIdentity) === 'system';
+  // Confirming System Git is about credentials a transfer would use, so it is
+  // asked only when there is a remote to bind: a clone always has one, and a
+  // local-only repository has none and binds nothing.
+  const identityNeedsAcknowledgement = Boolean(selectedGitIdentity && needsSystemAcknowledgement(
+    selectedGitIdentity, isCloneMode || Boolean(existingRepository?.primaryRemote),
+  ));
   /**
    * How the clone authenticates, read off the identity.
    *
@@ -636,11 +641,13 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
       const identityChosen = identityChoice?.key === identityChoiceKey;
       const applyIdentity = selectedGitIdentity
         && (identityChosen || selectedGitIdentity.id !== GLOBAL_IDENTITY_ID || unverifiedConfirmed);
-      if (!isCloneMode && applyIdentity && existingRepository?.primaryRemote
+      if (!isCloneMode && applyIdentity && existingRepository
         && existingRepository.directory === selectedTarget) {
         const outcome = await applyIdentityToRepository({
           directory: project.path,
-          remoteName: existingRepository.primaryRemote.name,
+          // A repository with no remote binds nothing; the identity is still
+          // written, because it also says who commits there.
+          remoteName: existingRepository.primaryRemote?.name ?? null,
           identity: selectedGitIdentity,
           acknowledgedSystem: unverifiedConfirmed,
         }, { git, sourceControl });

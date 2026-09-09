@@ -907,6 +907,7 @@ export const dict: Record<I18nKey, string> = {
   'gitView.context.needsAttention': '確認が必要',
   'gitView.identity.system': 'システムのアイデンティティ',
   'gitView.identity.systemNoAuthor': 'このコンピューターには作成者が設定されていません',
+  'gitView.identity.configChanged': 'このアイデンティティを適用したあとにリポジトリの Git 設定が変わりました。アイデンティティをもう一度選ぶと最新の状態になります。',
   'gitView.identity.systemConfirmTitle': 'このコンピューター自身の Git 資格情報を使いますか？',
   'gitView.identity.systemConfirmAction': '使う',
   'gitView.identity.unavailableHost': '{host} 向け',

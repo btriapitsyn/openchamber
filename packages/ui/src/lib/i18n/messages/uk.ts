@@ -11,6 +11,7 @@ export const dict: Record<I18nKey, string> = {
   'gitView.context.needsAttention': 'Потребує уваги',
   'gitView.identity.system': 'Системна ідентичність',
   'gitView.identity.systemNoAuthor': 'На цьому комп’ютері не налаштовано автора',
+  'gitView.identity.configChanged': 'Конфігурація Git репозиторію змінилася після застосування цієї ідентичності. Оберіть ідентичність ще раз, щоб оновити її.',
   'gitView.identity.systemConfirmTitle': 'Використати власні облікові дані Git цього комп’ютера?',
   'gitView.identity.systemConfirmAction': 'Використати',
   'gitView.identity.unavailableHost': 'Відповідає за {host}',

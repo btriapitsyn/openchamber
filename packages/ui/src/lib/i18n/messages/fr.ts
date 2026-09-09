@@ -732,6 +732,7 @@ export const dict = {
   'gitView.context.needsAttention': 'À vérifier',
   'gitView.identity.system': 'Identité système',
   'gitView.identity.systemNoAuthor': 'Aucun auteur configuré sur cet ordinateur',
+  'gitView.identity.configChanged': "La configuration Git du dépôt a changé après l'application de cette identité. Choisissez de nouveau l'identité pour la mettre à jour.",
   'gitView.identity.systemConfirmTitle': 'Utiliser les identifiants Git propres à cet ordinateur ?',
   'gitView.identity.systemConfirmAction': "L'utiliser",
   'gitView.identity.unavailableHost': 'Répond pour {host}',
