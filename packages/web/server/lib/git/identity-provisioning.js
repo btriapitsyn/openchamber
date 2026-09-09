@@ -25,12 +25,34 @@ const accountSignature = (account, user) => {
   return { userName, userEmail: '' };
 };
 
-const uniqueName = (profiles, candidate) => {
+const PROVIDER_LABELS = { github: 'GitHub', gitlab: 'GitLab' };
+
+/** The host of an instance, for telling two self-hosted GitLabs apart. */
+const instanceLabel = (instance) => {
+  const value = text(instance);
+  try { return new URL(value.includes('://') ? value : `https://${value}`).host; }
+  catch { return value; }
+};
+
+/**
+ * A name that says which account it is.
+ *
+ * The same login on two providers is ordinary — one person, one username, a
+ * GitHub and a GitLab account — and calling the second one "ada 2" tells
+ * nobody which is which. It is qualified by where it lives instead, and the
+ * first one keeps the plain name it already had.
+ */
+const uniqueName = (profiles, candidate, account) => {
   const taken = new Set(profiles.map((profile) => text(profile.name).toLowerCase()));
-  if (!taken.has(candidate.toLowerCase())) return candidate;
+  const free = (name) => !taken.has(name.toLowerCase());
+  if (free(candidate)) return candidate;
+  const provider = PROVIDER_LABELS[account?.provider];
+  if (provider && free(`${candidate} (${provider})`)) return `${candidate} (${provider})`;
+  const host = instanceLabel(account?.instance);
+  if (host && free(`${candidate} (${host})`)) return `${candidate} (${host})`;
   for (let suffix = 2; suffix < 100; suffix += 1) {
     const next = `${candidate} ${suffix}`;
-    if (!taken.has(next.toLowerCase())) return next;
+    if (free(next)) return next;
   }
   return `${candidate} ${Date.now()}`;
 };
@@ -72,7 +94,7 @@ export function createGitIdentityProvisioning({ store, now = Date.now, randomId 
       const login = text(user?.login) || text(user?.username) || signature.userName;
       return store.createProfile({
         id: `identity-${now()}-${randomId()}`,
-        name: uniqueName(profiles, login),
+        name: uniqueName(profiles, login, account),
         userName: signature.userName,
         userEmail: signature.userEmail,
         account,
