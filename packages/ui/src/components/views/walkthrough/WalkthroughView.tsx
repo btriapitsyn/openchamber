@@ -203,7 +203,9 @@ export const WalkthroughView = ({ directory: rootDirectory, visible = true }: Wa
     useBranchComparisonBase(directory || null, currentBranch, visible);
   const branchSource = useMemo<Extract<WalkthroughSource, { kind: 'branch' }> | null>(() => {
     const headRef = currentBranch;
-    if (!headRef) return null;
+    // A branch is never its own base, and the check belongs before the ref is
+    // qualified: afterwards `refs/heads/main` never equals a plain `main`.
+    if (!headRef || !comparisonBase || comparisonBase === headRef) return null;
     const all = branches?.all ?? [];
     // A base is named literally by the range API and must belong to the remote
     // this repository is bound to, so whatever was chosen or detected is
@@ -214,7 +216,7 @@ export const WalkthroughView = ({ directory: rootDirectory, visible = true }: Wa
       remoteNames: new Set(binding.read?.repository.remotes.map((remote) => remote.name) ?? []),
       primaryRemote: binding.contexts[0]?.primaryRemote,
     });
-    if (!baseRef || baseRef === headRef) return null;
+    if (!baseRef) return null;
     return { kind: 'branch', baseRef, headRef };
   }, [binding.contexts, binding.read, branches, comparisonBase, currentBranch]);
 

@@ -34,7 +34,6 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
     requests.push(url);
     switch (url.pathname) {
       case '/api/git/remotes': return Response.json([]);
-      case '/api/git/remote-url': return Response.json({ url: null });
       // The identity strip beside the branch reads these on mount.
       case '/api/git/identities': return Response.json([]);
       case '/api/git/global-identity': return Response.json(null);

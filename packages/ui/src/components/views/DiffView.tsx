@@ -1250,6 +1250,9 @@ export const DiffView: React.FC<DiffViewProps> = ({
     // this repository is bound to, so the chosen or detected one is qualified
     // before it becomes a comparison.
     const qualifiedBranchBase = React.useMemo(() => {
+        // A branch is never its own base, checked before the ref is qualified:
+        // afterwards `refs/heads/main` never equals a plain `main`.
+        if (!branchBase || branchBase === currentBranch) return null;
         const all = branches?.all ?? [];
         return qualifyBaseRef(branchBase, {
             localBranches: all.filter((name) => !name.startsWith('remotes/')),
@@ -1257,7 +1260,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
             remoteNames: new Set(binding.read?.repository.remotes.map((remote) => remote.name) ?? []),
             primaryRemote: binding.contexts[0]?.primaryRemote,
         });
-    }, [binding.contexts, binding.read, branchBase, branches]);
+    }, [binding.contexts, binding.read, branchBase, branches, currentBranch]);
     const comparisonSource = React.useMemo<GitComparisonSource | null>(() => {
         if (activeDiffScope === 'commit' && selectedCommitHash) return { kind: 'commit', hash: selectedCommitHash };
         if (activeDiffScope === 'branch' && qualifiedBranchBase && currentBranch) {
@@ -2004,7 +2007,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
                 );
             }
 
-            if (!branchBase) {
+            if (!qualifiedBranchBase) {
                 return (
                     <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
                         <Icon name="git-branch" className="size-6 text-muted-foreground" />
@@ -2045,7 +2048,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
                 <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
                     {activeDiffScope === 'turn' ? t('diffView.state.noLastTurnChanges')
                         : activeDiffScope === 'commit' ? t('commitComparison.emptyDiff')
-                        : activeDiffScope === 'branch' && branchBase ? t('diffView.branch.empty', { base: branchRefLabel(branchBase) })
+                        : activeDiffScope === 'branch' && qualifiedBranchBase ? t('diffView.branch.empty', { base: branchRefLabel(qualifiedBranchBase) })
                         : t('diffView.state.cleanWorkingTree')}
                 </div>
             );
@@ -2168,9 +2171,9 @@ export const DiffView: React.FC<DiffViewProps> = ({
                             requestWalkthroughTarget(directory, {
                                 source: activeDiffScope === 'commit' && selectedCommitHash ? {
                                     kind: 'commit', hash: selectedCommitHash,
-                                } : activeDiffScope === 'branch' && branchBase && currentBranch ? {
+                                } : activeDiffScope === 'branch' && qualifiedBranchBase && currentBranch ? {
                                     kind: 'branch',
-                                    baseRef: branchBase,
+                                    baseRef: qualifiedBranchBase,
                                     headRef: currentBranch,
                                 } : {
                                     kind: 'working-tree',

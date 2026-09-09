@@ -54,11 +54,14 @@ written against staged code never silently re-anchors onto an unstaged edit.
 | `working-tree` (`all` \| `staged` \| `working`) | `staged`, `working` | Untracked files are fetched individually because `git diff` omits them |
 | `branch` | `branch` | `getRangeDiff` with `includeWorkingTree: true` compares the selected merge base with current files, including committed and local work in one net diff |
 | `commit` | `commit` | `getCommitDiff` compares the full selected commit hash with its first parent; root commits compare with an empty tree |
-| `pr` | `pr:<number>` | GitHub's committed pull-request diff, without local working-tree changes |
+| `pr` | `pr:<number>` | The provider's committed pull-request diff, without local working-tree changes. Every read carries a validated repository binding context |
 
 Changes and walkthrough resolve the current branch's base through
 `packages/ui/src/hooks/useBranchComparisonBase.ts`. An explicit choice in Changes
-outranks reflog detection. Both toolbars use
+outranks reflog detection. The resolved base is then qualified by
+`qualifyBaseRef` in `packages/ui/src/components/views/git/baseBranch.ts`: the
+range API names refs literally, and a base outside the remote the repository is
+bound to is not a comparison this repository can make. Both toolbars use
 `packages/ui/src/components/views/git/BranchComparisonSelector.tsx` to select or
 change the base directly. Walkthrough allows selecting Branch before a base is
 known and waits for a valid choice before loading or generating. Opening
