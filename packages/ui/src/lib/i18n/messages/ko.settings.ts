@@ -2291,6 +2291,7 @@ export const settingsDict = {
   'settings.gitlab.actions.useInstance': '인스턴스 사용',
   'settings.gitlab.status.checking': '연결 확인 중…',
   'settings.gitlab.status.operationFailed': '작업 실패',
+  'settings.gitlab.status.tokenRejected': 'GitLab이 이 토큰을 받아들이지 않았습니다. 이 인스턴스의 토큰인지, API 접근 권한이 있는지 확인하세요.',
   'settings.gitlab.status.notConnected': '연결되지 않음',
   'settings.gitlab.status.connected': '연결됨',
   'settings.gitlab.actions.connect': 'GitLab 연결',

@@ -74,6 +74,7 @@ const GitLabInstanceItem: React.FC<GitLabInstanceItemProps> = ({ identity, sourc
   const [isAddingAccount, setIsAddingAccount] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const [operationFailed, setOperationFailed] = React.useState(false);
+  const [tokenRejected, setTokenRejected] = React.useState(false);
   const flowRuntimeKeyRef = React.useRef('');
   const runtimeGenerationRef = React.useRef(0);
   const captureRuntime = React.useCallback(() => {
@@ -164,6 +165,7 @@ const GitLabInstanceItem: React.FC<GitLabInstanceItemProps> = ({ identity, sourc
     const isCurrentRuntime = captureRuntime();
     setBusy(true);
     setOperationFailed(false);
+    setTokenRejected(false);
     try {
       const nextFlow = await sourceControl.authStart(identity);
       if (!isCurrentRuntime()) return;
@@ -184,6 +186,7 @@ const GitLabInstanceItem: React.FC<GitLabInstanceItemProps> = ({ identity, sourc
     const isCurrentRuntime = captureRuntime();
     setBusy(true);
     setOperationFailed(false);
+    setTokenRejected(false);
     try {
       const nextStatus = await sourceControl.authSetToken(identity, token.trim());
       if (!isCurrentRuntime()) return;
@@ -195,8 +198,12 @@ const GitLabInstanceItem: React.FC<GitLabInstanceItemProps> = ({ identity, sourc
       await refreshInstances(sourceControl, { force: true });
       if (!isCurrentRuntime()) return;
       onSaved?.();
-    } catch {
-      if (isCurrentRuntime()) setOperationFailed(true);
+    } catch (error) {
+      if (!isCurrentRuntime()) return;
+      // The server says whether the token itself was refused; anything else is
+      // a failure the person cannot fix by editing what they pasted.
+      if (error instanceof Error && 'code' in error && error.code === 'INVALID_TOKEN') setTokenRejected(true);
+      else setOperationFailed(true);
     } finally {
       if (isCurrentRuntime()) setBusy(false);
     }
@@ -206,6 +213,7 @@ const GitLabInstanceItem: React.FC<GitLabInstanceItemProps> = ({ identity, sourc
     const isCurrentRuntime = captureRuntime();
     setBusy(true);
     setOperationFailed(false);
+    setTokenRejected(false);
     try {
       await sourceControl.authDisconnect(identity, accountId);
       if (!isCurrentRuntime()) return;
@@ -224,6 +232,7 @@ const GitLabInstanceItem: React.FC<GitLabInstanceItemProps> = ({ identity, sourc
     const isCurrentRuntime = captureRuntime();
     setBusy(true);
     setOperationFailed(false);
+    setTokenRejected(false);
     try {
       await sourceControl.authSetCliDisabled(identity, !cli.disabled);
       if (!isCurrentRuntime()) return;
@@ -242,6 +251,7 @@ const GitLabInstanceItem: React.FC<GitLabInstanceItemProps> = ({ identity, sourc
     setPollAttempt(0);
     setToken('');
     setOperationFailed(false);
+    setTokenRejected(false);
   };
 
   const connected = accounts.length > 0;
@@ -249,6 +259,8 @@ const GitLabInstanceItem: React.FC<GitLabInstanceItemProps> = ({ identity, sourc
   let statusMessage: string;
   if (authEntry?.isLoading) {
     statusMessage = t('settings.gitlab.status.checking');
+  } else if (tokenRejected) {
+    statusMessage = t('settings.gitlab.status.tokenRejected');
   } else if (operationFailed || capabilitiesFailed || status?.status === 'unreachable') {
     statusMessage = t('settings.gitlab.status.operationFailed');
   } else if (accounts.length > 0) {

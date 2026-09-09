@@ -2291,6 +2291,7 @@ export const settingsDict = {
   'settings.gitlab.actions.useInstance': '使用实例',
   'settings.gitlab.status.checking': '正在检查连接…',
   'settings.gitlab.status.operationFailed': '操作失败',
+  'settings.gitlab.status.tokenRejected': 'GitLab 没有接受这个令牌。请确认它属于该实例并且有 API 访问权限。',
   'settings.gitlab.status.notConnected': '未连接',
   'settings.gitlab.status.connected': '已连接',
   'settings.gitlab.actions.connect': '连接 GitLab',

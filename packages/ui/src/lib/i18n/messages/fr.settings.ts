@@ -2291,6 +2291,7 @@ export const settingsDict = {
   'settings.gitlab.actions.useInstance': 'Utiliser l’instance',
   'settings.gitlab.status.checking': 'Vérification de la connexion…',
   'settings.gitlab.status.operationFailed': 'Échec de l’opération',
+  'settings.gitlab.status.tokenRejected': "GitLab n'a pas accepté ce jeton. Vérifiez qu'il appartient à cette instance et qu'il a accès à l'API.",
   'settings.gitlab.status.notConnected': 'Non connecté',
   'settings.gitlab.status.connected': 'Connecté',
   'settings.gitlab.actions.connect': 'Connecter GitLab',

@@ -2291,6 +2291,7 @@ export const settingsDict = {
   'settings.gitlab.actions.useInstance': 'Використати екземпляр',
   'settings.gitlab.status.checking': 'Перевірка з’єднання…',
   'settings.gitlab.status.operationFailed': 'Не вдалося виконати операцію',
+  'settings.gitlab.status.tokenRejected': 'GitLab не прийняв цей токен. Перевірте, чи він від цього інстансу і чи має доступ до API.',
   'settings.gitlab.status.notConnected': 'Не підключено',
   'settings.gitlab.status.connected': 'Підключено',
   'settings.gitlab.actions.connect': 'Підключити GitLab',

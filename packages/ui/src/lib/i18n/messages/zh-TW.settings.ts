@@ -2291,6 +2291,7 @@ export const settingsDict = {
   'settings.gitlab.actions.useInstance': '使用執行個體',
   'settings.gitlab.status.checking': '正在檢查連線…',
   'settings.gitlab.status.operationFailed': '操作失敗',
+  'settings.gitlab.status.tokenRejected': 'GitLab 沒有接受這個權杖。請確認它屬於該執行個體並且有 API 存取權限。',
   'settings.gitlab.status.notConnected': '未連線',
   'settings.gitlab.status.connected': '已連線',
   'settings.gitlab.actions.connect': '連線 GitLab',

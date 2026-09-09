@@ -734,6 +734,20 @@ describe('GitLab routes', () => {
     expect(onAccountInvalidated).toHaveBeenCalledWith({ provider: 'gitlab', instance: origin, accountId: account.id });
   });
 
+  it('names a refused token so the interface can say what to fix', async () => {
+    const store = makeStore();
+    const fetch = vi.fn(async () => new Response('unauthorized', { status: 401 }));
+    const app = appWith({ store, fetch });
+
+    const response = await request(app).post('/api/source-control/gitlab/auth/token')
+      .query({ instance: origin }).send({ token: 'not-a-token' }).expect(401);
+
+    // Without the code every failure reads the same, and a person cannot tell
+    // a bad token from a server they cannot reach.
+    expect(response.body.code).toBe('INVALID_TOKEN');
+    expect(store.setAccount).not.toHaveBeenCalled();
+  });
+
   it('verifies PATs before persistence and uses them for resource operations', async () => {
     const store = makeStore();
     const fetch = vi.fn(async () => userResponse());

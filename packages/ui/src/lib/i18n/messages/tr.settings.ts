@@ -2297,6 +2297,7 @@ export const settingsDict = {
   'settings.gitlab.actions.useInstance': 'Instance\'ı kullan',
   'settings.gitlab.status.checking': 'Bağlantı kontrol ediliyor…',
   'settings.gitlab.status.operationFailed': 'İşlem başarısız oldu',
+  'settings.gitlab.status.tokenRejected': 'GitLab bu tokenı kabul etmedi. Bu örneğe ait olduğunu ve API erişimi olduğunu kontrol et.',
   'settings.gitlab.status.notConnected': 'Bağlı değil',
   'settings.gitlab.status.connected': 'Bağlı',
   'settings.gitlab.actions.connect': 'GitLab\'a Bağlan',

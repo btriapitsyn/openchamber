@@ -530,8 +530,13 @@ export function registerGitLabRoutes(app, options = {}) {
     } catch (error) {
       const lockResponse = sendAuthStorageError(res, error);
       if (lockResponse) return lockResponse;
-      const status = error?.kind === 'invalid-token' ? 401 : errorStatus(classifyGitLabFailure(error));
-      return res.status(status).json({ error: error?.message || 'Failed to verify GitLab token' });
+      // The reason a token was refused is the person's to act on, so it is
+      // named by a code the interface can translate rather than folded into a
+      // generic failure.
+      if (error?.kind === 'invalid-token') {
+        return res.status(401).json({ error: error?.message || 'GitLab token is invalid', code: 'INVALID_TOKEN' });
+      }
+      return res.status(errorStatus(classifyGitLabFailure(error))).json({ error: error?.message || 'Failed to verify GitLab token' });
     }
   });
 
