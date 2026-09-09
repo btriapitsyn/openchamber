@@ -36,7 +36,11 @@ const isString = (value) => Object.prototype.toString.call(value) === '[object S
 const operationError = (code, message, status = 500, details = {}) => Object.assign(new Error(message), { code, status, ...details });
 const publicError = (code, message) => ({ code, message });
 const terminal = (state, code, message) => ({ state, error: publicError(code, message) });
-const fileIdentity = (stats) => `${stats.dev}:${stats.ino}`;
+// Linux reuses an inode number when a directory is removed and recreated in the
+// same parent, so device and inode alone cannot tell a replaced pathname from
+// the one we created. Creation time is immutable for a given object, so adding
+// it only ever makes the check stricter.
+const fileIdentity = (stats) => `${stats.dev}:${stats.ino}:${stats.birthtimeMs}`;
 const lstatSnapshot = (stats) => ({
   identity: fileIdentity(stats),
   mode: stats.mode,
