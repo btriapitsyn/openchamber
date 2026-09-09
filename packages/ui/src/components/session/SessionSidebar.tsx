@@ -38,6 +38,7 @@ import { getRuntimeKey } from '@/lib/runtime-switch';
 import { streamPerfCount, streamPerfMark } from '@/stores/utils/streamDebug';
 import { runBackgroundNetworkTask } from '@/lib/background-network';
 import { buildKnownSessionDirectories } from './sidebar/list/sessionListDirectories';
+import { sortProjectsByOrder } from './sidebar/list/projectSort';
 import { z } from 'zod';
 import { subscribeOpenchamberEvents } from '@/lib/openchamberEvents';
 import {
@@ -492,43 +493,10 @@ const SessionSidebarComponent: React.FC<SessionSidebarProps> = ({
   }
   previousSidebarRenderSourcesRef.current = sidebarRenderSources;
 
-  const sortedProjects = React.useMemo(() => {
-    const list = [...normalizedProjects];
-
-    switch (projectSortOrder) {
-      case 'a-z':
-        list.sort((a, b) => {
-          const aLabel = (a.label || a.path).toLowerCase();
-          const bLabel = (b.label || b.path).toLowerCase();
-          return aLabel.localeCompare(bLabel);
-        });
-        break;
-      case 'z-a':
-        list.sort((a, b) => {
-          const aLabel = (a.label || a.path).toLowerCase();
-          const bLabel = (b.label || b.path).toLowerCase();
-          return bLabel.localeCompare(aLabel);
-        });
-        break;
-      case 'date-added':
-        list.sort((a, b) => (b.addedAt ?? 0) - (a.addedAt ?? 0));
-        break;
-      case 'recent':
-        list.sort((a, b) => (b.lastOpenedAt ?? 0) - (a.lastOpenedAt ?? 0));
-        break;
-      case 'manual': {
-        const orderMap = new Map(manualProjectOrder.map((id, i) => [id, i]));
-        list.sort((a, b) => {
-          const ai = orderMap.get(a.id) ?? Infinity;
-          const bi = orderMap.get(b.id) ?? Infinity;
-          return ai - bi;
-        });
-        break;
-      }
-    }
-
-    return list;
-  }, [normalizedProjects, projectSortOrder, manualProjectOrder]);
+  const sortedProjects = React.useMemo(
+    () => sortProjectsByOrder(normalizedProjects, projectSortOrder, manualProjectOrder),
+    [normalizedProjects, projectSortOrder, manualProjectOrder],
+  );
   const projectView = useSessionProjectViewState({ isVSCode, projects: sortedProjects });
 
   const searchEmptyState = React.useMemo(() => (

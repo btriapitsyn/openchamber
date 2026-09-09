@@ -16,6 +16,7 @@ import { useSkillsCatalogStore } from '@/stores/useSkillsCatalogStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { Tooltip, TooltipTrigger } from '@/components/ui/tooltip';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
+import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { AgentsSidebar } from '@/components/sections/agents/AgentsSidebar';
 import { AgentsPage } from '@/components/sections/agents/AgentsPage';
 import { BehaviorPage } from '@/components/sections/behavior/BehaviorPage';
@@ -89,6 +90,9 @@ interface SettingsViewProps {
   isWindowed?: boolean;
   /** Restrict top-level settings navigation to a specific product surface. */
   visiblePageSlugs?: SettingsPageSlug[];
+  /** Lets a native shell hand its hardware back button to the mobile stages:
+      the handler steps one level up and reports whether it consumed the press. */
+  registerBackHandler?: (handler: (() => boolean) | null) => void;
   initialMobileStage?: MobileStage;
 }
 
@@ -184,7 +188,7 @@ function getCurrentHistoryState(): Record<string, unknown> {
 }
 
 
-export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile, isWindowed, visiblePageSlugs, initialMobileStage = 'nav' }) => {
+export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile, isWindowed, visiblePageSlugs, initialMobileStage = 'nav', registerBackHandler }) => {
   const { t } = useI18n();
   const deviceInfo = useDeviceInfo();
   const isMobile = forceMobile ?? deviceInfo.isMobile;
@@ -311,24 +315,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     }
     setMobileStage(def.kind === 'split' ? 'page-sidebar' : 'page-content');
   }, [isMobile, setSettingsPage]);
-
-  const openThirdPartyProviderSetup = React.useCallback(async (providerId: string): Promise<boolean> => {
-    const configStore = useConfigStore.getState();
-    await configStore.loadProviders({ source: 'settings:third-party-provider-setup' });
-    const providerAvailable = useConfigStore.getState().providers.some(
-      (provider) => provider.id === providerId,
-    );
-    if (!providerAvailable) {
-      return false;
-    }
-
-    configStore.setSelectedProvider(providerId);
-    openPage('providers');
-    if (isMobile) {
-      setMobileStage('page-content');
-    }
-    return true;
-  }, [isMobile, openPage]);
 
   const activePageMeta = React.useMemo(() => {
     return getSettingsPageMeta(settingsSlug);
@@ -683,12 +669,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
       case 'git':
         return <GitPage />;
       case 'integrations':
-        return (
-          <IntegrationsPage
-            onOpenProviderSetup={openThirdPartyProviderSetup}
-            onOpenPluginManager={() => openPage('plugins')}
-          />
-        );
+        return <IntegrationsPage />;
       case 'extensions':
         return <ExtensionsPage />;
       case 'general':
@@ -706,7 +687,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
       default:
         return null;
     }
-  }, [openChamberSectionBySlug, openPage, openThirdPartyProviderSetup, renderUnavailable, runtimeCtx, t]);
+  }, [openChamberSectionBySlug, renderUnavailable, runtimeCtx, t]);
 
   // Mobile: if opened via deep-link / palette to a non-home page, jump into it once.
   React.useEffect(() => {
@@ -731,10 +712,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
   }, [isMobile, mobileStage, settingsSlug]);
 
   const showBackButton = isMobile && mobileStage !== 'nav';
-  const backButtonTargetsPageSidebar = isMobile && mobileStage === 'page-content' && settingsSlug === 'skills.installed';
-  const showOpenPageSidebarButton = mobileStage === 'page-content'
-    && activePageMeta?.kind === 'split'
-    && !backButtonTargetsPageSidebar;
+  // Split pages drill down on mobile: nav → the page's own list → the item.
+  // Back walks that path in reverse, so it takes one tap to reach the next
+  // item instead of a round trip through the settings root.
+  const backButtonTargetsPageSidebar = isMobile
+    && mobileStage === 'page-content'
+    && activePageMeta?.kind === 'split';
   const mobileBackButtonLabel = backButtonTargetsPageSidebar
     ? t('settings.view.actions.back')
     : showBackButton
@@ -773,9 +756,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
   const handleMobilePageSidebarItemSelect = React.useCallback(() => {
     shouldFocusMobilePageContentRef.current = true;
     setMobileStage('page-content');
-    if (settingsSlug === 'skills.installed') {
-      pushMobileSplitDetailHistory(settingsSlug);
-    }
+    pushMobileSplitDetailHistory(settingsSlug);
   }, [pushMobileSplitDetailHistory, settingsSlug]);
 
   React.useEffect(() => {
@@ -811,18 +792,35 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     setMobileStage('nav');
   }, [backButtonTargetsPageSidebar, runtimeCtx.isVSCode, settingsSlug]);
 
+  // The Android hardware back button belongs to the same ladder as the header's
+  // back arrow: one level up per press, and only the press at the root falls
+  // through to the shell, which closes Settings.
+  React.useEffect(() => {
+    if (!registerBackHandler) {
+      return;
+    }
+    registerBackHandler(() => {
+      if (!isMobile || mobileStage === 'nav') {
+        return false;
+      }
+      handleBack();
+      return true;
+    });
+    return () => registerBackHandler(null);
+  }, [handleBack, isMobile, mobileStage, registerBackHandler]);
+
   React.useEffect(() => {
     if (!isMobile || runtimeCtx.isVSCode) {
       return;
     }
 
     const handlePopState = (event: PopStateEvent) => {
-      if (settingsSlug !== 'skills.installed') {
+      if (getSettingsPageMeta(settingsSlug)?.kind !== 'split') {
         return;
       }
 
       const detail = getSettingsDetailHistoryEntry(event.state);
-      if (detail?.page === 'skills.installed') {
+      if (detail?.page === settingsSlug) {
         setMobileStage('page-content');
         return;
       }
@@ -835,10 +833,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
       window.removeEventListener('popstate', handlePopState);
     };
   }, [isMobile, runtimeCtx.isVSCode, settingsSlug]);
-
-  const handleOpenPageSidebar = React.useCallback(() => {
-    setMobileStage('page-sidebar');
-  }, []);
 
   const renderSettingsNav = () => {
     const hasSearchQuery = settingsSearchQuery.trim().length > 0;
@@ -870,7 +864,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
         </div>
 
         {/* Scrollable nav items */}
-        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
+        <ScrollableOverlay outerClassName="flex-1 min-h-0" disableHorizontal>
           <div className="flex flex-col gap-0.5 px-4 pt-4 pb-2">
             {hasSearchQuery ? (
               settingsSearchResults.length > 0 ? (() => {
@@ -985,7 +979,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
               ));
             })()}
           </div>
-        </div>
+        </ScrollableOverlay>
 
         {/* Footer */}
         <div className="overflow-hidden transition-opacity duration-150 opacity-100">
@@ -1019,17 +1013,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
         // No sidebar available; fall back to direct content.
         const fallback = renderPageContent(settingsSlug);
         return (
-          <div className="flex-1 min-h-0 overflow-y-scroll overflow-x-hidden bg-background">
+          <ScrollableOverlay outerClassName="flex-1 min-h-0" className="bg-background" disableHorizontal>
             <ErrorBoundary>{fallback}</ErrorBoundary>
-          </div>
+          </ScrollableOverlay>
         );
       }
       return (
-        <div className="flex-1 min-h-0 overflow-y-scroll overflow-x-hidden bg-background">
+        <ScrollableOverlay outerClassName="flex-1 min-h-0" className="bg-background" disableHorizontal>
           <ErrorBoundary>
             {renderPageSidebar(settingsSlug, { onItemSelect: handleMobilePageSidebarItemSelect })}
           </ErrorBoundary>
-        </div>
+        </ScrollableOverlay>
       );
     }
 
@@ -1037,9 +1031,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     const content = renderPageContent(settingsSlug);
 
     return (
-      <div className="flex-1 min-h-0 overflow-y-scroll overflow-x-hidden bg-background">
+      <ScrollableOverlay outerClassName="flex-1 min-h-0" className="bg-background" disableHorizontal>
         <ErrorBoundary>{content}</ErrorBoundary>
-      </div>
+      </ScrollableOverlay>
     );
   };
 
@@ -1054,17 +1048,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
           <div className={cn('border-r', runtimeCtx.isVSCode ? 'bg-background' : 'bg-sidebar')} style={{ width: SETTINGS_SPLIT_SIDEBAR_WIDTH, minWidth: SETTINGS_SPLIT_SIDEBAR_WIDTH, borderColor: 'var(--interactive-border)' }}>
             <ErrorBoundary>{renderPageSidebar(settingsSlug, {})}</ErrorBoundary>
           </div>
-          <div className="flex-1 min-h-0 overflow-y-scroll overflow-x-hidden bg-background">
+          <ScrollableOverlay outerClassName="flex-1 min-h-0" className="bg-background" disableHorizontal>
             <ErrorBoundary>{renderPageContent(settingsSlug)}</ErrorBoundary>
-          </div>
+          </ScrollableOverlay>
         </div>
       );
     }
 
     return (
-      <div className="h-full min-h-0 overflow-y-scroll overflow-x-hidden bg-background">
+      <ScrollableOverlay outerClassName="h-full min-h-0" className="bg-background" disableHorizontal>
         <ErrorBoundary>{renderPageContent(settingsSlug)}</ErrorBoundary>
-      </div>
+      </ScrollableOverlay>
     );
   };
 
@@ -1098,17 +1092,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
               ? t('settings.view.home.title')
               : (activePageMeta ? getPageTitle(activePageMeta.slug) : t('settings.view.home.title'))}
           </div>
-
-          {showOpenPageSidebarButton && (
-            <button
-              type="button"
-              onClick={handleOpenPageSidebar}
-              aria-label={t('settings.view.actions.openSectionList')}
-              className="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg p-2 text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            >
-              <Icon name="list-unordered" className="h-5 w-5" />
-            </button>
-          )}
 
           {onClose && (
             <button

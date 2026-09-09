@@ -72,6 +72,9 @@ workspaces/
 # Local guest scratch. Not part of the repo.
 examples/
 
+# OpenChamber app runtime state (sessions db, screenshots)
+.openchamber/screenshots/
+
 # Marks a disposable clone dedicated to unattended maintenance tasks.
 .maintenance-clone
 test-results/

@@ -168,6 +168,18 @@ describe('useWalkthroughStore — model selection', () => {
     expect(useWalkthroughStore.getState().getSelectedModel('/repo', SOURCE))
       .toBe('anthropic/claude-haiku-4-5');
   });
+
+  test('keeps commit walkthroughs separate and selecting one does not generate', () => {
+    const generatedBefore = generateCalls;
+    const first: WalkthroughSource = { kind: 'commit', hash: 'a'.repeat(40) };
+    const second: WalkthroughSource = { kind: 'commit', hash: 'b'.repeat(40) };
+    useWalkthroughStore.getState().selectModel('/repo', first, 'anthropic/claude-haiku-4-5');
+    useWalkthroughStore.getState().requestSource('/repo', second);
+    expect(useWalkthroughStore.getState().getSelectedModel('/repo', first)).toBe('anthropic/claude-haiku-4-5');
+    expect(useWalkthroughStore.getState().getSelectedModel('/repo', second)).toBeUndefined();
+    expect(useWalkthroughStore.getState().requestedSource['/repo']).toEqual(second);
+    expect(generateCalls).toBe(generatedBefore);
+  });
 });
 
 describe('useWalkthroughStore — walkthrough language', () => {

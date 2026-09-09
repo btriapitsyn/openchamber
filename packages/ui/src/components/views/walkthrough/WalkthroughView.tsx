@@ -16,7 +16,11 @@ import { openExternalUrl } from '@/lib/url';
 import { buildWalkthroughView } from '@/lib/walkthrough/model';
 import type { WalkthroughSource, WalkthroughWorkingTreeScope } from '@/lib/walkthrough/types';
 import { ModelSelector } from '@/components/sections/agents/ModelSelector';
-import { deriveBaseBranch, hasResolvableBaseBranch } from '@/components/views/git/baseBranch';
+import { useBranchComparisonBase } from '@/hooks/useBranchComparisonBase';
+import { useCommitComparison } from '@/hooks/useCommitComparison';
+import { CommitComparisonSelector } from '@/components/views/git/CommitComparisonSelector';
+import { BranchComparisonSelector } from '@/components/views/git/BranchComparisonSelector';
+import { useGitBaseBranchStore } from '@/stores/useGitBaseBranchStore';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useGitBranches, useGitStatus, useGitStore, useIsGitRepo } from '@/stores/useGitStore';
@@ -159,6 +163,7 @@ export const WalkthroughView = ({ directory: rootDirectory, visible = true }: Wa
     [setStoredTocWidth, tocWidth]
   );
   const [scope, setScope] = useState<WalkthroughWorkingTreeScope>('all');
+  const [pendingSourceSelection, setPendingSourceSelection] = useState<{ directory: string; kind: 'branch' | 'commit' } | null>(null);
   const [activeStopId, setActiveStopId] = useState<string | null>(null);
   const [scrollToStopId, setScrollToStopId] = useState<string | null>(null);
   const [visitedStopIds, setVisitedStopIds] = useState<ReadonlySet<string>>(() => new Set());
@@ -175,6 +180,7 @@ export const WalkthroughView = ({ directory: rootDirectory, visible = true }: Wa
 
   const status = useGitStatus(directory || null);
   const branches = useGitBranches(directory || null);
+  const setBaseOverride = useGitBaseBranchStore((state) => state.setOverride);
   const ensureAll = useGitStore((state) => state.ensureAll);
   const { github, git } = useRuntimeAPIs();
 
@@ -182,37 +188,18 @@ export const WalkthroughView = ({ directory: rootDirectory, visible = true }: Wa
     if (directory) void ensureAll(directory, git);
   }, [directory, ensureAll, git]);
 
-  // The branch source reviews everything on this branch that is not on its
-  // base. Three-dot semantics server-side mean merges from the base are
-  // already excluded.
+  // Changes and walkthrough share the explicit base choice and reflog detection.
   const currentBranch = status?.current ?? null;
+  const choosingCommit = pendingSourceSelection?.directory === directory && pendingSourceSelection.kind === 'commit' && !requestedSource;
+  const isCommitScope = choosingCommit || requestedSource?.kind === 'commit';
+  const commitComparison = useCommitComparison(directory || null, currentBranch, visible && isCommitScope,
+    requestedSource?.kind === 'commit' ? requestedSource.hash : undefined);
+  const selectedCommitHash = commitComparison.selectedCommit?.hash ?? (requestedSource?.kind === 'commit' ? requestedSource.hash : null);
+  const { base: comparisonBase, resolved: comparisonBaseResolved, revision: branchRevision } = useBranchComparisonBase(directory || null, currentBranch, visible);
   const branchSource = useMemo<WalkthroughSource | null>(() => {
-    const headRef = currentBranch;
-    if (!headRef) return null;
-    const all = branches?.all ?? [];
-    const localBranches = all.filter((name) => !name.startsWith('remotes/'));
-    const remoteBranches = all
-      .filter((name) => name.startsWith('remotes/'))
-      .map((name) => name.slice('remotes/'.length));
-    const remoteNames = new Set(
-      remoteBranches
-        .map((name) => name.split('/')[0])
-        .filter(Boolean)
-    );
-    const trackingRemote = status?.tracking?.split('/')[0];
-    const defaultBranch = (trackingRemote && branches?.defaultBranches?.[trackingRemote])
-      ?? branches?.defaultBranches?.origin;
-    const baseRef = deriveBaseBranch({
-      remoteNames,
-      localBranches,
-      defaultBranch,
-      headBranch: headRef,
-    });
-    if (!baseRef || baseRef === headRef || !hasResolvableBaseBranch({ baseBranch: baseRef, localBranches, remoteBranches })) {
-      return null;
-    }
-    return { kind: 'branch', baseRef, headRef };
-  }, [branches, currentBranch, status?.tracking]);
+    if (!currentBranch || !comparisonBase || comparisonBase === currentBranch) return null;
+    return { kind: 'branch', baseRef: comparisonBase, headRef: currentBranch };
+  }, [comparisonBase, currentBranch]);
 
   // The pull request for this branch used to appear only after visiting the PR
   // panel, because nothing else asked GitHub about it. Ask here too: the status
@@ -258,9 +245,18 @@ export const WalkthroughView = ({ directory: rootDirectory, visible = true }: Wa
   ));
 
   const source = useMemo<WalkthroughSource>(
-    () => requestedSource ?? { kind: 'working-tree', scope },
-    [requestedSource, scope]
+    () => isCommitScope && selectedCommitHash
+      ? { kind: 'commit', hash: selectedCommitHash }
+      : requestedSource?.kind === 'branch'
+      ? branchSource ?? requestedSource
+      : requestedSource ?? { kind: 'working-tree', scope },
+    [branchSource, isCommitScope, requestedSource, scope, selectedCommitHash]
   );
+  const choosingBranchBase = pendingSourceSelection?.directory === directory && pendingSourceSelection.kind === 'branch' && !requestedSource;
+  const isBranchScope = choosingBranchBase || source.kind === 'branch';
+  const branchNeedsBase = choosingBranchBase || (source.kind === 'branch' && !branchSource);
+  const commitNeedsSelection = choosingCommit || (isCommitScope && !selectedCommitHash);
+  const needsSourceSelection = branchNeedsBase || commitNeedsSelection;
 
   // Offer whichever pull request we know about: the one already selected, or
   // the one this branch has.
@@ -271,6 +267,7 @@ export const WalkthroughView = ({ directory: rootDirectory, visible = true }: Wa
 
   const selectWorkingTree = useCallback(
     (value: WalkthroughWorkingTreeScope) => {
+      setPendingSourceSelection(null);
       clearRequestedSource(directory);
       setScope(value);
     },
@@ -281,6 +278,16 @@ export const WalkthroughView = ({ directory: rootDirectory, visible = true }: Wa
   const generate = useWalkthroughStore((state) => state.generate);
   const cancel = useWalkthroughStore((state) => state.cancel);
   const requestSource = useWalkthroughStore((state) => state.requestSource);
+  useEffect(() => {
+    if (!choosingBranchBase || !branchSource) return;
+    requestSource(directory, branchSource);
+    setPendingSourceSelection(null);
+  }, [branchSource, choosingBranchBase, directory, requestSource]);
+  useEffect(() => {
+    if (!choosingCommit || !selectedCommitHash) return;
+    requestSource(directory, { kind: 'commit', hash: selectedCommitHash });
+    setPendingSourceSelection(null);
+  }, [choosingCommit, directory, requestSource, selectedCommitHash]);
   const selectModel = useWalkthroughStore((state) => state.selectModel);
   const selectedModel = useWalkthroughStore((state) => state.getSelectedModel(directory, source));
   const selectLanguage = useWalkthroughStore((state) => state.selectLanguage);
@@ -302,11 +309,12 @@ export const WalkthroughView = ({ directory: rootDirectory, visible = true }: Wa
   // Reloads on a model or language change: whether this diff fits, and whether
   // the model can produce structured output, are answers about a specific
   // request — and the language instruction is part of that request.
+  const sourceRevision = source.kind === 'branch' ? branchRevision : '';
   useEffect(() => {
-    void load(directory, source, { language: activeLanguage });
-  }, [activeLanguage, directory, load, source, selectedModel]);
+    if (visible && !needsSourceSelection) void load(directory, source, { language: activeLanguage });
+  }, [activeLanguage, needsSourceSelection, directory, load, source, selectedModel, sourceRevision, visible]);
 
-  const view = useMemo(() => buildWalkthroughView(entry.result), [entry.result]);
+  const view = useMemo(() => needsSourceSelection ? null : buildWalkthroughView(entry.result), [needsSourceSelection, entry.result]);
 
   // A new walkthrough is a new reading path: keeping the old progress would
   // mark stops as visited that the user has never seen.
@@ -349,8 +357,8 @@ export const WalkthroughView = ({ directory: rootDirectory, visible = true }: Wa
 
   const [sourceMenuOpen, setSourceMenuOpen] = useState(false);
   const [languageMenuOpen, setLanguageMenuOpen] = useState(false);
-  const sourceValue = source.kind === 'working-tree' ? source.scope : source.kind;
-  const sourceLabel = source.kind === 'branch'
+  const sourceValue = isCommitScope ? 'commit' : isBranchScope ? 'branch' : source.kind === 'working-tree' ? source.scope : source.kind;
+  const sourceLabel = isCommitScope ? t('commitComparison.mode') : isBranchScope
     ? t('walkthrough.scope.branch')
     : source.kind === 'pr'
       ? t('walkthrough.scope.pullRequest', { number: source.number })
@@ -489,7 +497,7 @@ export const WalkthroughView = ({ directory: rootDirectory, visible = true }: Wa
 
   // Not ready, or no usable selected model, means Generate must not look
   // actionable — including when the resolved model has no login.
-  const generateDisabled = !activeModel || Boolean(entry.readiness && !entry.readiness.ready);
+  const generateDisabled = needsSourceSelection || !activeModel || Boolean(entry.readiness && !entry.readiness.ready);
 
   const handleGenerate = useCallback(
     (force: boolean) => {
@@ -547,11 +555,23 @@ export const WalkthroughView = ({ directory: rootDirectory, visible = true }: Wa
               value={sourceValue}
               onValueChange={(value) => {
                 setSourceMenuOpen(false);
+                if (value === 'commit') {
+                  clearRequestedSource(directory);
+                  setPendingSourceSelection({ directory, kind: 'commit' });
+                  return;
+                }
                 if (value === 'branch') {
-                  if (branchSource) requestSource(directory, branchSource);
+                  if (branchSource) {
+                    setPendingSourceSelection(null);
+                    requestSource(directory, branchSource);
+                  } else {
+                    clearRequestedSource(directory);
+                    setPendingSourceSelection({ directory, kind: 'branch' });
+                  }
                   return;
                 }
                 if (value === 'pr') {
+                  setPendingSourceSelection(null);
                   if (prSource) requestSource(directory, prSource);
                   return;
                 }
@@ -573,19 +593,18 @@ export const WalkthroughView = ({ directory: rootDirectory, visible = true }: Wa
                       : t('walkthrough.scope.working')}
                 </DropdownMenuRadioItem>
               ))}
-              {(branchSource || prSource) && (
+              {currentBranch && (
                 <>
                   <DropdownMenuSeparator />
-                  <DropdownMenuLabel className={SCOPE_GROUP_LABEL_CLASS}>
-                    {t('walkthrough.scope.group.committed')}
-                  </DropdownMenuLabel>
+                  <DropdownMenuRadioItem value="branch">
+                    {t('walkthrough.scope.branch')}
+                  </DropdownMenuRadioItem>
                 </>
               )}
-              {branchSource && (
-                <DropdownMenuRadioItem value="branch">
-                  {t('walkthrough.scope.branch')}
-                </DropdownMenuRadioItem>
-              )}
+              <DropdownMenuSeparator />
+              <DropdownMenuRadioItem value="commit">
+                {t('commitComparison.mode')}
+              </DropdownMenuRadioItem>
               {prSource && (
                 <DropdownMenuRadioItem value="pr">
                   {t('walkthrough.scope.pullRequest', { number: prSource.number })}
@@ -594,6 +613,30 @@ export const WalkthroughView = ({ directory: rootDirectory, visible = true }: Wa
             </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
+
+        {isBranchScope && (
+          <BranchComparisonSelector
+            key={JSON.stringify([directory, currentBranch])}
+            branches={branches?.all ?? []}
+            currentBranch={currentBranch}
+            base={comparisonBase}
+            onSelect={(base) => {
+              if (directory && currentBranch) setBaseOverride(directory, currentBranch, base);
+            }}
+          />
+        )}
+
+        {isCommitScope && (
+          <CommitComparisonSelector
+            key={JSON.stringify([directory, currentBranch])}
+            commits={commitComparison.commits}
+            selectedHash={selectedCommitHash}
+            loading={commitComparison.loading}
+            error={commitComparison.error}
+            onSelect={commitComparison.select}
+            onRefresh={() => void commitComparison.refresh()}
+          />
+        )}
 
         <div className="ml-auto flex min-w-0 items-center gap-1">
           <Tooltip>
@@ -814,7 +857,22 @@ export const WalkthroughView = ({ directory: rootDirectory, visible = true }: Wa
       )}
 
       <div className={cn('flex min-h-0 flex-1', showToc ? 'flex-row' : 'flex-col')}>
-        {blockedReason ? (
+        {commitNeedsSelection ? (
+          <div className="flex flex-1 items-center justify-center gap-2 p-8 typography-meta text-muted-foreground">
+            {commitComparison.loading ? <Icon name="loader-4" className="size-6 animate-spin" />
+              : commitComparison.error ?? t('commitComparison.noCommits')}
+          </div>
+        ) : branchNeedsBase ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
+            {!comparisonBaseResolved && currentBranch ? (
+              <Icon name="loader-4" className="size-6 animate-spin text-muted-foreground" />
+            ) : (
+              <p className="typography-meta text-muted-foreground">
+                {t('gitView.pr.toast.baseBranchRequired')}
+              </p>
+            )}
+          </div>
+        ) : blockedReason ? (
           <WalkthroughBlocker
             reason={blockedReason}
             model={blockedModel}

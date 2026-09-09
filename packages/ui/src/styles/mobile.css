@@ -56,6 +56,12 @@
     min-width: 36px;
   }
 
+  /* The Changes section and source pickers take their height from dropdownTriggerVariants,
+     rather than the generic mobile button minimum. */
+  :root.mobile-pointer:not(.desktop-runtime) button[data-mobile-comparison-trigger] {
+    min-height: 0;
+  }
+
   /* Composer footer action buttons (sessions / attach / auto-accept): hug the
      icon so the group stays tight. The container only renders in the mobile
      JSX, so no pointer/runtime gating is needed; !important overrides both the
@@ -468,6 +474,22 @@
 
 :root.oc-capacitor-app.oc-platform-android .header-safe-area {
   padding-top: var(--oc-safe-area-top);
+}
+
+/* Android 15+ enforces edge-to-edge, and once the WebView can read the insets
+   itself Capacitor stops padding the view and just hands them over — so the app
+   draws under the navigation/gesture bar and every full-cover surface has to
+   keep its own content clear of it. Marked surfaces opt in through
+   .oc-bottom-safe-surface; iOS deliberately stays on its softer visual inset,
+   where the home indicator is a thin overlay rather than a bar that eats taps.
+   Capacitor reports a zero bottom inset while the keyboard is up, so this never
+   stacks with --oc-keyboard-inset. */
+:root.oc-capacitor-app.oc-platform-android {
+  --oc-app-bottom-safe: max(16px, var(--oc-safe-area-bottom));
+}
+
+:root.oc-capacitor-app.oc-platform-android .oc-bottom-safe-surface {
+  padding-bottom: var(--oc-safe-area-bottom);
 }
 
 :root.oc-capacitor-app.oc-platform-android [data-sonner-toaster][data-y-position='top'] {

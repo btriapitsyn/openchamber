@@ -264,7 +264,7 @@ export function SidebarActivitySections(props: Props): React.ReactNode {
                     {isCollapsed ? <Icon name="arrow-right-s" className="h-3.5 w-3.5" /> : <Icon name="arrow-down-s" className="h-3.5 w-3.5" />}
                   </span>
                 </span>
-                <span className="text-[14px] font-semibold lowercase text-foreground">{section.title}</span>
+                <span className="typography-ui-label font-semibold lowercase text-foreground">{section.title}</span>
               </button>
               {section.key === 'chats' && props.onNewChat ? (
                 <button

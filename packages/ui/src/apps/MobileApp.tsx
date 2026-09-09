@@ -10,6 +10,7 @@ import { ChatView } from '@/components/views/ChatView';
 import { PlanView } from '@/components/views/PlanView';
 import { SettingsView } from '@/components/views/SettingsView';
 import { AppLinkConfirmDialog } from '@/components/chat/AppLinkConfirmDialog';
+import { SharedTrustConfirmDialog } from '@/components/projects/SharedTrustConfirmDialog';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { RuntimeAPIProvider } from '@/contexts/RuntimeAPIProvider';
 import { useAuthSessionStore } from '@/lib/runtime-auth-expiry';
@@ -18,6 +19,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { Toaster } from '@/components/ui/sonner';
 import { usePushVisibilityBeacon } from '@/hooks/usePushVisibilityBeacon';
 import { useRouter } from '@/hooks/useRouter';
+import { useTerminalSessionKeepalive } from '@/hooks/useTerminalSessionKeepalive';
 import { useUpdatePolling } from '@/hooks/useUpdatePolling';
 import { useWindowTitle } from '@/hooks/useWindowTitle';
 import { opencodeClient } from '@/lib/opencode/client';
@@ -82,8 +84,14 @@ const MOBILE_SETTINGS_PAGES = [
   'sessions',
   'git',
   'magic-prompts',
+  'snippets',
   'behavior',
+  'agents',
+  'commands',
   'mcp',
+  'plugins',
+  'skills.installed',
+  'skills.catalog',
   'providers',
   'usage',
   'voice',
@@ -105,6 +113,10 @@ type MobileSurface = 'instances' | 'settings' | 'update';
 
 const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onActiveConnectionDeleted }) => {
   const { t } = useI18n();
+  // The mobile root does not mount MainLayout, so it owns its own terminal
+  // keepalive: without it, background PTYs (running project actions included)
+  // are idle-reaped by the server while the workspace drawer is closed.
+  useTerminalSessionKeepalive();
   const [sessionsSheetOpen, setSessionsSheetOpen] = React.useState(false);
   const [activeSurface, setActiveSurface] = React.useState<MobileSurface | null>(null);
   // Phone right drawer with the workspace tabs; the tab persists across
@@ -290,12 +302,22 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
     onRightEdgeSwipe: () => setWorkspaceOpen(true),
   });
 
+  // Settings owns a drill-down of its own (nav → page list → item), so the
+  // hardware back button asks it to step up before the shell closes it.
+  const settingsBackRef = React.useRef<(() => boolean) | null>(null);
+  const registerSettingsBackHandler = React.useCallback((handler: (() => boolean) | null) => {
+    settingsBackRef.current = handler;
+  }, []);
+
   // Top-most layer first: a plan or fullscreen surface can sit ABOVE a drawer
   // (opened from the drawer footer / workspace tabs), so they close before the
   // drawers underneath.
   const handleNativeBack = React.useCallback(() => {
     if (openPlan) {
       setOpenPlan(null);
+      return true;
+    }
+    if (activeSurface === 'settings' && settingsBackRef.current?.()) {
       return true;
     }
     if (activeSurface) {
@@ -584,6 +606,7 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
                 forceMobile
                 isWindowed
                 initialMobileStage={settingsInitialMobileStage}
+                registerBackHandler={registerSettingsBackHandler}
                 // About exists for server updates — meaningful in a browser
                 // (hosted mobile), not in the Capacitor shell (store updates).
                 visiblePageSlugs={MOBILE_SETTINGS_PAGES.filter(
@@ -1283,6 +1306,7 @@ export function MobileApp({ apis }: MobileAppProps) {
                 setConnectionEpoch((value) => value + 1);
               }} />
               <AppLinkConfirmDialog />
+              <SharedTrustConfirmDialog />
               <Toaster position="top-center" offset="calc(var(--oc-safe-area-top, 0px) + 16px)" />
               {isInitialized ? <ConfigUpdateOverlay /> : null}
             </div>

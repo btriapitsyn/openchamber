@@ -3,6 +3,7 @@ import { cn } from '@/lib/utils';
 import { Icon } from '@/components/icon/Icon';
 import { useDeviceInfo } from '@/lib/device';
 import { useI18n } from '@/lib/i18n';
+import { isIMECompositionEvent } from '@/lib/ime';
 import { formatShortcutForDisplay } from '@/lib/shortcuts';
 
 export interface InlineCommentInputProps {
@@ -38,7 +39,7 @@ export function InlineCommentInput({
   const { isMobile } = useDeviceInfo();
   const [text, setText] = React.useState(initialText);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const saveShortcut = formatShortcutForDisplay('mod+enter');
+  const saveShortcut = formatShortcutForDisplay('enter');
   void isEditing;
 
   const handleTextChange = (value: string) => {
@@ -121,9 +122,11 @@ export function InlineCommentInput({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    // As the placeholder promises: Cmd/Ctrl+Enter attaches, plain Enter
-    // breaks the line, Escape cancels.
-    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+    if (isIMECompositionEvent(e)) return;
+
+    // Desktop Enter attaches; Shift+Enter and mobile Enter break the line.
+    // Keep Cmd/Ctrl+Enter available for hardware keyboards on mobile.
+    if (e.key === 'Enter' && !e.shiftKey && (!isMobile || e.metaKey || e.ctrlKey)) {
       e.preventDefault();
       save();
     } else if (e.key === 'Escape') {

@@ -36,6 +36,7 @@ import { DirectoryExplorerDialog } from '@/components/session/DirectoryExplorerD
 import { Icon } from '@/components/icon/Icon';
 import { NewWorktreeDialog } from '@/components/session/NewWorktreeDialog';
 import { Button } from '@/components/ui/button';
+import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { Input } from '@/components/ui/input';
 import { ScrollShadow } from '@/components/ui/ScrollShadow';
 import { toast } from '@/components/ui';
@@ -43,9 +44,11 @@ import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { getProjectLabel, normalizePath } from './mobilePaths';
 import { CHAT_DRAFT_PROJECT_ID, isChatDirectoryPath } from '@/lib/chatDirectories';
 import { partitionSidebarSessions } from '@/components/session/sidebar/list/sessionCollection';
+import { sortProjectsByOrder } from '@/components/session/sidebar/list/projectSort';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useI18n } from '@/lib/i18n';
 import { matchesRankQuery, rankByQuery } from '@/lib/search/fuzzySearch';
+import { updateDesktopSettings } from '@/lib/persistence';
 import { PROJECT_COLOR_MAP, PROJECT_ICON_MAP, ProjectIconImage } from '@/lib/projectMeta';
 import { cn } from '@/lib/utils';
 import {
@@ -57,6 +60,7 @@ import { mergeLiveSessionWithGlobalSession, refreshGlobalSessions, useGlobalSess
 import { useMobileSessionExpansionStore } from '@/stores/useMobileSessionExpansionStore';
 import { useMobileSessionTreeStore } from '@/stores/useMobileSessionTreeStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
+import { useSessionDisplayStore, type ProjectSortOrder } from '@/stores/useSessionDisplayStore';
 import { useSessionPinnedStore } from '@/stores/useSessionPinnedStore';
 import { orderWorktrees, useWorktreeOrderStore } from '@/stores/useWorktreeOrderStore';
 import {
@@ -73,6 +77,7 @@ import type { WorktreeMetadata } from '@/types/worktree';
 
 import { MobileDeleteWorktreeDialog } from './MobileDeleteWorktreeDialog';
 import { MobileProjectEditSurface } from './MobileProjectEditSurface';
+import { useEdgeSwipe } from './useEdgeSwipe';
 
 type MobileSessionsSheetProps = {
   open: boolean;
@@ -94,6 +99,16 @@ type MobileSessionsSheetProps = {
 
 const EMPTY_PINNED_SESSION_IDS = new Set<string>();
 
+// Same orders, same labels as the desktop sidebar's sort menu — the setting
+// itself is shared, so the two surfaces must offer the same choices.
+const PROJECT_SORT_OPTIONS = [
+  ['manual', 'sessions.sidebar.header.projectSort.manual'],
+  ['a-z', 'sessions.sidebar.header.projectSort.aToZ'],
+  ['z-a', 'sessions.sidebar.header.projectSort.zToA'],
+  ['date-added', 'sessions.sidebar.header.projectSort.dateAdded'],
+  ['recent', 'sessions.sidebar.header.projectSort.recent'],
+] as const;
+
 // Pseudo-project key for the collapsible "recent" group's persisted expansion.
 
 type ProjectMeta = {
@@ -106,6 +121,9 @@ type ProjectMeta = {
   iconBackground?: string | null;
   isGitRepo: boolean;
   worktrees: WorktreeMetadata[];
+  /** Read by the 'date-added' / 'recent' project orders. */
+  addedAt?: number;
+  lastOpenedAt?: number;
 };
 
 type WorktreeBucket = {
@@ -268,13 +286,40 @@ const NewWorktreeIconButton: React.FC<{
   );
 };
 
+/** Starts a session draft already pointed at this project — the mobile twin of
+    the desktop sidebar's per-project "+". */
+const NewSessionIconButton: React.FC<{
+  label: string;
+  onClick: () => void;
+  className?: string;
+}> = ({ label, onClick, className }) => (
+  <button
+    type="button"
+    className={cn(
+      'flex size-9 shrink-0 items-center justify-center rounded-full text-[var(--surface-mutedForeground)] transition-colors hover:bg-[var(--interactive-hover)] hover:text-[var(--surface-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)]',
+      className,
+    )}
+    aria-label={label}
+    title={label}
+    onClick={(event) => {
+      event.stopPropagation();
+      onClick();
+    }}
+    style={{ touchAction: 'manipulation' }}
+  >
+    <Icon name="add" className="size-4" />
+  </button>
+);
+
 // Width of the swipe-revealed action area (rename + archive + delete buttons).
 const ROW_ACTIONS_WIDTH = 144;
 const ROW_SWIPE_SNAP_MS = 180;
 
-/** Generic swipe-left-to-reveal wrapper for drawer rows (projects, worktrees).
+/** Generic swipe-right-to-reveal wrapper for drawer rows (projects, worktrees).
     Same gesture mechanics as SessionRow's swipe actions: horizontal intent
-    detection, imperative transform during the drag, snap on release. */
+    detection, imperative transform during the drag, snap on release. The
+    actions sit on the LEFT so the opposite direction stays free for the
+    drawer's own close swipe. */
 const MobileSwipeActionsRow: React.FC<{
   actionsWidth: number;
   actions: React.ReactNode;
@@ -298,7 +343,7 @@ const MobileSwipeActionsRow: React.FC<{
 
   React.useEffect(() => {
     revealedRef.current = revealed;
-    applyOffset(revealed ? -actionsWidth : 0, true);
+    applyOffset(revealed ? actionsWidth : 0, true);
   }, [actionsWidth, applyOffset, revealed]);
 
   const handleTouchStart = (event: React.TouchEvent) => {
@@ -317,16 +362,16 @@ const MobileSwipeActionsRow: React.FC<{
       if (Math.abs(dx) < 8 || Math.abs(dx) <= Math.abs(dy)) return;
       draggingRef.current = true;
     }
-    const base = revealedRef.current ? -actionsWidth : 0;
-    applyOffset(Math.min(0, Math.max(-actionsWidth, base + dx)), false);
+    const base = revealedRef.current ? actionsWidth : 0;
+    applyOffset(Math.max(0, Math.min(actionsWidth, base + dx)), false);
   };
 
   const handleTouchEnd = () => {
     startRef.current = null;
     if (!draggingRef.current) return;
     draggingRef.current = false;
-    const shouldReveal = offsetRef.current < -actionsWidth / 2;
-    applyOffset(shouldReveal ? -actionsWidth : 0, true);
+    const shouldReveal = offsetRef.current > actionsWidth / 2;
+    applyOffset(shouldReveal ? actionsWidth : 0, true);
     if (shouldReveal !== revealedRef.current) onRevealedChange(shouldReveal);
   };
 
@@ -339,7 +384,7 @@ const MobileSwipeActionsRow: React.FC<{
       onTouchCancel={handleTouchEnd}
       style={{ touchAction: 'pan-y' }}
     >
-      <div className="absolute inset-y-0 right-0 flex items-stretch" style={{ width: actionsWidth }} aria-hidden={!revealed}>
+      <div className="absolute inset-y-0 left-0 flex items-stretch" style={{ width: actionsWidth }} aria-hidden={!revealed}>
         {actions}
       </div>
       <div ref={contentRef} className="relative flex w-full items-center bg-background">
@@ -361,6 +406,15 @@ const SessionRenameForm: React.FC<{
 }> = ({ initialTitle, indent, onSubmit, onCancel }) => {
   const { t } = useI18n();
   const [value, setValue] = React.useState(initialTitle);
+
+  // Opens with the whole title selected, so the first keystroke replaces it.
+  // Stable ref callback: an inline one would re-run on every render and
+  // re-select the text mid-edit.
+  const focusRenameInput = React.useCallback((node: HTMLInputElement | null) => {
+    if (!node) return;
+    node.focus();
+    node.select();
+  }, []);
 
   const commit = () => {
     const next = value.trim();
@@ -385,7 +439,7 @@ const SessionRenameForm: React.FC<{
       }}
     >
       <input
-        autoFocus
+        ref={focusRenameInput}
         value={value}
         onChange={(event) => setValue(event.target.value)}
         onKeyDown={(event) => {
@@ -436,7 +490,7 @@ const SessionRow: React.FC<{
   expanded?: boolean;
   onToggleChildren?: () => void;
   onSelect: () => void;
-  /** Swipe-left actions. When omitted, the row is a plain non-swipeable row. */
+  /** Swipe-right actions. When omitted, the row is a plain non-swipeable row. */
   revealed?: boolean;
   onRevealedChange?: (revealed: boolean) => void;
   confirmingDelete?: boolean;
@@ -499,7 +553,7 @@ const SessionRow: React.FC<{
 
   React.useEffect(() => {
     revealedRef.current = revealed;
-    applyOffset(revealed ? -ROW_ACTIONS_WIDTH : 0, true);
+    applyOffset(revealed ? ROW_ACTIONS_WIDTH : 0, true);
   }, [applyOffset, revealed]);
 
   const handleTouchStart = (event: React.TouchEvent) => {
@@ -518,8 +572,8 @@ const SessionRow: React.FC<{
       if (Math.abs(dx) < 8 || Math.abs(dx) <= Math.abs(dy)) return;
       draggingRef.current = true;
     }
-    const base = revealedRef.current ? -ROW_ACTIONS_WIDTH : 0;
-    const next = Math.min(0, Math.max(-ROW_ACTIONS_WIDTH, base + dx));
+    const base = revealedRef.current ? ROW_ACTIONS_WIDTH : 0;
+    const next = Math.max(0, Math.min(ROW_ACTIONS_WIDTH, base + dx));
     applyOffset(next, false);
   };
 
@@ -527,8 +581,8 @@ const SessionRow: React.FC<{
     startRef.current = null;
     if (!draggingRef.current) return;
     draggingRef.current = false;
-    const shouldReveal = offsetRef.current < -ROW_ACTIONS_WIDTH / 2;
-    applyOffset(shouldReveal ? -ROW_ACTIONS_WIDTH : 0, true);
+    const shouldReveal = offsetRef.current > ROW_ACTIONS_WIDTH / 2;
+    applyOffset(shouldReveal ? ROW_ACTIONS_WIDTH : 0, true);
     if (shouldReveal !== revealedRef.current) onRevealedChange?.(shouldReveal);
   };
 
@@ -545,32 +599,14 @@ const SessionRow: React.FC<{
     >
       {swipeEnabled ? (
         <div
-          className="absolute inset-y-0 right-0 flex items-stretch"
+          className="absolute inset-y-0 left-0 flex items-stretch"
           style={{ width: ROW_ACTIONS_WIDTH }}
           aria-hidden={!revealed}
         >
           {/* Icon-only actions on the row's own background — they read as the
-              row extending to reveal extra controls, not a separate panel. */}
-          <button
-            type="button"
-            tabIndex={revealed ? 0 : -1}
-            className="flex flex-1 items-center justify-center text-muted-foreground transition-colors active:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
-            aria-label={t('mobile.sessions.renameSessionAria', { title })}
-            onClick={onRequestRename}
-            style={{ touchAction: 'manipulation' }}
-          >
-            <RiEdit2Line className="size-[18px]" />
-          </button>
-          <button
-            type="button"
-            tabIndex={revealed ? 0 : -1}
-            className="flex flex-1 items-center justify-center text-muted-foreground transition-colors active:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
-            aria-label={t('mobile.sessions.archiveSessionAria', { title })}
-            onClick={onArchive}
-            style={{ touchAction: 'manipulation' }}
-          >
-            <RiArchiveLine className="size-[18px]" />
-          </button>
+              row extending to reveal extra controls, not a separate panel.
+              Ordered outward from the content, so a partial drag exposes
+              delete first, exactly as the right-side version did. */}
           <button
             type="button"
             tabIndex={revealed ? 0 : -1}
@@ -587,6 +623,26 @@ const SessionRow: React.FC<{
             style={{ touchAction: 'manipulation' }}
           >
             <RiDeleteBinLine className="size-[18px]" />
+          </button>
+          <button
+            type="button"
+            tabIndex={revealed ? 0 : -1}
+            className="flex flex-1 items-center justify-center text-muted-foreground transition-colors active:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+            aria-label={t('mobile.sessions.archiveSessionAria', { title })}
+            onClick={onArchive}
+            style={{ touchAction: 'manipulation' }}
+          >
+            <RiArchiveLine className="size-[18px]" />
+          </button>
+          <button
+            type="button"
+            tabIndex={revealed ? 0 : -1}
+            className="flex flex-1 items-center justify-center text-muted-foreground transition-colors active:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+            aria-label={t('mobile.sessions.renameSessionAria', { title })}
+            onClick={onRequestRename}
+            style={{ touchAction: 'manipulation' }}
+          >
+            <RiEdit2Line className="size-[18px]" />
           </button>
         </div>
       ) : null}
@@ -875,6 +931,9 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
   const setActiveProject = useProjectsStore((state) => state.setActiveProject);
   const setActiveProjectIdOnly = useProjectsStore((state) => state.setActiveProjectIdOnly);
   const reorderProjects = useProjectsStore((state) => state.reorderProjects);
+  const manualProjectOrder = useProjectsStore((state) => state.manualProjectOrder);
+  const projectSortOrder = useSessionDisplayStore((state) => state.projectSortOrder);
+  const setProjectSortOrder = useSessionDisplayStore((state) => state.setProjectSortOrder);
   const removeProject = useProjectsStore((state) => state.removeProject);
   const projectExpandedMap = useMobileSessionTreeStore((state) => state.projectExpanded);
   const worktreeExpandedMap = useMobileSessionTreeStore((state) => state.worktreeExpanded);
@@ -886,12 +945,12 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
   const toggleParent = useMobileSessionExpansionStore((state) => state.toggleParent);
   const [query, setQuery] = React.useState('');
   const [editingProjectId, setEditingProjectId] = React.useState<string | null>(null);
-  // Swipe-left actions: which row has its actions revealed, and whether its
+  // Swipe-right actions: which row has its actions revealed, and whether its
   // delete button is armed (two-step). One row at a time.
   const [revealedSessionId, setRevealedSessionId] = React.useState<string | null>(null);
   const [confirmingDeleteSessionId, setConfirmingDeleteSessionId] = React.useState<string | null>(null);
   const [renamingSessionId, setRenamingSessionId] = React.useState<string | null>(null);
-  // Swipe-left actions on group headers (`project:{id}` / `wt:{bucketKey}`) —
+  // Swipe-right actions on group headers (`project:{id}` / `wt:{bucketKey}`) —
   // separate from session rows, but mutually exclusive with them.
   const [revealedRowId, setRevealedRowId] = React.useState<string | null>(null);
   const [confirmingRemoveProjectId, setConfirmingRemoveProjectId] = React.useState<string | null>(null);
@@ -901,6 +960,7 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
   } | null>(null);
   // Bumped to force a re-list of worktrees (e.g. after one is deleted in the editor).
   const [worktreeRefreshKey, setWorktreeRefreshKey] = React.useState(0);
+  const [sortPanelOpen, setSortPanelOpen] = React.useState(false);
   const [directoryDialogOpen, setDirectoryDialogOpen] = React.useState(false);
   const [newWorktreeDialogOpen, setNewWorktreeDialogOpen] = React.useState(false);
   const [worktreeDialogProjectId, setWorktreeDialogProjectId] = React.useState<string | null>(null);
@@ -986,21 +1046,27 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
 
   const projectsMeta = React.useMemo<ProjectMeta[]>(
     () =>
-      projects.map((project) => ({
-        id: project.id,
-        label: project.label?.trim() || getProjectLabel(project.path),
-        path: normalizePath(project.path),
-        icon: project.icon,
-        color: project.color,
-        iconImage: project.iconImage,
-        iconBackground: project.iconBackground,
-        isGitRepo: gitProjectPaths.has(normalizePath(project.path)),
-        worktrees: orderWorktrees(
-          worktreeOrderByProject[project.id],
-          worktreesByProject.get(normalizePath(project.path)) ?? [],
-        ),
-      })),
-    [gitProjectPaths, projects, worktreeOrderByProject, worktreesByProject],
+      sortProjectsByOrder(
+        projects.map((project) => ({
+          id: project.id,
+          label: project.label?.trim() || getProjectLabel(project.path),
+          path: normalizePath(project.path),
+          icon: project.icon,
+          color: project.color,
+          iconImage: project.iconImage,
+          iconBackground: project.iconBackground,
+          isGitRepo: gitProjectPaths.has(normalizePath(project.path)),
+          worktrees: orderWorktrees(
+            worktreeOrderByProject[project.id],
+            worktreesByProject.get(normalizePath(project.path)) ?? [],
+          ),
+          addedAt: project.addedAt,
+          lastOpenedAt: project.lastOpenedAt,
+        })),
+        projectSortOrder,
+        manualProjectOrder,
+      ),
+    [gitProjectPaths, manualProjectOrder, projectSortOrder, projects, worktreeOrderByProject, worktreesByProject],
   );
 
   /**
@@ -1336,6 +1402,16 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
+  // The order is a shared setting, so persist it the same way the desktop
+  // sidebar does — picking it here follows the user to their other surfaces.
+  const handleProjectSortChange = (order: ProjectSortOrder) => {
+    setProjectSortOrder(order);
+    void updateDesktopSettings({ sidebarProjectSortOrder: order });
+    // Dragging projects rewrites the manual order; it means nothing while the
+    // list is sorted by something else.
+    if (order !== 'manual') setEditingOrder(false);
+  };
+
   const handleReorderDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
@@ -1373,6 +1449,15 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
     onOpenChange(false);
   };
 
+  // Same contract as the desktop sidebar's per-project "+": the draft carries
+  // the project and its directory, so the app's current directory is not
+  // switched out from under the session that is still open behind the drawer.
+  const handleNewSessionInProject = (project: ProjectMeta) => {
+    setActiveProjectIdOnly(project.id);
+    openNewSessionDraft({ selectedProjectId: project.id, directoryOverride: project.path });
+    onOpenChange(false);
+  };
+
   const filteredNodes = React.useMemo(() => {
     if (!normalizedQuery) return projectNodes;
     return projectNodes.filter((node) => {
@@ -1404,22 +1489,33 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
     );
   }, [normalizedQuery, pinnedSessionIds, projectsMeta, sessionOrderRanks, sessions]);
 
-  const searchProjectMatches = React.useMemo(() => {
-    if (!normalizedQuery) return [] as Array<ProjectMeta & { sessionCount: number }>;
-    return rankByQuery(projectsMeta, normalizedQuery, (project) => [project.label, project.path])
-      .map((project) => ({
-        ...project,
-        sessionCount: sessions.filter((session) => {
-          if (getParentId(session)) return false;
-          const directory = normalizePath(getSessionDirectory(session));
-          return projectMatchesExactDirectory(project, directory);
-        }).length,
-      }));
-  }, [normalizedQuery, projectsMeta, sessions]);
+  const searchProjectMatches = React.useMemo<ProjectMeta[]>(() => {
+    if (!normalizedQuery) return [];
+    return rankByQuery(projectsMeta, normalizedQuery, (project) => [project.label, project.path]);
+  }, [normalizedQuery, projectsMeta]);
 
   const hasNoMatches =
     normalizedQuery && searchSessionMatches.length === 0 && searchProjectMatches.length === 0;
-  const canEditOrder = !normalizedQuery && projectsMeta.length > 1;
+  // Drag order IS the manual order: offering it under another sort would let
+  // the user rearrange a list that is about to be re-sorted anyway.
+  const canEditOrder = !normalizedQuery && projectsMeta.length > 1 && projectSortOrder === 'manual';
+
+  // Sorting lives in the header next to reordering — the two answer the same
+  // question about the list, and a permanent row of modes above it would cost
+  // a project row for a setting touched once a month.
+  const sortToggle = !editingOrder && !normalizedQuery && projectsMeta.length > 1 ? (
+    <Button
+      type="button"
+      variant="chip"
+      size="sm"
+      aria-label={t('sessions.sidebar.header.actions.sortProjects')}
+      title={t('sessions.sidebar.header.actions.sortProjects')}
+      onClick={() => setSortPanelOpen(true)}
+      style={{ touchAction: 'manipulation' }}
+    >
+      <Icon name="equalizer-2" className="size-4" />
+    </Button>
+  ) : null;
 
   const editToggle = canEditOrder ? (
     <Button
@@ -1464,12 +1560,16 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
     </Button>
   ) : null;
 
+  // The new-session button keeps the outer right edge whatever else is showing:
+  // it is the one action people reach for without looking, so it must not slide
+  // around as the icons beside it come and go.
   const trailingActions =
-    newChatButton || addProjectButton || editToggle ? (
+    newChatButton || addProjectButton || sortToggle || editToggle ? (
       <>
-        {newChatButton}
         {addProjectButton}
+        {sortToggle}
         {editToggle}
+        {newChatButton}
       </>
     ) : null;
 
@@ -1578,16 +1678,15 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
                           <span className="block min-w-0 flex-1 truncate typography-ui-label text-foreground">
                             {project.label}
                           </span>
-                          <span className="shrink-0 typography-micro text-muted-foreground tabular-nums">
-                            {project.sessionCount}
-                          </span>
                         </button>
                         {project.isGitRepo ? (
-                          <NewWorktreeIconButton
-                            className="mr-2"
-                            onClick={() => handleNewWorktree(project.id)}
-                          />
+                          <NewWorktreeIconButton onClick={() => handleNewWorktree(project.id)} />
                         ) : null}
+                        <NewSessionIconButton
+                          className="mr-2"
+                          label={t('mobile.sessions.newSessionInProjectAria', { label: project.label })}
+                          onClick={() => handleNewSessionInProject(project)}
+                        />
                       </div>
                     ))}
                   </div>
@@ -1697,19 +1796,6 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
                           <button
                             type="button"
                             tabIndex={revealedRowId === `project:${node.project.id}` ? 0 : -1}
-                            className="flex flex-1 items-center justify-center text-muted-foreground transition-colors active:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
-                            aria-label={t('mobile.sessions.editProjectAria', { label: node.project.label })}
-                            onClick={() => {
-                              setRevealedRowId(null);
-                              setEditingProjectId(node.project.id);
-                            }}
-                            style={{ touchAction: 'manipulation' }}
-                          >
-                            <RiEdit2Line className="size-[18px]" />
-                          </button>
-                          <button
-                            type="button"
-                            tabIndex={revealedRowId === `project:${node.project.id}` ? 0 : -1}
                             className={cn(
                               'flex flex-1 items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-destructive',
                               confirmingRemoveProjectId === node.project.id
@@ -1732,6 +1818,19 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
                             style={{ touchAction: 'manipulation' }}
                           >
                             <RiDeleteBinLine className="size-[18px]" />
+                          </button>
+                          <button
+                            type="button"
+                            tabIndex={revealedRowId === `project:${node.project.id}` ? 0 : -1}
+                            className="flex flex-1 items-center justify-center text-muted-foreground transition-colors active:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+                            aria-label={t('mobile.sessions.editProjectAria', { label: node.project.label })}
+                            onClick={() => {
+                              setRevealedRowId(null);
+                              setEditingProjectId(node.project.id);
+                            }}
+                            style={{ touchAction: 'manipulation' }}
+                          >
+                            <RiEdit2Line className="size-[18px]" />
                           </button>
                         </>
                       )}
@@ -1759,17 +1858,15 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
                           <span className="block min-w-0 flex-1 truncate typography-ui-label font-semibold text-foreground">
                             {node.project.label}
                           </span>
-                          {node.isActive ? <ActiveDot ariaLabel={t('mobile.sessions.activeProjectAria')} /> : null}
-                          <span className="shrink-0 typography-micro text-muted-foreground tabular-nums">
-                            {node.totalSessions}
-                          </span>
                         </button>
                         {node.project.isGitRepo ? (
-                          <NewWorktreeIconButton
-                            className="mr-2"
-                            onClick={() => handleNewWorktree(node.project.id)}
-                          />
+                          <NewWorktreeIconButton onClick={() => handleNewWorktree(node.project.id)} />
                         ) : null}
+                        <NewSessionIconButton
+                          className="mr-2"
+                          label={t('mobile.sessions.newSessionInProjectAria', { label: node.project.label })}
+                          onClick={() => handleNewSessionInProject(node.project)}
+                        />
                       </div>
                     </MobileSwipeActionsRow>
 
@@ -1956,6 +2053,33 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
           onClose={() => setEditingProjectId(null)}
           onWorktreesChanged={() => setWorktreeRefreshKey((value) => value + 1)}
         />
+        <MobileOverlayPanel
+          open={sortPanelOpen}
+          onClose={() => setSortPanelOpen(false)}
+          title={t('sessions.sidebar.header.actions.sortProjects')}
+        >
+          <div className="flex flex-col">
+            {PROJECT_SORT_OPTIONS.map(([order, labelKey]) => (
+              <button
+                key={order}
+                type="button"
+                className={cn(
+                  'flex min-h-11 w-full items-center justify-between rounded-lg px-3 text-left transition-colors active:bg-interactive-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary',
+                  projectSortOrder === order ? 'text-primary' : 'text-foreground',
+                )}
+                onClick={() => {
+                  handleProjectSortChange(order);
+                  setSortPanelOpen(false);
+                }}
+                style={{ touchAction: 'manipulation' }}
+              >
+                <span className="typography-ui-label">{t(labelKey)}</span>
+                {projectSortOrder === order ? <Icon name="check" className="size-4" /> : null}
+              </button>
+            ))}
+          </div>
+        </MobileOverlayPanel>
+
         {worktreeToDelete ? (
           <MobileDeleteWorktreeDialog
             open
@@ -1989,6 +2113,19 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
     <MobileSessionsDrawerContainer
       open={open}
       onClose={() => onOpenChange(false)}
+      // The mirror of the swipe that opened the drawer closes it again —
+      // except while a row has its actions out: then the same swipe is the
+      // user putting those away, so it only clears them.
+      onSwipeClose={() => {
+        if (revealedSessionId || revealedRowId) {
+          setRevealedSessionId(null);
+          setRevealedRowId(null);
+          setConfirmingDeleteSessionId(null);
+          setConfirmingRemoveProjectId(null);
+          return;
+        }
+        onOpenChange(false);
+      }}
       ariaLabel={t('mobile.sessions.sheet.title')}
     >
       <div className="flex h-[var(--oc-header-height,56px)] shrink-0 items-center gap-2 px-3">
@@ -2021,8 +2158,9 @@ const DRAWER_ENTER_DURATION_MS = 320;
 const DRAWER_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
 
 /** Full-width left drawer for the phone sessions list: covers the whole app
-    and slides in from the left edge. Closes via the header X, Escape, or the
-    Android back button (handled by MobileShell).
+    and slides in from the left edge. Closes via the header X, a right-edge
+    swipe back toward the left (the mirror of the gesture that opened it),
+    Escape, or the Android back button (handled by MobileShell).
 
     Stays MOUNTED while closed (parked off-screen, hidden): the sessions
     sheet's project/worktree state stays warm, so reopening shows the tree
@@ -2031,10 +2169,14 @@ const DRAWER_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
 const MobileSessionsDrawerContainer: React.FC<{
   open: boolean;
   onClose: () => void;
+  /** What the closing edge swipe does; the drawer's owner may want it to undo
+      a lighter state first. Falls back to `onClose`. */
+  onSwipeClose?: () => void;
   ariaLabel: string;
   children: React.ReactNode;
-}> = ({ open, onClose, ariaLabel, children }) => {
+}> = ({ open, onClose, onSwipeClose, ariaLabel, children }) => {
   const rootRef = React.useRef<HTMLElement | null>(null);
+  const drawerRef = React.useRef<HTMLElement>(null);
   const [entered, setEntered] = React.useState(false);
   // Kept visible through the exit slide; flipped to hidden once it finishes.
   const [visible, setVisible] = React.useState(open);
@@ -2042,6 +2184,18 @@ const MobileSessionsDrawerContainer: React.FC<{
   React.useEffect(() => {
     onCloseRef.current = onClose;
   }, [onClose]);
+  const onSwipeCloseRef = React.useRef(onSwipeClose);
+  React.useEffect(() => {
+    onSwipeCloseRef.current = onSwipeClose;
+  }, [onSwipeClose]);
+
+  // Swipe from the drawer's right edge back toward the left = close, the
+  // reverse of the left-edge swipe that opened it from the chat. Rows inside
+  // reveal their actions in the opposite direction, so the two never fight.
+  useEdgeSwipe(drawerRef, {
+    enabled: open,
+    onRightEdgeSwipe: () => (onSwipeCloseRef.current ?? onCloseRef.current)(),
+  });
 
   if (typeof document !== 'undefined' && !rootRef.current) {
     let root = document.getElementById(DRAWER_ROOT_ID);
@@ -2082,6 +2236,7 @@ const MobileSessionsDrawerContainer: React.FC<{
 
   return createPortal(
     <section
+      ref={drawerRef}
       role="dialog"
       aria-modal="true"
       aria-label={ariaLabel}

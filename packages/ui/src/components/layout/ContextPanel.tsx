@@ -55,7 +55,7 @@ import { isPluginContextPanelMode, pluginIdFromMode } from '@/lib/surfaces/modes
 import { getContextSurfaceWidthFraction } from '@/lib/surfaces/registry';
 import { isTerminalEventTarget } from '@/lib/terminalFocus';
 
-const CONTEXT_PANEL_MIN_WIDTH = 380;
+const CONTEXT_PANEL_MIN_WIDTH = 320;
 const CONTEXT_PANEL_MAX_WIDTH = 1400;
 const CONTEXT_PANEL_DEFAULT_WIDTH = 600;
 const RESIZE_FOLLOW_INTERVAL_MS = 100;
@@ -495,10 +495,21 @@ export const ContextPanel: React.FC = () => {
   const [availablePanelAreaWidth, setAvailablePanelAreaWidth] = React.useState<number | null>(null);
   const activeModeForWidth = activeTab?.mode ?? null;
   const manualWidth = activeModeForWidth ? panelState?.widthByMode?.[activeModeForWidth] : undefined;
+  const manualWidthFraction = activeModeForWidth ? panelState?.widthFractionByMode?.[activeModeForWidth] : undefined;
   const widthFraction = activeModeForWidth ? getContextSurfaceWidthFraction(activeModeForWidth) : 0.5;
   const widthFallbackBase = availablePanelAreaWidth
     ?? (typeof window !== 'undefined' ? window.innerWidth : CONTEXT_PANEL_DEFAULT_WIDTH * 2);
-  const width = clampWidth(manualWidth ?? Math.round(widthFraction * widthFallbackBase));
+  const effectiveManualWidth = manualWidthFraction != null && availablePanelAreaWidth != null
+    ? Math.round(manualWidthFraction * availablePanelAreaWidth)
+    : manualWidth;
+  const width = clampWidth(effectiveManualWidth ?? Math.round(widthFraction * widthFallbackBase));
+
+  // Convert legacy pixel-only preferences to a ratio the first time the
+  // available area is known, so existing users also get responsive sizing.
+  React.useEffect(() => {
+    if (!directoryKey || !activeModeForWidth || manualWidthFraction != null || manualWidth == null || availablePanelAreaWidth == null) return;
+    setContextPanelWidth(directoryKey, activeModeForWidth, manualWidth, availablePanelAreaWidth);
+  }, [activeModeForWidth, availablePanelAreaWidth, directoryKey, manualWidth, manualWidthFraction, setContextPanelWidth]);
   const chatSessionIDs = React.useMemo(() => {
     const ids: string[] = [];
     for (const tab of tabs) {
@@ -520,8 +531,7 @@ export const ContextPanel: React.FC = () => {
   const chatFrameSrcByTabIDRef = React.useRef<Map<string, EmbeddedSessionChatURLCacheEntry>>(new Map());
   const wasOpenRef = React.useRef(false);
 
-  // Tracks the panel area width so fraction-based surface defaults stay
-  // proportional as the window resizes; manual widths remain fixed px.
+  // Defaults and manually resized surfaces track the same available area.
   React.useLayoutEffect(() => {
     const parent = panelRef.current?.parentElement;
     if (!parent || typeof ResizeObserver === 'undefined') {
@@ -603,6 +613,7 @@ export const ContextPanel: React.FC = () => {
     // Apply the final width once, letting the regular 200ms width transition
     // carry the panel to the release position.
     const finalWidth = clampWidthForDrag(resizingWidthRef.current ?? width);
+    const availableWidth = resizeAvailableWidthRef.current;
     resizingWidthRef.current = null;
     resizeAvailableWidthRef.current = null;
     if (resizeFollowTimerRef.current !== null) {
@@ -611,7 +622,7 @@ export const ContextPanel: React.FC = () => {
     }
     document.documentElement.style.cursor = '';
     if (directoryKey && activeModeForWidth) {
-      setContextPanelWidth(directoryKey, activeModeForWidth, finalWidth);
+      setContextPanelWidth(directoryKey, activeModeForWidth, finalWidth, availableWidth ?? undefined);
     }
     setIsResizing(false);
     activeResizePointerIDRef.current = null;
@@ -691,8 +702,8 @@ export const ContextPanel: React.FC = () => {
     }
 
     // Terminal owns Escape so the PTY receives it (e.g. Vim Normal mode).
-    // ghostty-web listens in the bubble phase; stopping capture here would
-    // swallow the key before the terminal ever sees it (issue #2644).
+    // The terminal input listens in the bubble phase; stopping capture here
+    // would swallow the key before the terminal ever sees it (issue #2644).
     if (isTerminalEventTarget(event.target)) {
       return;
     }
@@ -980,8 +991,8 @@ export const ContextPanel: React.FC = () => {
     () => tabs.filter((tab) => tab.mode === 'diff'),
     [tabs],
   );
-  const hasTerminalTab = React.useMemo(
-    () => tabs.some((tab) => tab.mode === 'terminal'),
+  const terminalTab = React.useMemo(
+    () => tabs.find((tab) => tab.mode === 'terminal') ?? null,
     [tabs],
   );
   // Keep-alive: the walkthrough holds reading progress and scroll position that
@@ -1298,9 +1309,9 @@ export const ContextPanel: React.FC = () => {
             </React.Suspense>
           </div>
         ))}
-        {hasTerminalTab ? (
+        {terminalTab ? (
           <div className={cn('absolute inset-0', activeTab?.mode === 'terminal' ? 'block' : 'hidden')}>
-            <TerminalView visible={isOpen && activeTab?.mode === 'terminal'} />
+            <TerminalView visible={isOpen && activeTab?.mode === 'terminal'} directory={terminalTab.targetDirectory} />
           </div>
         ) : null}
         {hasWalkthroughTab ? (

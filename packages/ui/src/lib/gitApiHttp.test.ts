@@ -13,6 +13,11 @@ import {
   deleteRemoteBranch,
   dropGitStash,
   getGitBranches,
+  getGitRangeDiff,
+  getGitRangeFiles,
+  getGitCommitDiff,
+  getCommitFiles,
+  getGitLog,
   getGitStatus,
   gitFetch,
   merge,
@@ -29,6 +34,7 @@ import {
   unstageGitFiles,
 } from './gitApiHttp';
 import type { GitStatus } from './api/types';
+import { sessionEvents } from './sessionEvents';
 
 type FetchCall = {
   input: RequestInfo | URL;
@@ -140,7 +146,97 @@ describe('gitApiHttp index mutations', () => {
   });
 });
 
+describe('gitApiHttp branch comparisons', () => {
+  test('sends commit hashes and rename paths without trimming and rejects incomplete commit lists', async () => {
+    installWindowMock();
+    const urls: URL[] = [];
+    globalThis.fetch = Object.assign(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://localhost');
+      urls.push(url);
+      return Response.json(url.pathname.endsWith('/commit-diff') ? { diff: 'commit patch' } : { files: [{ path: 'incomplete' }] });
+    }, previousFetch);
+    try {
+      const hash = 'a'.repeat(40);
+      expect(await getGitCommitDiff('/repo', { hash, path: ' new\nfile.ts', previousPath: 'old.ts', contextLines: 20 }))
+        .toEqual({ diff: 'commit patch' });
+      expect(urls[0].pathname).toBe('/api/git/commit-diff');
+      expect(urls[0].searchParams.get('hash')).toBe(hash);
+      expect(urls[0].searchParams.get('path')).toBe(' new\nfile.ts');
+      expect(urls[0].searchParams.get('previousPath')).toBe('old.ts');
+      expect(urls[0].searchParams.get('context')).toBe('20');
+      await expect(getCommitFiles('/repo', hash)).rejects.toThrow();
+      await expect(getGitLog('/repo', { maxCount: 50, to: 'refs/heads/feature' })).rejects.toThrow();
+      expect(urls[2].searchParams.get('maxCount')).toBe('50');
+      expect(urls[2].searchParams.get('to')).toBe('refs/heads/feature');
+      expect(urls[2].searchParams.has('all')).toBe(false);
+    } finally {
+      restoreMocks();
+    }
+  });
+
+  test('sends the exact selected refs and working-tree option to both range endpoints', async () => {
+    installWindowMock();
+    const urls: URL[] = [];
+    globalThis.fetch = Object.assign(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://localhost');
+      urls.push(url);
+      return Response.json(url.pathname.endsWith('/range-files')
+        ? { files: [{ path: 'new.ts', status: 'A' }] }
+        : { diff: 'current patch' });
+    }, previousFetch);
+    try {
+      const options = { base: 'refs/heads/parent', head: 'child', includeWorkingTree: true };
+      expect(await getGitRangeDiff('/repo', options)).toEqual({ diff: 'current patch' });
+      expect(await getGitRangeFiles('/repo', options)).toEqual([{ path: 'new.ts', status: 'A' }]);
+      expect(urls).toHaveLength(2);
+      for (const url of urls) {
+        expect(url.searchParams.get('base')).toBe('refs/heads/parent');
+        expect(url.searchParams.get('head')).toBe('child');
+        expect(url.searchParams.get('includeWorkingTree')).toBe('true');
+      }
+    } finally {
+      restoreMocks();
+    }
+  });
+
+  test('rejects malformed file lists and preserves the server ref error', async () => {
+    installWindowMock();
+    globalThis.fetch = Object.assign(async () => Response.json({ files: [{ path: 'new.ts' }] }), previousFetch);
+    const options = { base: 'missing', head: 'child', includeWorkingTree: true };
+    try {
+      await expect(getGitRangeFiles('/repo', options)).rejects.toThrow();
+      globalThis.fetch = Object.assign(async () => Response.json({ error: 'Fetch the selected ref first.' }, { status: 500 }), previousFetch);
+      await expect(getGitRangeDiff('/repo', options)).rejects.toThrow('Fetch the selected ref first.');
+      await expect(getGitRangeFiles('/repo', options)).rejects.toThrow('Fetch the selected ref first.');
+    } finally {
+      restoreMocks();
+    }
+  });
+});
+
 describe('gitApiHttp status cache', () => {
+  test('a Git refresh hint invalidates the cached status before listeners fetch', async () => {
+    installWindowMock();
+    let statusRequestCount = 0;
+    globalThis.fetch = async () => {
+      statusRequestCount += 1;
+      return jsonResponse(statusPayload({ behind: statusRequestCount }));
+    };
+
+    try {
+      const directory = '/repo-cache-tool-mutation';
+      const first = await getGitStatus(directory);
+      sessionEvents.requestGitRefresh({ directory });
+      const afterMutation = await getGitStatus(directory);
+
+      expect(first.behind).toBe(1);
+      expect(afterMutation.behind).toBe(2);
+      expect(statusRequestCount).toBe(2);
+    } finally {
+      restoreMocks();
+    }
+  });
+
   test('invalidates cached status after fetch', async () => {
     installWindowMock();
     const calls: FetchCall[] = [];
@@ -184,6 +280,58 @@ describe('gitApiHttp status cache', () => {
         '/api/git/fetch?directory=%2Frepo-cache-fetch',
         '/api/git/status?directory=%2Frepo-cache-fetch',
       ]);
+    } finally {
+      restoreMocks();
+    }
+  });
+
+  test('fresh status bypasses an unexpired cached snapshot', async () => {
+    installWindowMock();
+    let statusRequestCount = 0;
+    globalThis.fetch = (async () => {
+      statusRequestCount += 1;
+      return jsonResponse(statusPayload({ behind: statusRequestCount }));
+    }) as typeof fetch;
+
+    try {
+      const directory = '/repo-cache-fresh';
+      const first = await getGitStatus(directory);
+      const cached = await getGitStatus(directory);
+      const fresh = await getGitStatus(directory, { fresh: true });
+
+      expect(first.behind).toBe(1);
+      expect(cached.behind).toBe(1);
+      expect(fresh.behind).toBe(2);
+      expect(statusRequestCount).toBe(2);
+    } finally {
+      restoreMocks();
+    }
+  });
+
+  test('fresh status cannot be replaced in cache by an older in-flight response', async () => {
+    installWindowMock();
+    const statusResolvers: Array<(response: Response) => void> = [];
+    // SAFETY: the mock accepts the same arguments as fetch and always returns
+    // a pending Response promise controlled by this test.
+    globalThis.fetch = (async () => new Promise<Response>((resolve) => {
+      statusResolvers.push(resolve);
+    })) as typeof fetch;
+
+    try {
+      const directory = '/repo-cache-fresh-race';
+      const older = getGitStatus(directory);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      const fresh = getGitStatus(directory, { fresh: true });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(statusResolvers).toHaveLength(2);
+      statusResolvers[1](jsonResponse(statusPayload({ current: 'fresh' })));
+      statusResolvers[0](jsonResponse(statusPayload({ current: 'stale' })));
+
+      expect((await fresh).current).toBe('fresh');
+      expect((await older).current).toBe('stale');
+      expect((await getGitStatus(directory)).current).toBe('fresh');
+      expect(statusResolvers).toHaveLength(2);
     } finally {
       restoreMocks();
     }

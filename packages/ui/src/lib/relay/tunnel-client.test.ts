@@ -10,7 +10,7 @@ import {
   type FrameEncryptor,
 } from './crypto';
 import { createHostHandshake } from './handshake';
-import { TunnelFrameType } from './protocol';
+import { RelayCloseCode, TunnelFrameType } from './protocol';
 import { isAmbiguousTransportFailure } from './transport-error';
 import {
   createFragmentAssembler,
@@ -244,7 +244,7 @@ const setupClient = async (
 ): Promise<{
   client: RelayTunnelClient;
   connectionCount: () => number;
-  killWire: () => void;
+  killWire: (code?: number) => void;
   sendTextToClient: (text: string) => void;
   clientBinaryCount: () => number;
 }> => {
@@ -279,7 +279,7 @@ const setupClient = async (
   return {
     client,
     connectionCount: () => count,
-    killWire: () => lastClientEndpoint?.close(1006, 'killed'),
+    killWire: (code = 1006) => lastClientEndpoint?.close(code, 'killed'),
     sendTextToClient: (text: string) => lastHostEndpoint?.send(text),
     clientBinaryCount: () => lastClientEndpoint?.binarySent ?? 0,
   };
@@ -437,6 +437,55 @@ describe('createRelayTunnelClient', () => {
     const status = client.getStatus();
     expect(['reconnecting', 'connecting', 'connected', 'error']).toContain(status.state);
   });
+
+  test('outbound retries cannot hide a silent peer', async () => {
+    const { client } = await setupClient({ silent: true }, {
+      batch: false, pingTimeoutMs: 40, reconnectBaseDelayMs: 2000, reconnectMaxDelayMs: 2000,
+    });
+    track(client);
+    let requests = 0;
+    const timer = setInterval(() => {
+      requests++;
+      void client.fetch('/health').catch(() => undefined);
+    }, 10);
+    try {
+      await wait(250);
+      expect(requests).toBeGreaterThan(10);
+      expect(client.getStatus()).toEqual({ state: 'reconnecting', lastError: 'relay keepalive timeout' });
+    } finally {
+      clearInterval(timer);
+    }
+  });
+
+  test('continuing inbound stream data stays healthy without idle pings', async () => {
+    const frames: TunnelFrame[] = [];
+    const { client, connectionCount } = await setupClient({ recordFrame: frame => frames.push(frame) }, { batchWindowMs: 5 });
+    track(client);
+    const response = await client.fetch('/never-ends');
+    await wait(250);
+    expect(connectionCount()).toBe(1);
+    expect(client.getStatus().state).toBe('connected');
+    expect(frames.some(frame => frame.frameType === TunnelFrameType.Ping)).toBe(false);
+    await response.body?.cancel();
+  });
+
+  for (const code of [RelayCloseCode.AuthFailed, RelayCloseCode.DuplicateClient, RelayCloseCode.LimitExceeded]) {
+    test(`terminal relay rejection ${code} rejects subsequent HTTP and WS opens`, async () => {
+      const { client, killWire, connectionCount } = await setupClient();
+      track(client);
+      await client.fetch('/health');
+      killWire(code);
+      await wait(10);
+      expect(client.getStatus().state).toBe('error');
+      const reason = client.getStatus().lastError;
+      await expect(client.fetch('/health')).rejects.toThrow(reason);
+      const socket = client.openWebSocket('/api/terminal/ws');
+      const closed = await new Promise<string>(resolve => { socket.onclose = event => resolve(event.reason); });
+      expect(closed).toBe(reason);
+      await wait(100);
+      expect(connectionCount()).toBe(1);
+    });
+  }
 
   test('survives duplicate ready frames from a slow first handshake (first-request 500 regression)', async () => {
     // firstHelloDelayMs > helloRetryMs (20ms): the client retries `hello`

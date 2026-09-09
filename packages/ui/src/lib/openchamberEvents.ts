@@ -1,5 +1,7 @@
 import { getRuntimeUrlResolver } from './runtime-url';
 import { subscribeRuntimeEndpointChanged } from './runtime-switch';
+import { isVSCodeRuntime } from './desktop';
+import { messageQueueUpdatedEventSchema, type MessageQueueUpdatedEvent } from '@/stores/messageQueueStore';
 
 type ScheduledTaskRanEvent = {
   type: 'scheduled-task-ran';
@@ -43,6 +45,8 @@ type AgentMemoryChangedEvent = {
 };
 
 type OpenChamberEvent =
+  | { type: 'event-stream-ready' }
+  | MessageQueueUpdatedEvent
   | ScheduledTaskRanEvent
   | SessionCreatedEvent
   | BrowserControlRequestEvent
@@ -126,6 +130,15 @@ const getEventProperties = (properties: unknown): Record<string, unknown> | null
 const dispatchFromEnvelope = (envelope: { type: string; properties: unknown }) => {
   if (envelope.type === 'openchamber:event-stream-ready') {
     reconnectAttempt = 0;
+    for (const listener of listeners) listener({ type: 'event-stream-ready' });
+    return;
+  }
+
+  if (envelope.type === 'openchamber:message-queue.updated') {
+    const parsed = messageQueueUpdatedEventSchema.safeParse(envelope);
+    if (parsed.success) {
+      for (const listener of listeners) listener(parsed.data);
+    }
     return;
   }
 
@@ -250,9 +263,11 @@ const connect = () => {
     canControlBrowser ? { browser: '1' } : undefined,
   ));
   source.onopen = () => {
+    if (eventSource !== source) return;
     resetHeartbeatTimer();
   };
   source.onmessage = (event) => {
+    if (eventSource !== source) return;
     resetHeartbeatTimer();
     const envelope = parseEnvelope(event.data);
     if (!envelope) {
@@ -262,6 +277,7 @@ const connect = () => {
   };
 
   source.onerror = () => {
+    if (eventSource !== source) return;
     cleanupSource();
     scheduleReconnect();
   };
@@ -284,6 +300,10 @@ const cleanupRuntimeChangeSubscription = () => {
 };
 
 export const subscribeOpenchamberEvents = (listener: Listener): (() => void) => {
+  // VS Code runs OpenCode through its bridge, not the OpenChamber server that
+  // owns this stream. Opening it here retries against vscode-webview:// forever.
+  if (isVSCodeRuntime()) return () => undefined;
+
   listeners.add(listener);
   ensureRuntimeChangeSubscription();
   connect();

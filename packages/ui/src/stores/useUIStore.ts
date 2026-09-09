@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { z } from 'zod';
 import { devtools, persist } from 'zustand/middleware';
 import type { SidebarSection } from '@/constants/sidebar';
 import { createDeferredSafeJSONStorage } from './utils/safeStorage';
@@ -9,13 +10,20 @@ import { DEFAULT_MONO_FONT, DEFAULT_UI_FONT, type MonoFontOption, type UiFontOpt
 import { getStoredMobileKeyboardMode, type MobileKeyboardMode } from '@/lib/mobileKeyboardMode';
 import type { LinearIssueListAssignee, LinearIssueListPriority, LinearIssueListStatus, TerminalShell } from '@/lib/api/types';
 import type { ProjectRef } from '@/lib/projectContextApi';
+import { directoryMayHaveActiveProjectAction, useTerminalStore } from '@/stores/useTerminalStore';
 import { useFilesViewTabsStore } from './useFilesViewTabsStore';
 import { isWindowsArm64 } from '@/lib/platform';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { isContextPanelMode, type ContextPanelMode } from '@/lib/surfaces/modes';
+import { getRuntimeKey, isTransientRuntimeKey } from '@/lib/runtime-switch';
 
-export type PendingDiffScope = 'working' | 'staged' | 'turn' | 'branch';
+export type PendingDiffScope = 'working' | 'staged' | 'turn' | 'branch' | 'commit';
 export type { ContextPanelMode };
+const contextPanelModeSchema = z.enum(['diff', 'walkthrough', 'file', 'context', 'plan', 'chat', 'browser', 'git', 'pr', 'linear', 'notes', 'terminal']);
+const persistedPanelWidthsSchema = z.object({
+  widthByMode: z.record(z.string(), z.number().finite().optional().catch(undefined)).catch({}),
+  widthFractionByMode: z.record(z.string(), z.number().positive().max(1).optional().catch(undefined)).catch({}),
+});
 export type MermaidRenderingMode = 'svg' | 'ascii';
 export type UserMessageRenderingMode = 'markdown' | 'plain';
 export type ChatRenderMode = 'sorted' | 'live';
@@ -66,6 +74,38 @@ function sanitizeLinearIssueListTeamId(value: unknown): string {
   return teamId || LINEAR_ISSUE_LIST_ALL_TEAMS;
 }
 
+/**
+ * Store the team filter under the connected instance, dropping the entry when
+ * it falls back to all teams so the map does not accumulate defaults. Transient
+ * keys (uninitialised, mobile-disconnected) name no instance and are not written.
+ */
+function writeLinearTeamIdForRuntime(
+  entries: Record<string, string>,
+  teamId: string,
+): Record<string, string> {
+  const runtimeKey = getRuntimeKey();
+  if (isTransientRuntimeKey(runtimeKey)) return entries;
+  const next = { ...entries };
+  if (teamId === LINEAR_ISSUE_LIST_ALL_TEAMS) {
+    delete next[runtimeKey];
+  } else {
+    next[runtimeKey] = teamId;
+  }
+  return next;
+}
+
+function sanitizeLinearIssueListTeamIdByRuntime(value: unknown): Record<string, string> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const entries: Record<string, string> = {};
+  // SAFETY: guarded above as a non-array object; every value is re-checked below.
+  for (const [runtimeKey, teamId] of Object.entries(value as Record<string, unknown>)) {
+    if (!runtimeKey.trim() || typeof teamId !== 'string') continue;
+    const sanitized = sanitizeLinearIssueListTeamId(teamId);
+    if (sanitized !== LINEAR_ISSUE_LIST_ALL_TEAMS) entries[runtimeKey] = sanitized;
+  }
+  return entries;
+}
+
 function sanitizeLinearIssueListPriority(value: unknown): LinearIssueListPriority {
   return value === 'none' || value === 'urgent' || value === 'high' || value === 'medium' || value === 'low' || value === 'all'
     ? value
@@ -76,6 +116,7 @@ type ContextPanelTab = {
   id: string;
   mode: ContextPanelMode;
   targetPath: string | null;
+  targetDirectory: string | null;
   /** Saved project plan this tab shows, for `plan` tabs opened from the notes
       panel. Project plans are addressed by id because their markdown is
       server-owned and has no client-visible path. */
@@ -96,6 +137,7 @@ type ContextPanelTab = {
 type ContextPanelTabDescriptor = {
   mode: ContextPanelMode;
   targetPath?: string | null;
+  targetDirectory?: string | null;
   projectPlanId?: string | null;
   projectPlanRef?: ProjectRef | null;
   dedupeKey?: string | null;
@@ -111,9 +153,12 @@ type ContextPanelDirectoryState = {
   expanded: boolean;
   tabs: ContextPanelTab[];
   activeTabId: string | null;
-  // Manual per-surface widths (px), populated only by user resize; surfaces
-  // without an entry fall back to their registry defaultWidthFraction.
+  // Legacy pixel widths and the last resize value, used until the panel's
+  // available area is known and a responsive ratio can be captured.
   widthByMode: Partial<Record<ContextPanelMode, number>>;
+  // Ratios captured when a user resizes a surface. These remain responsive
+  // across window sizes while widthByMode preserves older persisted values.
+  widthFractionByMode: Partial<Record<ContextPanelMode, number>>;
   touchedAt: number;
 };
 
@@ -168,12 +213,12 @@ const isLegacyDefaultTemplates = (value: unknown): boolean => {
 };
 
 const CONTEXT_PANEL_DEFAULT_WIDTH = 380;
-const CONTEXT_PANEL_MIN_WIDTH = 380;
+const CONTEXT_PANEL_MIN_WIDTH = 320;
 const CONTEXT_PANEL_MAX_WIDTH = 1400;
 /** Per surface, not per panel: see clampContextPanelTabs. */
 const CONTEXT_PANEL_MAX_TABS = 12;
 const CONTEXT_PANEL_MAX_LABEL_LENGTH = 120;
-const LEFT_SIDEBAR_MIN_WIDTH = 280;
+const LEFT_SIDEBAR_DEFAULT_WIDTH = 280;
 /** Separates browser tabs opened in the same millisecond. */
 let browserTabSequence = 0;
 
@@ -220,6 +265,15 @@ const normalizeContextTargetPath = (value: string | null | undefined): string | 
   return trimmed.replace(/\\/g, '/');
 };
 
+const normalizeContextTargetDirectory = (value: string | null | undefined): string | null => {
+  const normalizedPath = normalizeContextTargetPath(value);
+  if (!normalizedPath) {
+    return null;
+  }
+
+  return normalizeContextPanelDirectoryKey(normalizedPath) || null;
+};
+
 const normalizeContextTabLabel = (value: string | null | undefined): string | null => {
   if (typeof value !== 'string') {
     return null;
@@ -236,7 +290,7 @@ const normalizeContextTabLabel = (value: string | null | undefined): string | nu
 };
 
 const normalizePendingDiffScope = (value: unknown): PendingDiffScope | null => {
-  return value === 'working' || value === 'staged' || value === 'turn' || value === 'branch' ? value : null;
+  return value === 'working' || value === 'staged' || value === 'turn' || value === 'branch' || value === 'commit' ? value : null;
 };
 
 /** A plan tab's owner must be a complete project reference or nothing; a
@@ -288,6 +342,9 @@ const buildContextPanelTabID = (mode: ContextPanelMode, dedupeKey: string): stri
 
 const createContextPanelTab = (descriptor: ContextPanelTabDescriptor): ContextPanelTab => {
   const normalizedTargetPath = normalizeContextTargetPath(descriptor.targetPath);
+  const normalizedTargetDirectory = descriptor.mode === 'terminal'
+    ? normalizeContextTargetDirectory(descriptor.targetDirectory)
+    : null;
   const dedupeKey = normalizeContextPanelTabDedupeKey(
     descriptor.mode,
     normalizedTargetPath,
@@ -297,6 +354,7 @@ const createContextPanelTab = (descriptor: ContextPanelTabDescriptor): ContextPa
     id: buildContextPanelTabID(descriptor.mode, dedupeKey),
     mode: descriptor.mode,
     targetPath: normalizedTargetPath,
+    targetDirectory: normalizedTargetDirectory,
     projectPlanId: typeof descriptor.projectPlanId === 'string' && descriptor.projectPlanId.trim()
       ? descriptor.projectPlanId.trim()
       : null,
@@ -360,6 +418,7 @@ const sanitizeContextPanelTabs = (tabs: unknown): ContextPanelTab[] => {
     const candidate = entry as {
       mode?: unknown;
       targetPath?: unknown;
+      targetDirectory?: string | null;
       projectPlanId?: unknown;
       projectPlanRef?: unknown;
       dedupeKey?: unknown;
@@ -385,6 +444,9 @@ const sanitizeContextPanelTabs = (tabs: unknown): ContextPanelTab[] => {
     }
 
     const targetPath = normalizeContextTargetPath(typeof candidate.targetPath === 'string' ? candidate.targetPath : null);
+    const targetDirectory = candidate.mode === 'terminal'
+      ? normalizeContextTargetDirectory(candidate.targetDirectory)
+      : null;
     const projectPlanId = typeof candidate.projectPlanId === 'string' && candidate.projectPlanId.trim()
       ? candidate.projectPlanId.trim()
       : null;
@@ -413,6 +475,7 @@ const sanitizeContextPanelTabs = (tabs: unknown): ContextPanelTab[] => {
       id,
       mode: candidate.mode,
       targetPath,
+      targetDirectory,
       projectPlanId,
       projectPlanRef,
       dedupeKey,
@@ -460,6 +523,7 @@ const touchContextPanelState = (prev?: ContextPanelDirectoryState): ContextPanel
     tabs: [],
     activeTabId: null,
     widthByMode: {},
+    widthFractionByMode: {},
     touchedAt: Date.now(),
   };
 };
@@ -479,22 +543,23 @@ const upsertContextPanelTab = (
   const existingIndex = baseTabs.findIndex((tab) => tab.id === nextTab.id);
   const tabs = existingIndex === -1
     ? [...baseTabs, nextTab]
-     : baseTabs.map((tab, index) => (index === existingIndex
-       ? {
-           ...tab,
-           mode: nextTab.mode,
-           targetPath: nextTab.targetPath || tab.targetPath,
-           projectPlanId: nextTab.projectPlanId ?? tab.projectPlanId,
-           projectPlanRef: nextTab.projectPlanRef ?? tab.projectPlanRef,
-           dedupeKey: nextTab.dedupeKey,
-           label: nextTab.label,
-           sessionTitleFallback: nextTab.sessionTitleFallback || tab.sessionTitleFallback,
-           stagedDiff: nextTab.stagedDiff,
-           diffScope: nextTab.diffScope,
-           readOnly: nextTab.readOnly,
-           touchedAt: Date.now(),
-         }
-       : tab));
+    : baseTabs.map((tab, index) => (index === existingIndex
+      ? {
+          ...tab,
+          mode: nextTab.mode,
+          targetPath: nextTab.targetPath || tab.targetPath,
+          targetDirectory: nextTab.targetDirectory,
+          projectPlanId: nextTab.projectPlanId ?? tab.projectPlanId,
+          projectPlanRef: nextTab.projectPlanRef ?? tab.projectPlanRef,
+          dedupeKey: nextTab.dedupeKey,
+          label: nextTab.label,
+          sessionTitleFallback: nextTab.sessionTitleFallback || tab.sessionTitleFallback,
+          stagedDiff: nextTab.stagedDiff,
+          diffScope: nextTab.diffScope,
+          readOnly: nextTab.readOnly,
+          touchedAt: Date.now(),
+        }
+      : tab));
 
   // A background upsert (an agent working a page) keeps the panel exactly as
   // the user left it: closed stays closed, and whatever tab they were on
@@ -620,6 +685,7 @@ const sanitizeContextPanelByDirectory = (
       touchedAt?: unknown;
       mode?: unknown;
       targetPath?: unknown;
+      targetDirectory?: string | null;
       dedupeKey?: unknown;
       label?: unknown;
     };
@@ -631,10 +697,11 @@ const sanitizeContextPanelByDirectory = (
     // no owner and cannot be migrated into an openable saved-plan tab — that
     // combination is dropped by sanitize above. A generic filesystem plan tab
     // (no plan id) revives fine from the descriptor alone.
-    if (tabs.length === 0 && (candidate.mode === 'diff' || candidate.mode === 'file' || candidate.mode === 'context' || candidate.mode === 'plan' || candidate.mode === 'chat')) {
+    if (tabs.length === 0 && (candidate.mode === 'diff' || candidate.mode === 'file' || candidate.mode === 'context' || candidate.mode === 'plan' || candidate.mode === 'chat' || candidate.mode === 'terminal')) {
       tabs = [createContextPanelTab({
         mode: candidate.mode,
         targetPath: typeof candidate.targetPath === 'string' ? candidate.targetPath : null,
+        targetDirectory: candidate.targetDirectory,
         dedupeKey: typeof candidate.dedupeKey === 'string' ? candidate.dedupeKey : null,
         label: typeof candidate.label === 'string' ? candidate.label : null,
       })];
@@ -647,16 +714,13 @@ const sanitizeContextPanelByDirectory = (
     // Legacy single `width` values are intentionally dropped: widths are now
     // per-surface, seeded from registry defaults until the user resizes.
     const widthByMode: Partial<Record<ContextPanelMode, number>> = {};
-    if (candidate.widthByMode && typeof candidate.widthByMode === 'object') {
-      for (const [mode, value] of Object.entries(candidate.widthByMode as Record<string, unknown>)) {
-        if (
-          isContextPanelMode(mode)
-          && typeof value === 'number'
-          && Number.isFinite(value)
-        ) {
-          widthByMode[mode] = clampContextPanelWidth(value);
-        }
-      }
+    const widthFractionByMode: Partial<Record<ContextPanelMode, number>> = {};
+    const savedWidths = persistedPanelWidthsSchema.parse(rawState);
+    for (const mode of contextPanelModeSchema.options) {
+      const pixels = savedWidths.widthByMode[mode];
+      const fraction = savedWidths.widthFractionByMode[mode];
+      if (pixels !== undefined) widthByMode[mode] = clampContextPanelWidth(pixels);
+      if (fraction !== undefined) widthFractionByMode[mode] = fraction;
     }
 
     next[directory] = {
@@ -665,6 +729,7 @@ const sanitizeContextPanelByDirectory = (
       tabs: clampedTabs,
       activeTabId: resolveActiveContextPanelTabID(clampedTabs, resolvedActiveTabId),
       widthByMode,
+      widthFractionByMode,
       touchedAt: typeof candidate.touchedAt === 'number' && Number.isFinite(candidate.touchedAt)
         ? candidate.touchedAt
         : Date.now(),
@@ -698,7 +763,6 @@ interface UIStore {
   multiRunLauncherPrefillPrompt: string;
   isSidebarOpen: boolean;
   sidebarWidth: number;
-  hasManuallyResizedLeftSidebar: boolean;
   contextPanelByDirectory: Record<string, ContextPanelDirectoryState>;
   contextRailOrder: string[];
   /** Surface ids the user hid from the context rail; stored as the hidden set
@@ -734,6 +798,8 @@ interface UIStore {
    * Persisted to server settings, not just this browser.
    */
   workStatusHiddenSections: string[];
+  /** Explicitly chosen hidden-section state. False keeps the default opt-in seed. */
+  workStatusHiddenSectionsExplicit: boolean;
   isSessionSwitcherOpen: boolean;
   isSessionDropdownOpen: boolean;
   pendingDiffFile: string | null;
@@ -819,9 +885,19 @@ interface UIStore {
   /** Width of the walkthrough table of contents, in pixels. */
   walkthroughTocWidth: number;
   gitChangesViewMode: 'flat' | 'tree';
+  toolJsonViewMode: 'summary' | 'formatted' | 'raw';
   linearIssueListStatus: LinearIssueListStatus;
   linearIssueListAssignee: LinearIssueListAssignee;
+  /**
+   * Team filter for the instance currently connected. A Linear team belongs to
+   * one workspace, and each OpenChamber instance has its own Linear login, so
+   * this is derived from `linearIssueListTeamIdByRuntime` rather than persisted
+   * on its own — a team id carried across a switch filters the new instance's
+   * list down to nothing.
+   */
   linearIssueListTeamId: string;
+  /** Team filter per instance, keyed the same way every runtime-scoped cache is. */
+  linearIssueListTeamIdByRuntime: Record<string, string>;
   linearIssueListPriority: LinearIssueListPriority;
   /** One-shot identifier for opening a Linear issue in the rail panel. Not persisted. */
   linearIssueFocus: string | null;
@@ -833,6 +909,7 @@ interface UIStore {
   notifyOnSubtasks: boolean;
   // Desktop dock badge showing the count of sessions with unseen activity (macOS).
   dockBadgeEnabled: boolean;
+  alwaysShowScrollbars: boolean;
 
   // Event toggles (which events trigger notifications)
   notifyOnCompletion: boolean;
@@ -877,6 +954,8 @@ interface UIStore {
   projectContextTab: string;
   inputSpellcheckEnabled: boolean;
   largeTextPasteBehavior: LargeTextPasteBehavior;
+  enterToSend: boolean;
+  enterToSendConfigured: boolean;
   wideChatLayoutEnabled: boolean;
   codeBlockLineWrap: boolean;
   showToolFileIcons: boolean;
@@ -922,7 +1001,7 @@ interface UIStore {
   closeContextPanelTabs: (directory: string, tabIds: readonly string[]) => void;
   closeContextPanel: (directory: string) => void;
   toggleContextPanelExpanded: (directory: string) => void;
-  setContextPanelWidth: (directory: string, mode: ContextPanelMode, width: number) => void;
+  setContextPanelWidth: (directory: string, mode: ContextPanelMode, width: number, availableWidth?: number) => void;
   setNotesPanelHeight: (height: number) => void;
   setWorkStatusSectionExpanded: (sectionId: string, expanded: boolean) => void;
   setWorkStatusScrollTop: (scrollTop: number) => void;
@@ -1021,9 +1100,12 @@ interface UIStore {
   setDiffWrapLines: (wrap: boolean) => void;
   setWalkthroughTocWidth: (width: number) => void;
   setGitChangesViewMode: (mode: 'flat' | 'tree') => void;
+  setToolJsonViewMode: (mode: 'summary' | 'formatted' | 'raw') => void;
   setLinearIssueListStatus: (status: LinearIssueListStatus) => void;
   setLinearIssueListAssignee: (assignee: LinearIssueListAssignee) => void;
   setLinearIssueListTeamId: (teamId: string) => void;
+  /** Re-read the team filter for the instance now connected. */
+  applyLinearIssueListFiltersForRuntime: () => void;
   setLinearIssueListPriority: (priority: LinearIssueListPriority) => void;
   resetLinearIssueListFilters: () => void;
   setLinearIssueFocus: (identifier: string | null) => void;
@@ -1038,6 +1120,7 @@ interface UIStore {
   setSessionTabsEnabled: (value: boolean) => void;
   setNotifyOnSubtasks: (value: boolean) => void;
   setDockBadgeEnabled: (value: boolean) => void;
+  setAlwaysShowScrollbars: (value: boolean) => void;
   setNotifyOnCompletion: (value: boolean) => void;
   setNotifyOnError: (value: boolean) => void;
   setNotifyOnQuestion: (value: boolean) => void;
@@ -1059,6 +1142,8 @@ interface UIStore {
   setProjectContextTab: (value: string) => void;
   setInputSpellcheckEnabled: (value: boolean) => void;
   setLargeTextPasteBehavior: (value: LargeTextPasteBehavior) => void;
+  setEnterToSend: (value: boolean) => void;
+  setEnterToSendConfigured: (value: boolean) => void;
   setWideChatLayoutEnabled: (value: boolean) => void;
   setCodeBlockLineWrap: (value: boolean) => void;
   setShowToolFileIcons: (value: boolean) => void;
@@ -1099,8 +1184,7 @@ export const useUIStore = create<UIStore>()(
         isMultiRunLauncherOpen: false,
         multiRunLauncherPrefillPrompt: '',
         isSidebarOpen: true,
-        sidebarWidth: LEFT_SIDEBAR_MIN_WIDTH,
-        hasManuallyResizedLeftSidebar: false,
+        sidebarWidth: LEFT_SIDEBAR_DEFAULT_WIDTH,
         contextPanelByDirectory: {},
         contextRailOrder: [],
         contextRailHiddenSurfaces: [],
@@ -1114,6 +1198,7 @@ export const useUIStore = create<UIStore>()(
         workStatusPanelFits: false,
         workStatusOverlayOpen: false,
         workStatusHiddenSections: [],
+        workStatusHiddenSectionsExplicit: false,
         isSessionSwitcherOpen: false,
         isSessionDropdownOpen: false,
         pendingDiffFile: null,
@@ -1184,9 +1269,11 @@ export const useUIStore = create<UIStore>()(
         diffWrapLines: false,
         walkthroughTocWidth: 224,
         gitChangesViewMode: 'flat',
+        toolJsonViewMode: 'summary',
         linearIssueListStatus: 'all',
         linearIssueListAssignee: 'any',
         linearIssueListTeamId: LINEAR_ISSUE_LIST_ALL_TEAMS,
+        linearIssueListTeamIdByRuntime: {},
         linearIssueListPriority: 'all',
         linearIssueFocus: null,
         isTimelineDialogOpen: false,
@@ -1196,6 +1283,7 @@ export const useUIStore = create<UIStore>()(
         notificationMode: 'hidden-only',
         notifyOnSubtasks: true,
         dockBadgeEnabled: true,
+        alwaysShowScrollbars: false,
 
         // Event toggles (which events trigger notifications)
         notifyOnCompletion: true,
@@ -1227,6 +1315,8 @@ export const useUIStore = create<UIStore>()(
         projectContextTab: 'notes',
         inputSpellcheckEnabled: false,
         largeTextPasteBehavior: DEFAULT_LARGE_TEXT_PASTE_BEHAVIOR,
+        enterToSend: false,
+        enterToSendConfigured: false,
         wideChatLayoutEnabled: false,
         codeBlockLineWrap: true,
         showToolFileIcons: true,
@@ -1256,45 +1346,15 @@ export const useUIStore = create<UIStore>()(
         },
 
         toggleSidebar: () => {
-          set((state) => {
-            const newOpen = !state.isSidebarOpen;
-
-            if (newOpen && !state.hasManuallyResizedLeftSidebar) {
-              return {
-                isSidebarOpen: newOpen,
-                sidebarWidth: LEFT_SIDEBAR_MIN_WIDTH,
-              };
-            }
-            return { isSidebarOpen: newOpen };
-          });
+          set((state) => ({ isSidebarOpen: !state.isSidebarOpen }));
         },
 
         setSidebarOpen: (open) => {
-          set((state) => {
-            if (state.isSidebarOpen === open) {
-              if (!open) {
-                return state;
-              }
-              if (!state.hasManuallyResizedLeftSidebar && state.sidebarWidth !== LEFT_SIDEBAR_MIN_WIDTH) {
-                return {
-                  isSidebarOpen: open,
-                  sidebarWidth: LEFT_SIDEBAR_MIN_WIDTH,
-                };
-              }
-              return state;
-            }
-            if (open && !state.hasManuallyResizedLeftSidebar) {
-              return {
-                isSidebarOpen: open,
-                sidebarWidth: LEFT_SIDEBAR_MIN_WIDTH,
-              };
-            }
-            return { isSidebarOpen: open };
-          });
+          set((state) => state.isSidebarOpen === open ? state : { isSidebarOpen: open });
         },
 
         setSidebarWidth: (width) => {
-          set({ sidebarWidth: width, hasManuallyResizedLeftSidebar: true });
+          set({ sidebarWidth: width });
         },
 
         setContextRailOrder: (order) => {
@@ -1328,14 +1388,29 @@ export const useUIStore = create<UIStore>()(
           const panelState = state.contextPanelByDirectory[normalizedDirectory];
           const tabs = panelState?.tabs ?? [];
           const activeTab = tabs.find((tab) => tab.id === panelState?.activeTabId) ?? null;
+          const clearTerminalTarget = () => {
+            if (mode === 'terminal') {
+              const terminalTab = tabs.find((tab) => tab.mode === 'terminal') ?? null;
+              const targetDirectory = terminalTab?.targetDirectory ?? null;
+              if (targetDirectory) {
+                const targetState = useTerminalStore.getState().getDirectoryState(targetDirectory);
+                if (directoryMayHaveActiveProjectAction(targetState)) {
+                  return;
+                }
+              }
+              state.openContextPanelTab(normalizedDirectory, { mode: 'terminal', targetDirectory: null }, { reveal: false });
+            }
+          };
 
           if (panelState?.isOpen && activeTab?.mode === mode) {
+            clearTerminalTarget();
             state.closeContextPanel(normalizedDirectory);
             return;
           }
 
           const tabsOfMode = tabs.filter((tab) => tab.mode === mode);
           if (tabsOfMode.length > 0) {
+            clearTerminalTarget();
             // `>=` so equal timestamps (same-millisecond opens) resolve to the
             // later tab in insertion order.
             const mostRecent = tabsOfMode.reduce((best, tab) => (tab.touchedAt >= best.touchedAt ? tab : best));
@@ -1359,12 +1434,21 @@ export const useUIStore = create<UIStore>()(
             return;
           }
 
+          const nextTab = tab.mode === 'terminal'
+            ? {
+                ...tab,
+                targetDirectory: normalizeContextTargetDirectory(tab.targetDirectory) === normalizedDirectory
+                  ? null
+                  : normalizeContextTargetDirectory(tab.targetDirectory),
+              }
+            : tab;
+
           set((state) => {
             const prev = state.contextPanelByDirectory[normalizedDirectory];
             const current = touchContextPanelState(prev);
             const byDirectory = {
               ...state.contextPanelByDirectory,
-              [normalizedDirectory]: upsertContextPanelTab(current, tab, options),
+              [normalizedDirectory]: upsertContextPanelTab(current, nextTab, options),
             };
 
             return { contextPanelByDirectory: clampContextPanelRoots(byDirectory, 20) };
@@ -1634,7 +1718,7 @@ export const useUIStore = create<UIStore>()(
           });
         },
 
-        setContextPanelWidth: (directory, mode, width) => {
+        setContextPanelWidth: (directory, mode, width, availableWidth) => {
           const normalizedDirectory = normalizeDirectoryPath((directory || '').trim());
           if (!normalizedDirectory) {
             return;
@@ -1643,14 +1727,22 @@ export const useUIStore = create<UIStore>()(
           set((state) => {
             const prev = state.contextPanelByDirectory[normalizedDirectory];
             const current = touchContextPanelState(prev);
+            const clampedWidth = clampContextPanelWidth(width);
+            const widthFractionByMode = { ...current.widthFractionByMode };
+            if (availableWidth !== undefined && Number.isFinite(availableWidth) && availableWidth > 0) {
+              widthFractionByMode[mode] = Math.min(1, clampedWidth / availableWidth);
+            } else {
+              delete widthFractionByMode[mode];
+            }
             const byDirectory = {
               ...state.contextPanelByDirectory,
               [normalizedDirectory]: {
                 ...current,
                 widthByMode: {
                   ...current.widthByMode,
-                  [mode]: clampContextPanelWidth(width),
+                  [mode]: clampedWidth,
                 },
+                widthFractionByMode,
               },
             };
 
@@ -1708,6 +1800,7 @@ export const useUIStore = create<UIStore>()(
             const isHidden = hidden.includes(sectionId);
             if (visible === !isHidden) return state;
             return {
+              workStatusHiddenSectionsExplicit: true,
               workStatusHiddenSections: visible
                 ? hidden.filter((entry) => entry !== sectionId)
                 : [...hidden, sectionId],
@@ -1716,7 +1809,7 @@ export const useUIStore = create<UIStore>()(
         },
 
         setWorkStatusHiddenSections: (sectionIds) => {
-          set({ workStatusHiddenSections: [...new Set(sectionIds)] });
+          set({ workStatusHiddenSections: [...new Set(sectionIds)], workStatusHiddenSectionsExplicit: true });
         },
 
         setContextRailSurfaceVisible: (surfaceId, visible) => {
@@ -2032,21 +2125,20 @@ export const useUIStore = create<UIStore>()(
 
           const entries = Object.entries(SEMANTIC_TYPOGRAPHY) as Array<[SemanticTypographyKey, string]>;
 
-          // Default must be SEMANTIC_TYPOGRAPHY (from CSS). Remove overrides.
+          // Scale the root rem unit so regular utility classes, icons, spacing,
+          // and semantic typography all respond to the same interface setting.
           if (scale === 1) {
+            root.style.removeProperty('font-size');
             for (const [key] of entries) {
               root.style.removeProperty(getTypographyVariable(key));
             }
             return;
           }
 
-          for (const [key, baseValue] of entries) {
-            const numericValue = parseFloat(baseValue);
-            if (!Number.isFinite(numericValue)) {
-              continue;
-            }
-            root.style.setProperty(getTypographyVariable(key), `${numericValue * scale}rem`);
-          }
+          root.style.fontSize = `${scale * 100}%`;
+
+          // The variables remain authored in rem and inherit the root scale.
+          for (const [key] of entries) root.style.removeProperty(getTypographyVariable(key));
         },
 
         applyPadding: () => {
@@ -2105,6 +2197,10 @@ export const useUIStore = create<UIStore>()(
           set({ gitChangesViewMode: mode });
         },
 
+        setToolJsonViewMode: (mode) => {
+          set({ toolJsonViewMode: mode });
+        },
+
         setLinearIssueListStatus: (status) => {
           set({ linearIssueListStatus: sanitizeLinearIssueListStatus(status) });
         },
@@ -2114,7 +2210,20 @@ export const useUIStore = create<UIStore>()(
         },
 
         setLinearIssueListTeamId: (teamId) => {
-          set({ linearIssueListTeamId: sanitizeLinearIssueListTeamId(teamId) });
+          const sanitized = sanitizeLinearIssueListTeamId(teamId);
+          set((state) => ({
+            linearIssueListTeamId: sanitized,
+            linearIssueListTeamIdByRuntime: writeLinearTeamIdForRuntime(state.linearIssueListTeamIdByRuntime, sanitized),
+          }));
+        },
+
+        applyLinearIssueListFiltersForRuntime: () => {
+          const runtimeKey = getRuntimeKey();
+          set((state) => ({
+            linearIssueListTeamId: isTransientRuntimeKey(runtimeKey)
+              ? LINEAR_ISSUE_LIST_ALL_TEAMS
+              : state.linearIssueListTeamIdByRuntime[runtimeKey] ?? LINEAR_ISSUE_LIST_ALL_TEAMS,
+          }));
         },
 
         setLinearIssueListPriority: (priority) => {
@@ -2122,12 +2231,16 @@ export const useUIStore = create<UIStore>()(
         },
 
         resetLinearIssueListFilters: () => {
-          set({
+          set((state) => ({
             linearIssueListStatus: 'all',
             linearIssueListAssignee: 'any',
             linearIssueListTeamId: LINEAR_ISSUE_LIST_ALL_TEAMS,
+            linearIssueListTeamIdByRuntime: writeLinearTeamIdForRuntime(
+              state.linearIssueListTeamIdByRuntime,
+              LINEAR_ISSUE_LIST_ALL_TEAMS,
+            ),
             linearIssueListPriority: 'all',
-          });
+          }));
         },
 
         setLinearIssueFocus: (identifier) => {
@@ -2430,6 +2543,9 @@ export const useUIStore = create<UIStore>()(
         setDockBadgeEnabled: (value) => {
           set({ dockBadgeEnabled: value });
         },
+        setAlwaysShowScrollbars: (value) => {
+          set({ alwaysShowScrollbars: value });
+        },
 
         setNotifyOnCompletion: (value) => { set({ notifyOnCompletion: value }); },
         setNotifyOnError: (value) => { set({ notifyOnError: value }); },
@@ -2483,6 +2599,12 @@ export const useUIStore = create<UIStore>()(
         },
         setLargeTextPasteBehavior: (value) => {
           set({ largeTextPasteBehavior: normalizeLargeTextPasteBehavior(value) });
+        },
+        setEnterToSend: (value) => {
+          set({ enterToSend: value });
+        },
+        setEnterToSendConfigured: (value) => {
+          set({ enterToSendConfigured: value });
         },
         setWideChatLayoutEnabled: (value) => {
           set({ wideChatLayoutEnabled: value });
@@ -2582,12 +2704,20 @@ export const useUIStore = create<UIStore>()(
       {
         name: 'ui-store',
         storage: createDeferredSafeJSONStorage(),
-        version: 18,
+        version: 21,
         migrate: (persistedState, version) => {
           if (!persistedState || typeof persistedState !== 'object') {
             return persistedState;
           }
           const state = persistedState as Record<string, unknown>;
+
+          // v20 -> v21: enable telemetry by default; preserve explicit choices.
+          if (version < 21 && state.workStatusHiddenSectionsExplicit !== true) {
+            state.workStatusHiddenSections = Array.isArray(state.workStatusHiddenSections)
+              ? state.workStatusHiddenSections.filter((id) => id !== 'telemetry')
+              : [];
+            state.workStatusHiddenSectionsExplicit = false;
+          }
 
           // v15 -> v16: the main-area surface concept is gone from persistence
           // (the chat always owns the desktop main area; panel surfaces have
@@ -2793,11 +2923,21 @@ export const useUIStore = create<UIStore>()(
 
           state.linearIssueListStatus = sanitizeLinearIssueListStatus(state.linearIssueListStatus);
           state.linearIssueListAssignee = sanitizeLinearIssueListAssignee(state.linearIssueListAssignee);
-          state.linearIssueListTeamId = sanitizeLinearIssueListTeamId(state.linearIssueListTeamId);
+          // v18 -> v19: the team filter became per instance. The legacy flat
+          // value names a team in one workspace with nothing to say which
+          // instance it came from, so it is dropped rather than guessed at.
+          delete state.linearIssueListTeamId;
+          state.linearIssueListTeamIdByRuntime = sanitizeLinearIssueListTeamIdByRuntime(state.linearIssueListTeamIdByRuntime);
           state.linearIssueListPriority = sanitizeLinearIssueListPriority(state.linearIssueListPriority);
 
           state.fileEditorKeymap = normalizeFileEditorKeymap(state.fileEditorKeymap);
           state.largeTextPasteBehavior = normalizeLargeTextPasteBehavior(state.largeTextPasteBehavior);
+
+          if (state.toolJsonViewMode !== 'summary'
+            && state.toolJsonViewMode !== 'formatted'
+            && state.toolJsonViewMode !== 'raw') {
+            state.toolJsonViewMode = 'summary';
+          }
 
           if (typeof state.autoSaveEnabled !== 'boolean') {
             state.autoSaveEnabled = true;
@@ -2826,6 +2966,7 @@ export const useUIStore = create<UIStore>()(
           workStatusScrollTop: state.workStatusScrollTop,
           workStatusPanelEnabled: state.workStatusPanelEnabled,
           workStatusHiddenSections: state.workStatusHiddenSections,
+          workStatusHiddenSectionsExplicit: state.workStatusHiddenSectionsExplicit,
           isSessionSwitcherOpen: state.isSessionSwitcherOpen,
           sidebarSection: state.sidebarSection,
           settingsPage: state.settingsPage,
@@ -2873,9 +3014,10 @@ export const useUIStore = create<UIStore>()(
           diffWrapLines: state.diffWrapLines,
           walkthroughTocWidth: state.walkthroughTocWidth,
           gitChangesViewMode: state.gitChangesViewMode,
+          toolJsonViewMode: state.toolJsonViewMode,
           linearIssueListStatus: state.linearIssueListStatus,
           linearIssueListAssignee: state.linearIssueListAssignee,
-          linearIssueListTeamId: state.linearIssueListTeamId,
+          linearIssueListTeamIdByRuntime: state.linearIssueListTeamIdByRuntime,
           linearIssueListPriority: state.linearIssueListPriority,
           nativeNotificationsEnabled: state.nativeNotificationsEnabled,
           notificationMode: state.notificationMode,
@@ -2883,6 +3025,7 @@ export const useUIStore = create<UIStore>()(
           sessionTabsEnabled: state.sessionTabsEnabled,
           notifyOnSubtasks: state.notifyOnSubtasks,
           dockBadgeEnabled: state.dockBadgeEnabled,
+          alwaysShowScrollbars: state.alwaysShowScrollbars,
           notifyOnCompletion: state.notifyOnCompletion,
           notifyOnError: state.notifyOnError,
           notifyOnQuestion: state.notifyOnQuestion,
@@ -2900,6 +3043,8 @@ export const useUIStore = create<UIStore>()(
           projectContextSidebarWidth: state.projectContextSidebarWidth,
           inputSpellcheckEnabled: state.inputSpellcheckEnabled,
           largeTextPasteBehavior: state.largeTextPasteBehavior,
+          enterToSend: state.enterToSend,
+          enterToSendConfigured: state.enterToSendConfigured,
           wideChatLayoutEnabled: state.wideChatLayoutEnabled,
           codeBlockLineWrap: state.codeBlockLineWrap,
           showToolFileIcons: state.showToolFileIcons,
@@ -2910,6 +3055,7 @@ export const useUIStore = create<UIStore>()(
           weekStartPreference: state.weekStartPreference,
           desktopWindowControlsPosition: state.desktopWindowControlsPosition,
           desktopWindowControlsStyle: state.desktopWindowControlsStyle,
+          inputBarOffset: state.inputBarOffset,
           mermaidRenderingMode: state.mermaidRenderingMode,
           userMessageRenderingMode: state.userMessageRenderingMode,
           collapsibleUserMessages: state.collapsibleUserMessages,

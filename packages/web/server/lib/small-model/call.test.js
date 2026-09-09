@@ -483,6 +483,29 @@ describe('callSmallModel — custom provider config', () => {
   });
 
   describe('catalog-based base URL (no config override)', () => {
+    it('identifies OpenCode Go requests with the owning conversation', async () => {
+      readConfig.mockReturnValue({});
+      fetchMock.mockResolvedValue(ok('ok'));
+
+      await callSmallModel({
+        auth: { 'opencode-go': { type: 'api', key: 'go-key' } },
+        catalog: {
+          'opencode-go': {
+            id: 'opencode-go',
+            api: 'https://opencode.ai/zen/go/v1',
+            models: { utility: { id: 'utility' } },
+          },
+        },
+        workingDirectory: '/proj',
+        sessionID: 'ses_conversation',
+        providerID: 'opencode-go',
+        modelID: 'utility',
+        prompt: 'hi',
+      });
+
+      expect(lastCall(fetchMock).init.headers['x-opencode-session']).toBe('ses_conversation');
+    });
+
     it('uses the catalog api field when no config baseURL is set', async () => {
       readConfig.mockReturnValue({});
       fetchMock.mockResolvedValue(ok('ok'));
@@ -540,6 +563,35 @@ describe('callSmallModel — custom provider config', () => {
       const { url, init } = lastCall(fetchMock);
       expect(url).toBe('https://api.llmapi.ai/v1/chat/completions');
       expect(init.headers.Authorization).toBe('Bearer plugin-key');
+    });
+
+    it('uses the selected runtime model endpoint', async () => {
+      readConfig.mockReturnValue({});
+      getRuntimeProvider.mockResolvedValue({
+        id: 'runtime-provider',
+        apiKey: 'plugin-key',
+        baseURL: 'https://runtime-provider/v1beta',
+        models: new Map([
+          ['first-model', { api: { url: 'https://runtime-provider/v1beta', npm: '@ai-sdk/google' } }],
+          ['selected-model', { api: { url: 'https://runtime-provider/v1', npm: '@ai-sdk/openai' } }],
+        ]),
+        anonymousZen: false,
+      });
+      fetchMock.mockResolvedValue(ok('done'));
+
+      await callSmallModel({
+        auth: {},
+        catalog: {},
+        workingDirectory: '/proj',
+        providerID: 'runtime-provider',
+        modelID: 'selected-model',
+        prompt: 'hi',
+      });
+
+      const { url, init } = lastCall(fetchMock);
+      expect(url).toBe('https://runtime-provider/v1/chat/completions');
+      expect(url).not.toContain('/v1beta');
+      expect(JSON.parse(init.body).model).toBe('selected-model');
     });
 
     it('keeps the ChatGPT-plan login on its own transport instead of the runtime key', async () => {

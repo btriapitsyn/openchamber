@@ -3,6 +3,7 @@ import type { GitStatus } from '@/lib/api/types';
 import { useGitStore } from './useGitStore';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { notifyGitStatusInvalidated } from '@/lib/gitStatusInvalidation';
+import { clearWorktreeBootstrapState, markWorktreeBootstrapPending } from '@/lib/worktrees/worktreeBootstrap';
 
 // The real transport has no server in tests and fails as a generic error.
 // Tests that exercise other failure modes swap this implementation; the
@@ -86,7 +87,116 @@ const createGitApi = (getGitStatus: GitAPI['getGitStatus']): GitAPI => ({
 
 describe('useGitStore', () => {
   beforeEach(() => {
+    clearWorktreeBootstrapState('/repo');
     useGitStore.getState().resetForRuntimeSwitch(getRuntimeKey());
+  });
+
+  test('keeps timed-out diff requests inside the concurrency limit until they settle', async () => {
+    const paths = ['one.ts', 'two.ts', 'three.ts', 'four.ts'];
+    setDirectoryStatus(createStatus({}, paths.map((path) => ({ path, index: ' ', working_dir: 'M' }))));
+    const pending: Array<{ path: string; request: Deferred<Awaited<ReturnType<GitAPI['getGitFileDiff']>>> }> = [];
+    const git = createGitApi(async () => createStatus());
+    git.getGitFileDiff = (_directory, { path }) => {
+      const request = createDeferred<Awaited<ReturnType<GitAPI['getGitFileDiff']>>>();
+      pending.push({ path, request });
+      return request.promise;
+    };
+
+    const prefetch = useGitStore.getState().prefetchDiffs('/repo', git, paths);
+    try {
+      expect(pending.length).toBe(2);
+      // Exercise the real 15-second prefetch deadline. Expiring the UI wait
+      // does not settle the injected transport or stop its server-side work.
+      await new Promise((resolve) => setTimeout(resolve, 15_100));
+      expect(pending.length).toBe(2);
+      await useGitStore.getState().prefetchDiffs('/repo', git, paths);
+      expect(pending.length).toBe(2);
+      expect(useGitStore.getState().getDirectoryState('/repo')?.diffCache.size).toBe(0);
+    } finally {
+      for (const { path, request } of pending) request.resolve({ path, original: 'before', modified: 'after' });
+      await prefetch;
+    }
+    // Late responses were discarded, but their real completion frees capacity.
+    expect(useGitStore.getState().getDirectoryState('/repo')?.diffCache.size).toBe(0);
+    git.getGitFileDiff = async (_directory, { path }) => ({ path, original: 'fresh', modified: 'fresh' });
+    await useGitStore.getState().prefetchDiffs('/repo', git, paths);
+    expect(useGitStore.getState().getDirectoryState('/repo')?.diffCache.size).toBe(4);
+  }, 40_000);
+
+  test('limits overlapping diff batches per directory and retains capacity across a cache reset', async () => {
+    const paths = ['one.ts', 'two.ts', 'three.ts'];
+    const status = createStatus({}, paths.map((path) => ({ path, index: ' ', working_dir: 'M' })));
+    const directories = ['/repo-a', '/repo-b', '/repo-c'];
+    const populate = () => useGitStore.setState({
+      directories: new Map(directories.map((directory) => [directory, createDirectoryState(status)])),
+    });
+    populate();
+    const request = createDeferred<Awaited<ReturnType<GitAPI['getGitFileDiff']>>>();
+    const calls: string[] = [];
+    const git = createGitApi(async () => status);
+    git.getGitFileDiff = (directory) => {
+      calls.push(directory);
+      return request.promise;
+    };
+    const batches = directories.flatMap((directory) => paths.map((path) => (
+      useGitStore.getState().prefetchDiffs(directory, git, [path])
+    )));
+    try {
+      expect(calls.length).toBe(6);
+      for (const directory of directories) expect(calls.filter((value) => value === directory).length).toBe(2);
+      useGitStore.getState().resetForRuntimeSwitch(getRuntimeKey());
+      populate();
+      await Promise.all(directories.map((directory) => useGitStore.getState().prefetchDiffs(directory, git, paths)));
+      expect(calls.length).toBe(6);
+    } finally {
+      request.resolve({ path: 'one.ts', original: '', modified: '' });
+      await Promise.all(batches);
+    }
+    for (const directory of directories) expect(useGitStore.getState().getDirectoryState(directory)?.diffCache.size).toBe(0);
+  });
+
+  test('repeated status refreshes for three directories share their outstanding requests', async () => {
+    const status = createStatus();
+    const directories = ['/status-a', '/status-b', '/status-c'];
+    useGitStore.setState({ directories: new Map(directories.map((directory) => [directory, createDirectoryState(status)])) });
+    const request = createDeferred<GitStatus>();
+    let calls = 0;
+    const git = createGitApi(async () => {
+      calls += 1;
+      return request.promise;
+    });
+    const refreshes = Array.from({ length: 20 }, () => directories.map((directory) => (
+      useGitStore.getState().fetchStatus(directory, git, { silent: true })
+    ))).flat();
+    try {
+      expect(calls).toBe(3);
+    } finally {
+      request.resolve(status);
+      await Promise.all(refreshes);
+    }
+  });
+
+  test('a duplicate diff demand does not discard the first batch or leave failure slots occupied', async () => {
+    const paths = ['one.ts', 'two.ts', 'three.ts'];
+    setDirectoryStatus(createStatus({}, paths.map((path) => ({ path, index: ' ', working_dir: 'M' }))));
+    const request = createDeferred<Awaited<ReturnType<GitAPI['getGitFileDiff']>>>();
+    const git = createGitApi(async () => createStatus());
+    let calls = 0;
+    git.getGitFileDiff = async (_directory, { path }) => {
+      calls += 1;
+      if (path === 'one.ts') return request.promise;
+      if (path === 'two.ts') throw new Error('failed read');
+      return { path, original: '', modified: 'fresh' };
+    };
+    const first = useGitStore.getState().prefetchDiffs('/repo', git, paths);
+    await useGitStore.getState().prefetchDiffs('/repo', git, paths);
+    request.resolve({ path: 'one.ts', original: '', modified: 'fresh' });
+    await first;
+    expect(calls).toBe(3);
+    const cache = useGitStore.getState().getDirectoryState('/repo')?.diffCache;
+    expect(cache?.has('one.ts')).toBe(true);
+    expect(cache?.has('two.ts')).toBe(false);
+    expect(cache?.has('three.ts')).toBe(true);
   });
 
   test('does not reuse an in-flight light status request for full status', async () => {
@@ -198,8 +308,10 @@ describe('useGitStore', () => {
     setDirectoryStatus(createStatus());
     const requests: Deferred<GitStatus>[] = [];
     let statusCalls = 0;
-    const git = createGitApi(() => {
+    const statusOptions: Array<{ mode?: 'light'; fresh?: boolean } | undefined> = [];
+    const git = createGitApi((_directory, options) => {
       statusCalls += 1;
+      statusOptions.push(options);
       const request = createDeferred<GitStatus>();
       requests.push(request);
       return request.promise;
@@ -212,12 +324,63 @@ describe('useGitStore', () => {
     const all = useGitStore.getState().fetchAll('/repo', git, { force: true });
     await Promise.resolve();
     expect(statusCalls).toBe(2);
+    expect(statusOptions).toEqual([undefined, { fresh: true }]);
 
     requests[1].resolve({ ...createStatus(), current: 'feature' });
     requests[0].resolve(createStatus());
     await Promise.allSettled([inFlight, all]);
 
     expect(useGitStore.getState().getDirectoryState('/repo')?.status?.current).toBe('feature');
+  });
+
+  test('does not request status while worktree bootstrap is pending', async () => {
+    setDirectoryStatus(createStatus());
+    let statusCalls = 0;
+    const git = createGitApi(async () => {
+      statusCalls += 1;
+      return createStatus(undefined, [{ path: 'bootstrap.ts', index: 'D', working_dir: ' ' }]);
+    });
+
+    markWorktreeBootstrapPending('/repo');
+    const changed = await useGitStore.getState().fetchStatus('/repo', git, { force: true });
+
+    expect(changed).toBe(false);
+    expect(statusCalls).toBe(0);
+    expect(useGitStore.getState().getDirectoryState('/repo')?.status?.files).toEqual([]);
+  });
+
+  test('does not publish a status response after bootstrap becomes pending', async () => {
+    setDirectoryStatus(createStatus());
+    const request = createDeferred<GitStatus>();
+    const git = createGitApi(() => request.promise);
+
+    const loading = useGitStore.getState().fetchStatus('/repo', git, { silent: true });
+    await Promise.resolve();
+    markWorktreeBootstrapPending('/repo');
+    request.resolve(createStatus(undefined, [{ path: 'bootstrap.ts', index: 'D', working_dir: ' ' }]));
+
+    expect(await loading).toBe(false);
+    expect(useGitStore.getState().getDirectoryState('/repo')?.status?.files).toEqual([]);
+  });
+
+  test('can propagate a forced status failure to a reconciliation owner', async () => {
+    setDirectoryStatus(createStatus());
+    const git = createGitApi(async () => {
+      throw new Error('offline');
+    });
+    const originalConsoleError = console.error;
+    console.error = () => undefined;
+
+    try {
+      await expect(useGitStore.getState().fetchStatus('/repo', git, {
+        force: true,
+        silent: true,
+        throwOnError: true,
+      })).rejects.toThrow('offline');
+      expect(useGitStore.getState().getDirectoryState('/repo')?.status?.files).toEqual([]);
+    } finally {
+      console.error = originalConsoleError;
+    }
   });
 
   test('does not let an older status fetch undo an optimistic mutation', async () => {

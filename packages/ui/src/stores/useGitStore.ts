@@ -11,6 +11,7 @@ import { getDeferredSafeStorage } from '@/stores/utils/safeStorage';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { GitDirectoriesUnsupportedError, listGitDirectories } from '@/lib/gitApiHttp';
 import { subscribeGitStatusInvalidations } from '@/lib/gitStatusInvalidation';
+import { getWorktreeBootstrapState } from '@/lib/worktrees/worktreeBootstrap';
 
 const LOG_STALE_THRESHOLD = 10000;
 const REPO_CHECK_STALE_THRESHOLD = 60_000;
@@ -28,6 +29,7 @@ const DIFF_CACHE_MAX_ENTRIES = 30;
 const DIFF_CACHE_MAX_TOTAL_SIZE_BYTES = 20 * 1024 * 1024; // 20MB
 const DIFF_CACHE_MAX_GLOBAL_ENTRIES = 200;
 type GitStatusFetchMode = 'full' | 'light';
+type GitStatusRequestOptions = { mode?: 'light'; fresh?: boolean };
 
 // Discovery outcome for a root that is not itself a git repository. The three
 // states are mutually exclusive: a repository list (possibly empty), a failed
@@ -64,7 +66,7 @@ interface GitStore {
   setActiveDirectory: (directory: string | null) => void;
   getDirectoryState: (directory: string) => DirectoryGitState | null;
 
-  fetchStatus: (directory: string, git: GitAPI, options?: { silent?: boolean; mode?: 'light'; force?: boolean }) => Promise<boolean>;
+  fetchStatus: (directory: string, git: GitAPI, options?: { silent?: boolean; mode?: 'light'; force?: boolean; throwOnError?: boolean }) => Promise<boolean>;
   fetchBranches: (directory: string, git: GitAPI) => Promise<void>;
   fetchLog: (directory: string, git: GitAPI, maxCount?: number) => Promise<void>;
   fetchIdentity: (directory: string, git: GitAPI) => Promise<void>;
@@ -115,7 +117,7 @@ interface GitFileDiffResponse {
 
 interface GitAPI {
   checkIsGitRepository: (directory: string) => Promise<boolean>;
-  getGitStatus: (directory: string, options?: { mode?: 'light' }) => Promise<GitStatus>;
+  getGitStatus: (directory: string, options?: GitStatusRequestOptions) => Promise<GitStatus>;
   getGitBranches: (directory: string) => Promise<GitBranch>;
   getGitLog: (directory: string, options?: { maxCount?: number }) => Promise<GitLogResponse>;
   getCurrentGitIdentity: (directory: string) => Promise<GitIdentitySummary | null>;
@@ -655,7 +657,11 @@ export const useGitStore = create<GitStore>()(
         inFlightStatusFetches.clear();
         inFlightEnsureAllByDirectory.clear();
         inFlightNestedRepoDiscovery.clear();
-        inFlightDiffFetchesByDirectory.clear();
+        // Outstanding transports still consume capacity on their captured
+        // runtime, even after its visible cache has been reset.
+        for (const [key, requests] of inFlightDiffFetchesByDirectory) {
+          if (requests.size === 0) inFlightDiffFetchesByDirectory.delete(key);
+        }
         diffFetchGenerationByDirectory.clear();
         set({
           runtimeKey,
@@ -692,6 +698,9 @@ export const useGitStore = create<GitStore>()(
       },
 
       fetchStatus: async (directory, git, options = {}) => {
+        if (getWorktreeBootstrapState(directory)?.status === 'pending') {
+          return false;
+        }
         const statusFetchMode: GitStatusFetchMode = options.mode ?? 'full';
         const runtimeKey = getRuntimeKey();
         const statusFetchKey = getStatusFetchKey(runtimeKey, directory, statusFetchMode);
@@ -757,8 +766,17 @@ export const useGitStore = create<GitStore>()(
               return false;
             }
 
-            const newStatus = await git.getGitStatus(directory, options.mode ? { mode: options.mode } : undefined);
+            let statusOptions: GitStatusRequestOptions | undefined;
+            if (options.mode || options.force) {
+              statusOptions = {};
+              if (options.mode) statusOptions.mode = options.mode;
+              if (options.force) statusOptions.fresh = true;
+            }
+            const newStatus = await git.getGitStatus(directory, statusOptions);
             if (!isRequestCurrent(token, directory)) return false;
+            // A request admitted before worktree creation must not publish a
+            // transient --no-checkout/reset snapshot after bootstrap begins.
+            if (getWorktreeBootstrapState(directory)?.status === 'pending') return false;
 
             const latestState = get().directories.get(directory) ?? createEmptyDirectoryState();
             if (hasStatusChanged(latestState.status, newStatus)) {
@@ -830,6 +848,9 @@ export const useGitStore = create<GitStore>()(
             }
           } catch (error) {
             console.error('Failed to fetch git status:', error);
+            if (options.throwOnError) {
+              throw error;
+            }
           } finally {
             if (!silent && isRequestCurrent(token, directory)) {
               const newDirectories = new Map(get().directories);
@@ -1124,7 +1145,6 @@ export const useGitStore = create<GitStore>()(
       },
 
       prefetchDiffs: async (directory, git, filePaths, options = {}) => {
-        const token = startRequest(directory, 'diff');
         const dirState = get().directories.get(directory);
         if (!dirState?.status?.files || dirState.status.files.length === 0 || filePaths.length === 0) return;
 
@@ -1158,7 +1178,7 @@ export const useGitStore = create<GitStore>()(
         }
 
         const limitedFilePaths = dedupedPaths.slice(0, Math.max(1, maxFiles));
-        if (limitedFilePaths.length === 0) return;
+        if (limitedFilePaths.length === 0 || inFlight.size >= DIFF_PREFETCH_CONCURRENCY) return;
 
         const generation = getDiffFetchGeneration(directory);
 
@@ -1166,7 +1186,7 @@ export const useGitStore = create<GitStore>()(
           return;
         }
 
-        limitedFilePaths.forEach((path) => inFlight.add(path));
+        const token = startRequest(directory, 'diff');
 
         let nextIndex = 0;
         const results: Array<{ path: string; diff: { original: string; modified: string; isBinary?: boolean } }> = [];
@@ -1178,38 +1198,50 @@ export const useGitStore = create<GitStore>()(
         };
 
         const fetchWithTimeout = async (filePath: string) => {
-          const fetchPromise = git.getGitFileDiff(directory, { path: filePath });
+          inFlight.add(filePath);
+          const fetchPromise = (async () => {
+            try {
+              return await git.getGitFileDiff(directory, { path: filePath });
+            } finally {
+              // A UI deadline only stops waiting. Keep the path and capacity
+              // reserved until the transport actually settles.
+              inFlight.delete(filePath);
+            }
+          })();
+          let timeout: ReturnType<typeof setTimeout> | undefined;
           const timeoutPromise = new Promise<never>((_, reject) => {
-            setTimeout(() => reject(new Error(`Timed out after ${DIFF_PREFETCH_TIMEOUT_MS}ms`)), DIFF_PREFETCH_TIMEOUT_MS);
+            timeout = setTimeout(() => reject(new Error(`Timed out after ${DIFF_PREFETCH_TIMEOUT_MS}ms`)), DIFF_PREFETCH_TIMEOUT_MS);
           });
-          const response = await Promise.race([fetchPromise, timeoutPromise]);
-          return {
-            path: filePath,
-            diff: { original: response.original ?? '', modified: response.modified ?? '', isBinary: response.isBinary },
-          };
+          try {
+            const response = await Promise.race([fetchPromise, timeoutPromise]);
+            return {
+              path: filePath,
+              diff: { original: response.original ?? '', modified: response.modified ?? '', isBinary: response.isBinary },
+            };
+          } finally {
+            clearTimeout(timeout);
+          }
         };
 
         const worker = async () => {
           for (;;) {
-            if (generation !== getDiffFetchGeneration(directory) || !isRequestCurrent(token, directory)) {
+            if (generation !== getDiffFetchGeneration(directory) || !isRequestCurrent(token, directory)
+              || inFlight.size >= DIFF_PREFETCH_CONCURRENCY) {
               return;
             }
             const next = takeNext();
             if (!next) return;
+            if (inFlight.has(next)) continue;
             try {
               results.push(await fetchWithTimeout(next));
             } catch {
               // Ignore individual failures/timeouts during prefetch.
-            } finally {
-              inFlight.delete(next);
             }
           }
         };
 
         const workerCount = Math.min(DIFF_PREFETCH_CONCURRENCY, limitedFilePaths.length);
         await Promise.allSettled(Array.from({ length: workerCount }, () => worker()));
-
-        limitedFilePaths.forEach((path) => inFlight.delete(path));
 
         if (generation !== getDiffFetchGeneration(directory) || !isRequestCurrent(token, directory)) {
           return;

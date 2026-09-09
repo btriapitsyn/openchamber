@@ -124,7 +124,6 @@ const HeaderIconActionButton = React.memo(function HeaderIconActionButton({
 type DesktopServicesMenuProps = {
   isDesktopApp: boolean;
   currentInstanceLabel: string;
-  compactCurrentInstanceLabel: string;
   currentInstanceIsLocal: boolean;
   isDesktopServicesOpen: boolean;
   setIsDesktopServicesOpen: React.Dispatch<React.SetStateAction<boolean>>;
@@ -139,7 +138,6 @@ type DesktopServicesMenuProps = {
 const DesktopServicesMenu = React.memo(function DesktopServicesMenu({
   isDesktopApp,
   currentInstanceLabel,
-  compactCurrentInstanceLabel,
   currentInstanceIsLocal,
   isDesktopServicesOpen,
   setIsDesktopServicesOpen,
@@ -171,12 +169,12 @@ const DesktopServicesMenu = React.memo(function DesktopServicesMenu({
                 : t('header.services.open')}
               className={cn(
                 DESKTOP_HEADER_ICON_BUTTON_CLASS,
-                isDesktopApp ? 'w-auto max-w-[14rem] justify-start gap-1.5 px-2.5' : 'h-8 w-8'
+                isDesktopApp ? 'w-auto max-w-[20rem] justify-start gap-1.5 px-2.5' : 'h-8 w-8'
               )}
             >
               <Icon name="server" className="h-[18px] w-[18px]" />
               {isDesktopApp ? (
-                <span className="truncate typography-ui-label font-medium text-foreground">{compactCurrentInstanceLabel}</span>
+                <span className="truncate typography-ui-label font-medium text-foreground">{currentInstanceLabel}</span>
               ) : null}
             </button>
           </DropdownMenuTrigger>
@@ -250,27 +248,6 @@ const isSameContextUsage = (
     && a.thresholdLimit === b.thresholdLimit
     && (a.lastMessageId ?? '') === (b.lastMessageId ?? '');
 };
-
-const formatCompactHeaderLabel = (value: string): string => {
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return '';
-  }
-
-  const words = trimmed.split(/\s+/).filter(Boolean);
-  if (words.length >= 2) {
-    const first = words[0];
-    const second = words[1].slice(0, 3);
-    const shortTwoWord = `${first} ${second}`.trim();
-    if (words.length > 2 || shortTwoWord.length < trimmed.length) {
-      return `${shortTwoWord}...`;
-    }
-    return shortTwoWord;
-  }
-
-  return trimmed.length > 12 ? `${trimmed.slice(0, 9).trimEnd()}...` : trimmed;
-};
-
 
 const normalize = (value: string): string => {
   if (!value) return '';
@@ -447,7 +424,6 @@ export const Header: React.FC = () => {
   const [remoteUpdateInfo, setRemoteUpdateInfo] = React.useState<UpdateInfo | null>(null);
   const [remoteUpdateChecking, setRemoteUpdateChecking] = React.useState(false);
   const [remoteUpdateError, setRemoteUpdateError] = React.useState<string | null>(null);
-  const compactCurrentInstanceLabel = React.useMemo(() => formatCompactHeaderLabel(currentInstanceLabel), [currentInstanceLabel]);
   const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
   // While the work-status panel is on screen it already reports the project,
   // the branch and the context fill — three paces away in the same window.
@@ -704,6 +680,7 @@ export const Header: React.FC = () => {
     if (!worktreeAttachment) return null;
     return formatSessionWorktreeBadge(worktreeAttachment, {
       pending: t('gitView.empty.worktreeSetupInProgress'),
+      missing: t('sessions.sidebar.group.worktreeMissing'),
     });
   }, [t, worktreeAttachment]);
 
@@ -806,6 +783,15 @@ export const Header: React.FC = () => {
 
   const beginHeaderSessionRenameRef = React.useRef(beginHeaderSessionRename);
   beginHeaderSessionRenameRef.current = beginHeaderSessionRename;
+
+  // The rename field opens with the whole title selected, so the first
+  // keystroke replaces it. Stable ref callback: an inline one would re-run on
+  // every render and re-select the text mid-edit.
+  const focusHeaderRenameInput = React.useCallback((node: HTMLInputElement | null) => {
+    if (!node) return;
+    node.focus();
+    node.select();
+  }, []);
 
   React.useEffect(() => {
     setIsHeaderSessionMenuOpen(false);
@@ -1090,7 +1076,9 @@ export const Header: React.FC = () => {
   // `--oc-titlebar-left-inset` so the sidebar strip can mirror it.
   const titlebarLeftInset = React.useMemo(() => {
     if (isDesktopApp && isMacPlatform && !isDesktopWindowFullscreen) {
-      return '5.5rem';
+      // Native traffic lights have a fixed physical footprint. Keep this
+      // clearance in pixels so shrinking the interface cannot overlap them.
+      return '88px';
     }
     if (isTabletStandalonePwa) {
       return 'max(calc(0.75rem + var(--oc-wco-left-inset, 0px)), 5.5rem)';
@@ -1293,7 +1281,6 @@ export const Header: React.FC = () => {
       <DesktopServicesMenu
         isDesktopApp={isDesktopApp}
         currentInstanceLabel={currentInstanceLabel}
-        compactCurrentInstanceLabel={compactCurrentInstanceLabel}
         currentInstanceIsLocal={currentInstanceIsLocal}
         isDesktopServicesOpen={isDesktopServicesOpen}
         setIsDesktopServicesOpen={setIsDesktopServicesOpen}
@@ -1447,9 +1434,9 @@ export const Header: React.FC = () => {
                   }}
                 >
                   <input
+                    ref={focusHeaderRenameInput}
                     value={headerSessionTitleDraft}
                     onChange={(event) => setHeaderSessionTitleDraft(event.target.value)}
-                    autoFocus
                     onKeyDown={(event) => {
                       event.stopPropagation();
                       if (event.key === 'Escape') {
@@ -1604,9 +1591,9 @@ export const Header: React.FC = () => {
                   }}
                 >
                   <input
+                    ref={focusHeaderRenameInput}
                     value={headerSessionTitleDraft}
                     onChange={(event) => setHeaderSessionTitleDraft(event.target.value)}
-                    autoFocus
                     onKeyDown={(event) => {
                       event.stopPropagation();
                       if (event.key === 'Escape') {
