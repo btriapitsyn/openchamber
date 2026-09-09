@@ -680,8 +680,8 @@ export const ContextPanel: React.FC = () => {
     }
 
     // Terminal owns Escape so the PTY receives it (e.g. Vim Normal mode).
-    // ghostty-web listens in the bubble phase; stopping capture here would
-    // swallow the key before the terminal ever sees it (issue #2644).
+    // The terminal input listens in the bubble phase; stopping capture here
+    // would swallow the key before the terminal ever sees it (issue #2644).
     if (isTerminalEventTarget(event.target)) {
       return;
     }

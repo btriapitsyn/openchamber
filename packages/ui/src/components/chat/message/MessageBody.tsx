@@ -40,6 +40,8 @@ import { ToolRevealOnMount } from './parts/ToolRevealOnMount';
 import { StaticToolRow } from './parts/ProgressiveGroup';
 import { isExpandableTool, isStandaloneTool } from './parts/toolRenderUtils';
 import TurnActivity from '../components/TurnActivity';
+import { LiveActivityCollapse } from '../components/LiveActivityCollapse';
+import { LiveFinalActivityContext } from '../components/liveActivityContext';
 import { useProjectContextStore } from '@/stores/useProjectContextStore';
 import { resolveProjectForSessionDirectory } from '@/lib/projectResolution';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
@@ -1326,6 +1328,7 @@ const AssistantMessageBody = React.memo(({
     const timeFormatPreference = useUIStore((state) => state.timeFormatPreference);
     const vscodeApi = useRuntimeAPIs().vscode;
     const isSortedRenderMode = chatRenderMode === 'sorted';
+    const liveFinalActivity = React.useContext(LiveFinalActivityContext);
     const collapsedPreviewCount = 7;
     const isLastAssistantInTurn = turnGroupingContext?.isLastAssistantInTurn ?? false;
     const hasStopFinish = messageFinish === 'stop';
@@ -1729,7 +1732,21 @@ const AssistantMessageBody = React.memo(({
     const shouldRenderStandaloneActionsAfterContent = shouldShowStandaloneMessageActions && lastRenderableTextPartIndex < 0;
 
     const renderedParts = React.useMemo(() => {
-        const rendered: React.ReactNode[] = [];
+        const answerRendered: React.ReactNode[] = [];
+        const activityRendered: React.ReactNode[] = [];
+        let rendered = answerRendered;
+        const splitLiveActivity = !isSortedRenderMode && liveFinalActivity?.messageId === messageId && hasStopFinish;
+        let hasRenderedAnswerText = false;
+        const isFinalLiveAnswer = chatRenderMode === 'live' && isLastAssistantInTurn && hasStopFinish;
+        const hasEarlierVisibleActivity = isFinalLiveAnswer && Boolean(turnGroupingContext?.activityParts?.some((activity) => {
+            if (activity.messageId === messageId) {
+                return false;
+            }
+            if (activity.part.type === 'tool') {
+                return shouldShowTool(activity.part);
+            }
+            return (activity.kind !== 'reasoning' || showReasoningTraces) && !isEmptyTextPart(activity.part);
+        }));
 
         const renderSegmentBlock = (segment: TurnActivityGroup): React.ReactNode | null => {
             if (!shouldRenderActivityGroup || !toggleActivityGroup) {
@@ -1809,6 +1826,7 @@ const AssistantMessageBody = React.memo(({
         let i = 0;
         while (i < visibleParts.length) {
             const part = visibleParts[i];
+            rendered = splitLiveActivity && part.type !== 'text' ? activityRendered : answerRendered;
 
             if (part.type === 'text') {
                 const activity = activityByPart.get(part);
@@ -1820,6 +1838,16 @@ const AssistantMessageBody = React.memo(({
                     i += 1;
                     continue;
                 }
+                if (isFinalLiveAnswer && !hasRenderedAnswerText && (rendered.length > 0 || activityRendered.length > 0 || hasEarlierVisibleActivity || turnGroupingContext?.hasEarlierAssistantText)) {
+                    rendered.push(
+                        <div
+                            key={`final-answer-divider-${messageId}`}
+                            aria-hidden="true"
+                            className="mt-1.5 mb-4 h-px w-full bg-muted-foreground/60"
+                        />
+                    );
+                }
+                hasRenderedAnswerText = true;
                 rendered.push(
                     <div key={`assistant-text-${messageId}-${i}`} ref={messageTextContentRef} data-message-text-export-source="true">
                         <AssistantTextPart
@@ -1968,7 +1996,16 @@ const AssistantMessageBody = React.memo(({
             });
         });
 
-        return rendered;
+        if (splitLiveActivity && liveFinalActivity) {
+            return [
+                <LiveActivityCollapse key="final-message-activity" expanded={liveFinalActivity.expanded}
+                    id={liveFinalActivity.contentId} animateOnMount={liveFinalActivity.animateCollapse}>
+                    {activityRendered}
+                </LiveActivityCollapse>,
+                ...answerRendered,
+            ];
+        }
+        return answerRendered;
     }, [
         activityByPart,
         activityGroupSegmentsForMessage,
@@ -1982,6 +2019,9 @@ const AssistantMessageBody = React.memo(({
         isMobile,
         isActivityOwnerMessage,
         isSortedRenderMode,
+        liveFinalActivity,
+        isLastAssistantInTurn,
+        hasStopFinish,
         lastRenderableTextPartIndex,
         messageId,
         messageActionButtons,

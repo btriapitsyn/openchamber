@@ -1,6 +1,7 @@
 import { describe, expect, test, beforeEach, mock } from "bun:test"
 import type { PermissionRequest } from "@/types/permission"
 import type { QuestionRequest } from "@/types/question"
+import type { InputState } from "./input-store"
 
 // Mock SDK client that records permission.reply / question.reply calls
 const replyCalls: Array<{ method: string; params: Record<string, unknown> }> = []
@@ -18,9 +19,17 @@ const failingRevertSessionIds = new Set<string>()
 const failingUnrevertSessionIds = new Set<string>()
 let afterUnrevertCall: ((sessionId: string) => void) | null = null
 let sessionDeleteError: unknown | null = null
+let sessionForkResult: Session | null = null
+let sessionForkError: Error | null = null
+let beforeSessionForkResolve: (() => void) | null = null
+const selectedSessions: Array<{ sessionId: string | null; directoryHint?: string | null }> = []
 let beforeSessionUpdateResolve: ((sessionId: string) => void) | null = null
 let beforeSessionDeleteResolve: ((sessionId: string) => void) | null = null
 let beforeControlPlaneMoveResolve: ((sessionId: string) => void) | null = null
+let beforeDirectoryAvailabilityResolve: (() => void) | null = null
+const controlPlaneMoveErrorsById = new Map<string, Error>()
+let globalHasLoaded = true
+const deletedChatDirectories: string[] = []
 const globalUpsertedSessions: unknown[] = []
 const globalUpsertedSessionBatches: Session[][] = []
 const globalRemovedSessionIds: string[] = []
@@ -76,6 +85,8 @@ const mockSdk = {
       moveSession: mock((params: Record<string, unknown>) => {
         replyCalls.push({ method: "controlPlane.moveSession", params })
         beforeControlPlaneMoveResolve?.(String(params.sessionID))
+        const error = controlPlaneMoveErrorsById.get(String(params.sessionID))
+        if (error) return Promise.resolve({ error, response: { status: 500 } })
         return Promise.resolve({})
       }),
     },
@@ -153,6 +164,9 @@ const mockSdk = {
 }
 
 // Mock opencodeClient singleton
+// SAFETY: the actions under test touch only the SDK surface mocked above.
+const actionSdk = mockSdk as unknown as OpencodeClient
+
 mock.module("@/lib/opencode/client", () => ({
   opencodeClient: {
     getScopedSdkClient: (directory: string) => {
@@ -160,12 +174,22 @@ mock.module("@/lib/opencode/client", () => ({
       return mockScopedClient
     },
     getDirectory: () => "/test/project",
-    getDirectoryAvailability: mock(async (directory: string) => directoryAvailability.get(directory) ?? "available"),
+    getDirectoryAvailability: mock(async (directory: string) => {
+      beforeDirectoryAvailabilityResolve?.()
+      return directoryAvailability.get(directory) ?? "available"
+    }),
     getFilesystemHome: mock(async () => "/home/test"),
     getSdkClient: () => mockSdk,
     getSessionMessages: mock((sessionId: string, _limit?: number, directory?: string | null) => {
       replyCalls.push({ method: "session.messages", params: { sessionID: sessionId, directory } })
       return Promise.resolve(sessionMessageRecords.get(sessionId) ?? [])
+    }),
+    forkSession: mock(async (sessionId: string, messageId?: string, directory?: string | null): Promise<Session> => {
+      replyCalls.push({ method: "session.fork", params: { sessionID: sessionId, messageID: messageId, directory } })
+      beforeSessionForkResolve?.()
+      if (sessionForkError) throw sessionForkError
+      if (!sessionForkResult) throw new Error("Missing fork session fixture")
+      return sessionForkResult
     }),
     replyToPermission: mock((requestId: string, reply: string, options?: { directory?: string | null }) => {
       replyCalls.push({ method: "permission.reply", params: { requestID: requestId, reply, directory: options?.directory } })
@@ -224,7 +248,9 @@ mock.module("./session-ui-store", () => ({
         return null
       },
       currentSessionId: null,
-      setCurrentSession: () => {},
+      setCurrentSession: (sessionId: string | null, directoryHint?: string | null) => {
+        selectedSessions.push({ sessionId, directoryHint })
+      },
       setWorktreeMetadata: () => {},
       setSessionDirectory: (sessionID: string, directory: string) => {
         movedSessionDirectories.push({ sessionID, directory })
@@ -234,15 +260,27 @@ mock.module("./session-ui-store", () => ({
 }))
 
 // Mock useInputStore
-const inputState = {
+const inputState: Pick<InputState,
+  "pendingComposerRestore" | "pendingInputText" | "pendingInputMode" | "attachedFiles"
+  | "clearAttachedFiles" | "addRestoredAttachment"
+> = {
+  pendingComposerRestore: null,
   pendingInputText: "",
-  pendingInputMode: "normal" as const,
+  pendingInputMode: "replace",
   attachedFiles: [],
   clearAttachedFiles: () => {
     inputState.attachedFiles = []
   },
-  addRestoredAttachment: (attachment: never) => {
-    inputState.attachedFiles = [...inputState.attachedFiles, attachment]
+  addRestoredAttachment: (attachment) => {
+    inputState.attachedFiles = [...inputState.attachedFiles, {
+      id: attachment.url,
+      file: new File([], attachment.filename, { type: attachment.mimeType }),
+      dataUrl: attachment.url,
+      mimeType: attachment.mimeType,
+      filename: attachment.filename,
+      size: 0,
+      source: "server",
+    }]
   },
 }
 
@@ -285,6 +323,7 @@ mock.module("@/stores/useGlobalSessionsStore", () => ({
     getState: () => ({
       activeSessions: globalActiveSessions,
       archivedSessions: globalArchivedSessions,
+      hasLoaded: globalHasLoaded,
       upsertSession: (session: unknown) => {
         globalUpsertedSessions.push(session)
       },
@@ -383,7 +422,9 @@ mock.module("./send-failure-classification", () => ({
 }))
 
 mock.module("@/lib/chatDirectories", () => ({
-  deleteChatDirectory: async () => {},
+  deleteChatDirectory: async (directory: string) => {
+    deletedChatDirectories.push(directory)
+  },
 }))
 
 mock.module("./session-deletion-cleanup", () => ({
@@ -549,6 +590,10 @@ describe("confirmed session removal", () => {
     archiveBatchRequests.length = 0
     archiveBatchResponse = { status: 404, body: { error: 'not found' } }
     beforeControlPlaneMoveResolve = null
+    beforeDirectoryAvailabilityResolve = null
+    controlPlaneMoveErrorsById.clear()
+    globalHasLoaded = true
+    deletedChatDirectories.length = 0
   })
 
   test("does not remove live or persisted state when delete fails", async () => {
@@ -681,6 +726,58 @@ describe("confirmed session removal", () => {
     expect(globalRemovedSessionIds).toEqual(["session-a"])
     expect(replyCalls.filter((call) => call.method === "session.delete").map((call) => call.params.sessionID))
       .toEqual(["session-a", "session-b"])
+  })
+
+  const chatDirectory = "/home/user/.config/openchamber/chats/2026-09-05/session-abc"
+  const chatSession = (id: string, parentID?: string): Session => ({
+    id,
+    slug: id,
+    projectID: "project-chats",
+    directory: chatDirectory,
+    title: id,
+    version: "1",
+    time: { created: 1, updated: 1 },
+    parentID,
+  })
+
+  test("keeps a shared chat directory while another root session still uses it", async () => {
+    const root = chatSession("chat-root")
+    const fork = chatSession("chat-fork")
+    globalActiveSessions = [root, fork]
+    const source = createStore({}, { session: [root, fork] })
+    const { deleteSession, setActionRefs } = await import("./session-actions")
+    setActionRefs(actionSdk, createChildStores([[chatDirectory, source]]), () => chatDirectory)
+
+    expect(await deleteSession("chat-root")).toBe(true)
+    expect(deletedChatDirectories).toEqual([])
+
+    globalActiveSessions = [fork]
+    expect(await deleteSession("chat-fork")).toBe(true)
+    expect(deletedChatDirectories).toEqual([chatDirectory])
+  })
+
+  test("removes the chat directory with its last root even though the root's own subagents share it", async () => {
+    const root = chatSession("chat-root")
+    const subagent = chatSession("chat-subagent", "chat-root")
+    globalActiveSessions = [root, subagent]
+    const source = createStore({}, { session: [root, subagent] })
+    const { deleteSession, setActionRefs } = await import("./session-actions")
+    setActionRefs(actionSdk, createChildStores([[chatDirectory, source]]), () => chatDirectory)
+
+    expect(await deleteSession("chat-root")).toBe(true)
+    expect(deletedChatDirectories).toEqual([chatDirectory])
+  })
+
+  test("keeps the chat directory when the global cache cannot prove it is unused", async () => {
+    const root = chatSession("chat-root")
+    globalActiveSessions = [root]
+    globalHasLoaded = false
+    const source = createStore({}, { session: [root] })
+    const { deleteSession, setActionRefs } = await import("./session-actions")
+    setActionRefs(actionSdk, createChildStores([[chatDirectory, source]]), () => chatDirectory)
+
+    expect(await deleteSession("chat-root")).toBe(true)
+    expect(deletedChatDirectories).toEqual([])
   })
 
   test("does not archive locally until the server returns the archived session", async () => {
@@ -959,6 +1056,10 @@ describe("session restore (unarchive)", () => {
     sessionUpdateResult = {}
     beforeSessionUpdateResolve = null
     beforeControlPlaneMoveResolve = null
+    beforeDirectoryAvailabilityResolve = null
+    controlPlaneMoveErrorsById.clear()
+    globalHasLoaded = true
+    deletedChatDirectories.length = 0
   })
 
   test("does not restore locally until the server returns the restored session", async () => {
@@ -1037,231 +1138,34 @@ describe("session restore (unarchive)", () => {
     expect((globalUpsertedSessions[0] as SessionWithDirectory).directory).toBe(worktreeDirectory)
   })
 
-  test("moves a restored missing-worktree subtree to its matching project directory without changing descendants or cached transcript state", async () => {
+  test("restores a missing-worktree session in place without relocating it", async () => {
     const missingWorktreeDirectory = "/projects/main/.worktrees/deleted-branch"
-    const destinationDirectory = "/projects/main"
-    const rootMessage = {
-      id: "message-root",
-      sessionID: "session-root",
-      role: "user",
-      time: { created: 10 },
-    } as Message
-    const rootPart = { id: "part-root", messageID: rootMessage.id, type: "text", text: "root" } as Part
-    const childMessage = {
-      id: "message-child",
-      sessionID: "session-child",
-      role: "assistant",
-      time: { created: 11 },
-    } as Message
-    const childPart = { id: "part-child", messageID: childMessage.id, type: "text", text: "child" } as Part
-    const rootSession = {
-      id: "session-root",
-      projectID: "project-main",
-      directory: missingWorktreeDirectory,
-      project: { worktree: destinationDirectory },
-      time: { created: 1, archived: 2 },
-    } as SessionWithDirectory
-    const childSession = {
-      id: "session-child",
-      parentID: "session-root",
-      projectID: "project-main",
-      directory: missingWorktreeDirectory,
-      project: { worktree: destinationDirectory },
-      time: { created: 2, archived: 3 },
-    } as SessionWithDirectory
-    globalArchivedSessions.push(rootSession, childSession)
-    openCodeProjects.push({ id: "project-main", worktree: destinationDirectory } as Project)
-    directoryAvailability.set(missingWorktreeDirectory, "missing")
-    sessionUpdateResultsById.set("session-root", {
-      ...rootSession,
-      time: { created: 1, updated: 1, archived: 0 },
-    })
-    sessionUpdateResultsById.set("session-child", {
-      ...childSession,
-      time: { created: 2, updated: 2, archived: 0 },
-    })
-
-    const source = createStore({}, {
-      session: [rootSession, childSession],
-      sessionTotal: 2,
-      message: {
-        "session-root": [rootMessage],
-        "session-child": [childMessage],
-      },
-      part: {
-        [rootMessage.id]: [rootPart],
-        [childMessage.id]: [childPart],
-      },
-    })
-    const destination = createStore({})
-    const { unarchiveSession, setActionRefs } = await import("./session-actions")
-    setActionRefs(
-      mockSdk as unknown as OpencodeClient,
-      createChildStores([[missingWorktreeDirectory, source], [destinationDirectory, destination]]),
-      () => missingWorktreeDirectory,
-    )
-
-    expect(await unarchiveSession("session-root")).toBe(true)
-    expect(replyCalls.filter((call) => call.method === "controlPlane.moveSession")).toEqual([
-      {
-        method: "controlPlane.moveSession",
-        params: {
-          sessionID: "session-root",
-          destination: { directory: destinationDirectory },
-          moveChanges: false,
-        },
-      },
-      {
-        method: "controlPlane.moveSession",
-        params: {
-          sessionID: "session-child",
-          destination: { directory: destinationDirectory },
-          moveChanges: false,
-        },
-      },
-    ])
-    expect(source.getState().session).toEqual([])
-    expect(destination.getState().session.map((session) => ({
-      id: session.id,
-      parentID: (session as SessionWithDirectory).parentID ?? null,
-      directory: (session as SessionWithDirectory).directory ?? null,
-    }))).toEqual([
-      { id: "session-root", parentID: null, directory: destinationDirectory },
-      { id: "session-child", parentID: "session-root", directory: destinationDirectory },
-    ])
-    expect(destination.getState().message["session-root"]?.[0]?.id).toBe(rootMessage.id)
-    expect(destination.getState().message["session-child"]?.[0]?.id).toBe(childMessage.id)
-    expect(destination.getState().part[rootMessage.id]?.[0]?.id).toBe(rootPart.id)
-    expect(destination.getState().part[childMessage.id]?.[0]?.id).toBe(childPart.id)
-    expect(destination.getState().session.every((session) => !session.time?.archived)).toBe(true)
-    expect(registeredSessionDirectories).toEqual([
-      { sessionID: "session-root", directory: destinationDirectory },
-      { sessionID: "session-child", directory: destinationDirectory },
-    ])
-    expect(movedSessionDirectories).toEqual([
-      { sessionID: "session-root", directory: destinationDirectory },
-      { sessionID: "session-child", directory: destinationDirectory },
-    ])
-    expect(globalUpsertedSessions.map((session) => ({
-      id: (session as SessionWithDirectory).id,
-      parentID: (session as SessionWithDirectory).parentID ?? null,
-      directory: (session as SessionWithDirectory).directory ?? null,
-    }))).toEqual([
-      { id: "session-root", parentID: null, directory: destinationDirectory },
-      { id: "session-child", parentID: "session-root", directory: destinationDirectory },
-    ])
-  })
-
-  test("restores missing-worktree descendants from the global cache when their directory store is unavailable", async () => {
-    const missingWorktreeDirectory = "/projects/main/.worktrees/deleted-branch"
-    const destinationDirectory = "/projects/main"
-    const rootSession = {
-      id: "session-root",
-      projectID: "proj_main",
-      directory: missingWorktreeDirectory,
-      project: { worktree: destinationDirectory },
-      time: { created: 1, archived: 2 },
-    } as SessionWithDirectory
-    const childSession = {
-      id: "session-child",
-      parentID: rootSession.id,
-      projectID: "proj_main",
-      directory: missingWorktreeDirectory,
-      project: { worktree: destinationDirectory },
-      time: { created: 2, archived: 3 },
-    } as SessionWithDirectory
-    globalArchivedSessions.push(rootSession, childSession)
-    openCodeProjects.push({ id: "proj_main", worktree: destinationDirectory } as Project)
-    directoryAvailability.set(missingWorktreeDirectory, "missing")
-    sessionUpdateResultsById.set("session-root", { ...rootSession, time: { created: 1, updated: 1, archived: 0 } })
-    sessionUpdateResultsById.set("session-child", { ...childSession, time: { created: 2, updated: 2, archived: 0 } })
-
-    const destination = createStore({})
-    const { unarchiveSession, setActionRefs } = await import("./session-actions")
-    setActionRefs(
-      mockSdk as unknown as OpencodeClient,
-      createChildStores([[destinationDirectory, destination]]),
-      () => missingWorktreeDirectory,
-    )
-
-    expect(await unarchiveSession(rootSession.id)).toBe(true)
-    expect(replyCalls.filter((call) => call.method === "controlPlane.moveSession").map((call) => call.params.sessionID))
-      .toEqual([rootSession.id, childSession.id])
-    expect(destination.getState().session.map((session) => session.id)).toEqual([rootSession.id, childSession.id])
-    expect(destination.getState().session.every((session) => !session.time?.archived)).toBe(true)
-  })
-
-  test("does not publish a missing-worktree move after the runtime changes during the control-plane request", async () => {
-    const missingWorktreeDirectory = "/projects/main/.worktrees/deleted-branch"
-    const destinationDirectory = "/projects/main"
     const session = {
-      id: "session-runtime-switch",
-      projectID: "proj_main",
+      id: "session-root",
+      projectID: "project-main",
       directory: missingWorktreeDirectory,
-      project: { worktree: destinationDirectory },
+      project: { worktree: "/projects/main" },
       time: { created: 1, archived: 2 },
     } as SessionWithDirectory
     globalArchivedSessions.push(session)
-    openCodeProjects.push({ id: "proj_main", worktree: destinationDirectory } as Project)
     directoryAvailability.set(missingWorktreeDirectory, "missing")
-    sessionUpdateResultsById.set(session.id, { ...session, time: { created: 1, updated: 1, archived: 0 } })
-    beforeControlPlaneMoveResolve = () => {
-      runtimeKey = "new-runtime"
-    }
+    sessionUpdateResultsById.set("session-root", {
+      ...session,
+      time: { created: 1, updated: 1, archived: 0 },
+    })
 
-    const destination = createStore({})
+    const store = createStore({})
     const { unarchiveSession, setActionRefs } = await import("./session-actions")
-    setActionRefs(
-      mockSdk as unknown as OpencodeClient,
-      createChildStores([[destinationDirectory, destination]]),
-      () => missingWorktreeDirectory,
-    )
-
-    expect(await unarchiveSession(session.id)).toBe(false)
-    expect(destination.getState().session).toEqual([])
-    expect(registeredSessionDirectories).toEqual([])
-    expect(globalUpsertedSessions).toEqual([])
-  })
-
-  test("re-moves a root left stranded in a missing worktree after a partial restore", async () => {
-    const missingWorktreeDirectory = "/projects/main/.worktrees/deleted-branch"
-    const destinationDirectory = "/projects/main"
-    // A previous restore attempt already unarchived the root (server echo made
-    // it active), then the control-plane move failed, leaving it stranded in the
-    // deleted worktree. The retry must still relocate it, not report a false
-    // success because the root is no longer archived.
-    const strandedRoot = {
-      id: "session-root",
-      projectID: "proj_main",
-      directory: missingWorktreeDirectory,
-      project: { worktree: destinationDirectory },
-      time: { created: 1, archived: 0 },
-    } as SessionWithDirectory
-    globalActiveSessions.push(strandedRoot)
-    openCodeProjects.push({ id: "proj_main", worktree: destinationDirectory } as Project)
-    directoryAvailability.set(missingWorktreeDirectory, "missing")
-    sessionUpdateResultsById.set("session-root", { ...strandedRoot, time: { created: 1, updated: 1, archived: 0 } })
-
-    const destination = createStore({})
-    const { unarchiveSession, setActionRefs } = await import("./session-actions")
-    setActionRefs(
-      mockSdk as unknown as OpencodeClient,
-      createChildStores([[destinationDirectory, destination]]),
-      () => missingWorktreeDirectory,
-    )
+    setActionRefs(mockSdk as unknown as OpencodeClient, createChildStores([[missingWorktreeDirectory, store]]), () => missingWorktreeDirectory)
 
     expect(await unarchiveSession("session-root")).toBe(true)
-    expect(replyCalls.filter((call) => call.method === "controlPlane.moveSession")).toEqual([
-      {
-        method: "controlPlane.moveSession",
-        params: {
-          sessionID: "session-root",
-          destination: { directory: destinationDirectory },
-          moveChanges: false,
-        },
-      },
+    expect(replyCalls.filter((call) => call.method === "controlPlane.moveSession")).toEqual([])
+    expect(store.getState().session).toEqual([])
+    expect(registeredSessionDirectories).toEqual([{ sessionID: "session-root", directory: missingWorktreeDirectory }])
+    expect(movedSessionDirectories).toEqual([])
+    expect(globalUpsertedSessions).toEqual([
+      { ...session, time: { created: 1, updated: 1, archived: 0 } },
     ])
-    expect(destination.getState().session.map((session) => session.id)).toEqual(["session-root"])
   })
 
   test("does not move a restored project session that is not a worktree", async () => {
@@ -2057,6 +1961,197 @@ describe("respondToPermission passes directory", () => {
   })
 })
 
+describe("forkFromMessage composer restore", () => {
+  const sourceSession: Session = {
+    id: "session-a",
+    slug: "source-session",
+    projectID: "project-a",
+    directory: "/test/project",
+    title: "Source session",
+    version: "1",
+    time: { created: 1, updated: 1 },
+  }
+  const forkedSession: Session = { ...sourceSession, id: "session-fork", slug: "forked-session" }
+  const textPart: Part = {
+    id: "part-text",
+    sessionID: sourceSession.id,
+    messageID: "message-fork",
+    type: "text",
+    text: "Replay this prompt",
+  }
+  const filePart: Part = {
+    id: "part-file",
+    sessionID: sourceSession.id,
+    messageID: "message-fork",
+    type: "file",
+    url: "data:image/png;base64,aW1hZ2U=",
+    mime: "image/png",
+    filename: "screenshot.png",
+  }
+  const restoredFile = { url: filePart.url, mimeType: filePart.mime, filename: filePart.filename }
+
+  beforeEach(() => {
+    replyCalls.length = 0
+    selectedSessions.length = 0
+    runtimeKey = "fork-runtime"
+    sessionForkResult = forkedSession
+    sessionForkError = null
+    beforeSessionForkResolve = null
+    inputState.pendingComposerRestore = null
+    inputState.pendingInputText = "Keep the source draft"
+    inputState.pendingInputMode = "append"
+    inputState.attachedFiles = [{
+      id: "source-attachment",
+      file: new File(["source"], "source.txt", { type: "text/plain" }),
+      dataUrl: "data:text/plain;base64,c291cmNl",
+      mimeType: "text/plain",
+      filename: "source.txt",
+      size: 6,
+      source: "local",
+    }]
+  })
+
+  for (const directory of ["/test/project", "/canonical/project"]) {
+    test(`stages the replay for the returned session in ${directory} without changing the source composer`, async () => {
+      sessionForkResult = { ...forkedSession, directory }
+      const source = createStore({}, {
+        session: [sourceSession],
+        part: { "message-fork": [textPart, filePart] },
+      })
+      const sourceInput = { ...inputState }
+      const { forkFromMessage, setActionRefs } = await import("./session-actions")
+      setActionRefs(actionSdk, createChildStores([[sourceSession.directory, source]]), () => "/other/project")
+
+      await forkFromMessage(sourceSession.id, "message-fork")
+
+      expect(replyCalls).toEqual([{
+        method: "session.fork",
+        params: { sessionID: sourceSession.id, messageID: "message-fork", directory: sourceSession.directory },
+      }])
+      expect(inputState.pendingComposerRestore).toEqual({
+        target: { runtimeKey: "fork-runtime", directory, sessionId: forkedSession.id },
+        text: "Replay this prompt",
+        files: [restoredFile],
+      })
+      expect(inputState.pendingInputText).toBe(sourceInput.pendingInputText)
+      expect(inputState.pendingInputMode).toBe(sourceInput.pendingInputMode)
+      expect(inputState.attachedFiles).toBe(sourceInput.attachedFiles)
+      expect(inputState.attachedFiles).toHaveLength(1)
+      expect(selectedSessions).toEqual([{ sessionId: forkedSession.id, directoryHint: directory }])
+      expect(source.getState().session).toEqual([sourceSession, sessionForkResult])
+    })
+  }
+
+  test("uses the returned project worktree when the fork has no directory", async () => {
+    const forkWithProject: Session & { project: { worktree: string } } = {
+      ...forkedSession, directory: "", project: { worktree: "/canonical/worktree" },
+    }
+    sessionForkResult = forkWithProject
+    const source = createStore({}, { session: [sourceSession], part: { "message-fork": [textPart] } })
+    const { forkFromMessage, setActionRefs } = await import("./session-actions")
+    setActionRefs(actionSdk, createChildStores([[sourceSession.directory, source]]), () => sourceSession.directory)
+
+    await forkFromMessage(sourceSession.id, "message-fork")
+
+    expect(inputState.pendingComposerRestore?.target.directory).toBe("/canonical/worktree")
+    expect(selectedSessions).toEqual([{ sessionId: forkedSession.id, directoryHint: "/canonical/worktree" }])
+  })
+
+  test("stages a file-only prompt with empty text without replacing source attachments", async () => {
+    const source = createStore({}, {
+      session: [sourceSession],
+      part: { "message-fork": [filePart] },
+    })
+    const sourceInput = { ...inputState }
+    const { forkFromMessage, setActionRefs } = await import("./session-actions")
+    setActionRefs(actionSdk, createChildStores([[sourceSession.directory, source]]), () => sourceSession.directory)
+
+    await forkFromMessage(sourceSession.id, "message-fork")
+
+    expect(inputState.pendingComposerRestore).toEqual({
+      target: { runtimeKey: "fork-runtime", directory: sourceSession.directory, sessionId: forkedSession.id },
+      text: "",
+      files: [restoredFile],
+    })
+    expect(inputState.pendingInputText).toBe(sourceInput.pendingInputText)
+    expect(inputState.attachedFiles).toBe(sourceInput.attachedFiles)
+    expect(selectedSessions).toEqual([{ sessionId: forkedSession.id, directoryHint: sourceSession.directory }])
+  })
+
+  test("excludes synthetic text and files from the staged replay", async () => {
+    const syntheticFile: Part & { synthetic: boolean } = {
+      ...filePart,
+      id: "part-synthetic-file",
+      url: "file:///test/project/generated.txt",
+      mime: "text/plain",
+      filename: "generated.txt",
+      synthetic: true,
+    }
+    const source = createStore({}, {
+      session: [sourceSession],
+      part: { "message-fork": [
+        { ...textPart, id: "part-synthetic-text", text: "Generated file contents", synthetic: true },
+        textPart,
+        syntheticFile,
+        filePart,
+      ] },
+    })
+    const { forkFromMessage, setActionRefs } = await import("./session-actions")
+    setActionRefs(actionSdk, createChildStores([[sourceSession.directory, source]]), () => sourceSession.directory)
+
+    await forkFromMessage(sourceSession.id, "message-fork")
+
+    expect(inputState.pendingComposerRestore).toEqual({
+      target: { runtimeKey: "fork-runtime", directory: sourceSession.directory, sessionId: forkedSession.id },
+      text: "Replay this prompt",
+      files: [restoredFile],
+    })
+  })
+
+  test("leaves input, selection, and sessions unchanged when the fork fails", async () => {
+    sessionForkError = new Error("fork failed")
+    const source = createStore({}, {
+      session: [sourceSession],
+      part: { "message-fork": [textPart, filePart] },
+    })
+    const sourceState = source.getState()
+    const sourceInput = { ...inputState }
+    const { forkFromMessage, setActionRefs } = await import("./session-actions")
+    setActionRefs(actionSdk, createChildStores([[sourceSession.directory, source]]), () => sourceSession.directory)
+
+    await expect(forkFromMessage(sourceSession.id, "message-fork")).rejects.toThrow("fork failed")
+
+    expect(inputState).toEqual(sourceInput)
+    expect(inputState.attachedFiles).toBe(sourceInput.attachedFiles)
+    expect(selectedSessions).toEqual([])
+    expect(source.getState()).toBe(sourceState)
+  })
+
+  test("does not select, mutate, or stage a fork resolved after the runtime changes", async () => {
+    beforeSessionForkResolve = () => { runtimeKey = "other-runtime" }
+    const source = createStore({}, {
+      session: [sourceSession],
+      part: { "message-fork": [textPart, filePart] },
+    })
+    const sourceState = source.getState()
+    const sourceInput = { ...inputState }
+    const { forkFromMessage, setActionRefs } = await import("./session-actions")
+    setActionRefs(actionSdk, createChildStores([[sourceSession.directory, source]]), () => sourceSession.directory)
+
+    await forkFromMessage(sourceSession.id, "message-fork")
+
+    expect(replyCalls).toEqual([{
+      method: "session.fork",
+      params: { sessionID: sourceSession.id, messageID: "message-fork", directory: sourceSession.directory },
+    }])
+    expect(runtimeKey).toBe("other-runtime")
+    expect(inputState).toEqual(sourceInput)
+    expect(inputState.attachedFiles).toBe(sourceInput.attachedFiles)
+    expect(selectedSessions).toEqual([])
+    expect(source.getState()).toBe(sourceState)
+  })
+})
+
 describe("revertToMessage passes session directory", () => {
   beforeEach(() => {
     replyCalls.length = 0
@@ -2066,7 +2161,7 @@ describe("revertToMessage passes session directory", () => {
     failingRevertSessionIds.clear()
     Object.assign(inputState, {
       pendingInputText: "previous draft",
-      pendingInputMode: "normal" as const,
+      pendingInputMode: "replace",
       attachedFiles: [],
     })
   })

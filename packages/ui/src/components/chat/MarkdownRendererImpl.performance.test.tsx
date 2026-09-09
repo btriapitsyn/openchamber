@@ -383,6 +383,9 @@ describe('MarkdownRenderer DOM mount performance contract', () => {
       expect(table?.classList.contains('min-w-full')).toBe(false);
       expect(table?.classList.contains('w-full')).toBe(false);
       expect(table?.parentElement?.classList.contains('overflow-x-auto')).toBe(true);
+      const wrapper = table?.closest('[data-markdown="table-wrapper"]');
+      expect(wrapper?.classList.contains('w-fit')).toBe(true);
+      expect(wrapper?.classList.contains('max-w-full')).toBe(true);
       expect(cells.length).toBeGreaterThan(0);
       expect(cells.every((cell) => cell.classList.contains('min-w-[120px]'))).toBe(true);
       expect(cells.every((cell) => cell.classList.contains('max-w-[320px]'))).toBe(true);

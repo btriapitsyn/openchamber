@@ -18,7 +18,9 @@ const promptAsyncMock = mock(async (...args: unknown[]) => {
   return next ?? { response: new Response(null, { status: 200 }) };
 });
 
+let pathGetCalls = 0;
 const pathGetMock = mock(async () => {
+  pathGetCalls += 1;
   const next = pathGetResults.shift();
   if (next instanceof Error) throw next;
   return next ?? { data: { directory: '/workspace/project' } };
@@ -58,16 +60,22 @@ mock.module('@/lib/runtime-switch', () => ({
   getRuntimeKey: mock(() => runtimeKey),
 }));
 
+type DirectoryProbeQuery = { path?: string };
+const runtimeFetchCalls: Array<{ path: string; query: DirectoryProbeQuery | undefined }> = [];
+const runtimeFetchResults: Array<Response | Error> = [];
 const fsHomeResponses: Array<Response | Error> = [];
 
 mock.module('@/lib/runtime-fetch', () => ({
-  runtimeFetch: mock(async (input: string | URL | Request) => {
+  runtimeFetch: mock(async (input: string | URL | Request, init?: { query?: DirectoryProbeQuery }) => {
     if (typeof input === 'string' && input.includes('/fs/home')) {
       const next = fsHomeResponses.shift();
       if (next instanceof Error) throw next;
       if (next) return next;
     }
-    return new Response(JSON.stringify([]), {
+    if (typeof input === 'string') runtimeFetchCalls.push({ path: input, query: init?.query });
+    const next = runtimeFetchResults.shift();
+    if (next instanceof Error) throw next;
+    return next ?? new Response(JSON.stringify([]), {
       headers: { 'Content-Type': 'application/json' },
     });
   }),
@@ -84,15 +92,49 @@ beforeEach(() => {
   promptAsyncCalls.length = 0;
   promptAsyncResults.length = 0;
   pathGetResults.length = 0;
+  pathGetCalls = 0;
+  runtimeFetchCalls.length = 0;
+  runtimeFetchResults.length = 0;
   fsHomeResponses.length = 0;
 });
 
 describe('opencodeClient directory availability', () => {
-  test('distinguishes a missing directory from an unavailable path probe', async () => {
-    pathGetResults.push({ error: { code: 'ENOENT', message: 'no such file or directory' } });
+  type ProbeBody = { error: string; reason?: string } | { isDirectory: boolean } | { isFile: boolean; size: number };
+  const json = (status: number, body: ProbeBody): Response => new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  test('stats the directory through the OpenChamber filesystem route, never through OpenCode path resolution', async () => {
+    runtimeFetchResults.push(json(200, { isDirectory: true }));
+    expect(await opencodeClient.getDirectoryAvailability('/private/deleted-worktree')).toBe('available');
+    expect(runtimeFetchCalls).toEqual([{ path: '/api/fs/directory-stat', query: { path: '/private/deleted-worktree' } }]);
+    expect(pathGetCalls).toBe(0);
+  });
+
+  test('distinguishes a missing directory from an unavailable probe', async () => {
+    runtimeFetchResults.push(json(404, { error: 'Directory not found', reason: 'not-found' }));
     expect(await opencodeClient.getDirectoryAvailability('/private/deleted-worktree')).toBe('missing');
 
-    pathGetResults.push(new Error('offline'));
+    runtimeFetchResults.push(json(400, { error: 'Specified path is not a directory', reason: 'not-directory' }));
+    expect(await opencodeClient.getDirectoryAvailability('/private/deleted-worktree')).toBe('missing');
+
+    runtimeFetchResults.push(json(200, { isFile: true, size: 12 }));
+    expect(await opencodeClient.getDirectoryAvailability('/private/deleted-worktree')).toBe('unknown');
+
+    runtimeFetchResults.push(json(404, { error: 'Not Found' }));
+    expect(await opencodeClient.getDirectoryAvailability('/private/deleted-worktree')).toBe('unknown');
+
+    runtimeFetchResults.push(json(500, { error: 'Failed to stat path' }));
+    expect(await opencodeClient.getDirectoryAvailability('/private/deleted-worktree')).toBe('unknown');
+
+    runtimeFetchResults.push(json(403, { error: 'Access to directory denied', reason: 'os-permission' }));
+    expect(await opencodeClient.getDirectoryAvailability('/private/deleted-worktree')).toBe('unknown');
+
+    runtimeFetchResults.push(json(501, { error: 'Unsupported' }));
+    expect(await opencodeClient.getDirectoryAvailability('/private/deleted-worktree')).toBe('unknown');
+
+    runtimeFetchResults.push(new Error('offline'));
     expect(await opencodeClient.getDirectoryAvailability('/private/deleted-worktree')).toBe('unknown');
   });
 });

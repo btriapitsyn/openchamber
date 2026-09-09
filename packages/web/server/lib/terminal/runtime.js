@@ -10,7 +10,7 @@ import {
 import { sanitizeTerminalHistoryChunk } from './history.js';
 import { consumeTerminalThemeQueries, terminalThemeModeReport } from './theme-response.js';
 import { buildTerminalShellLaunch, createTerminalShellResolver, normalizeTerminalShell } from './shells.js';
-import { stripAppImageArgv0Leak, resolveLinuxPtyLaunch } from '../inherited-env.js';
+import { stripAppImageArgv0Leak, resolvePosixPtyLaunch } from '../inherited-env.js';
 
 const MAX_SESSIONS = 20;
 const MAX_HISTORY_BYTES = 512 * 1024;
@@ -19,6 +19,9 @@ const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 const TERMINATION_GRACE_MS = 1000;
 const INTERACTIVE_TERMINAL_MODE = 'interactive';
 const COMMAND_TERMINAL_MODE = 'command';
+// Error code the create/restart routes attach when the requested cwd no longer
+// exists. Mirrored by `TERMINAL_CWD_MISSING_CODE` in packages/ui/src/lib/terminalApi.ts.
+const TERMINAL_CWD_MISSING_CODE = 'TERMINAL_CWD_MISSING';
 const TERMINAL_PURPOSE = Object.freeze({ type: 'terminal' });
 const MAX_PURPOSE_ID_CHARS = 128;
 const OBJECT_TAG = '[object Object]';
@@ -120,15 +123,16 @@ export function createTerminalRuntime({
     for (const executable of resolvedShell.executables) {
       try {
         const env = { ...process.env, PATH: buildAugmentedPath(), TERM: 'xterm-256color', COLORTERM: 'truecolor', COLORFGBG: themeMode === 'light' ? '0;15' : '15;0' };
-        // The daemon's IPC fd is closed inside the PTY. An explicit override is
-        // required because bun-pty also inherits Bun's native process environment.
-        env.NODE_CHANNEL_FD = '';
+        // The daemon's IPC fd is closed inside the PTY; an inherited NODE_CHANNEL_FD
+        // (even an empty one) makes Node CLIs warn about an unparsable IPC channel.
+        delete env.NODE_CHANNEL_FD;
         delete env.BASH_XTRACEFD; delete env.BASH_ENV; delete env.ENV; delete env.ELECTRON_RUN_AS_NODE;
         // AppImage exports ARGV0; zsh would otherwise rewrite argv[0] for every command (#2588).
-        // bun-pty also merges the native OS environ, so wrap with `env -u ARGV0` on Linux.
         stripAppImageArgv0Leak(env);
         const shellLaunch = buildTerminalShellLaunch(executable, { mode, command, loginShell });
-        const launch = resolveLinuxPtyLaunch(shellLaunch.executable, shellLaunch.args);
+        // bun-pty merges the native OS environ back in, so the POSIX launch is
+        // wrapped with `env -u` for the variables deleted above.
+        const launch = resolvePosixPtyLaunch(shellLaunch.executable, shellLaunch.args);
         const options = { name: 'xterm-256color', cwd, cols, rows, env };
         if (process.platform === 'win32') options.useConpty = true;
         return { process: await provider.spawn(launch.executable, launch.args, options), backend: provider.backend, shell: resolvedShell.id, loginShell };
@@ -181,6 +185,10 @@ export function createTerminalRuntime({
 
   const snapshot = (session) => ({
     t: 'snapshot', v: 3, s: session.id, q: session.sequence, history: session.history,
+    // The PTY size the history was drawn for: a client replays history at this
+    // size before fitting its own viewport, so shell output wrapped for one
+    // width never gets re-laid-out at another.
+    cols: session.cols, rows: session.rows,
     status: session.status, exitCode: session.exitCode, signal: session.signal,
     mode: session.mode ?? INTERACTIVE_TERMINAL_MODE, purpose: getSessionPurpose(session),
     runtime, ptyBackend: session.backend,
@@ -235,11 +243,18 @@ export function createTerminalRuntime({
     ptyProcess.onExit(({ exitCode, signal }) => { session.eventQueue.push({ type: 'exit', process: ptyProcess, exitCode, signal }); drainEvents(session); });
   };
 
+  // A working directory that no longer exists (a deleted worktree) is the one
+  // rejection the client can recover from by moving the session to its
+  // project, so the response names it. Every other rejection stays generic.
+  const invalidWorkingDirectory = (code) => Object.assign(new Error('Invalid working directory'), code ? { code } : {});
   const validateCwd = async (cwd) => {
     if (typeof cwd !== 'string' || !cwd.trim()) throw new Error('cwd is required');
-    const stats = await fs.promises.stat(cwd).catch(() => null);
-    if (!stats?.isDirectory()) throw new Error('Invalid working directory');
+    let stats;
+    try { stats = await fs.promises.stat(cwd); }
+    catch (error) { throw invalidWorkingDirectory(error?.code === 'ENOENT' || error?.code === 'ENOTDIR' ? TERMINAL_CWD_MISSING_CODE : undefined); }
+    if (!stats?.isDirectory()) throw invalidWorkingDirectory();
   };
+  const errorBody = (error, fallback) => ({ error: error?.message || fallback, ...(typeof error?.code === 'string' ? { code: error.code } : {}) });
 
   const applyAppearance = (session, { themeMode, terminalBackground, terminalForeground }) => {
     const previous = [session.themeMode, session.terminalBackground, session.terminalForeground];
@@ -461,7 +476,7 @@ export function createTerminalRuntime({
         purpose: getSessionPurpose(session),
       });
     }
-    catch (error) { res.status(error?.message === 'Maximum terminal sessions reached' ? 429 : 400).json({ error: error?.message || 'Failed to create terminal session' }); }
+    catch (error) { res.status(error?.message === 'Maximum terminal sessions reached' ? 429 : 400).json(errorBody(error, 'Failed to create terminal session')); }
   });
   app.post('/api/terminal/:sessionId/resize', (req, res) => {
     const session = sessions.get(req.params.sessionId);
@@ -505,7 +520,7 @@ export function createTerminalRuntime({
     try {
       await restart;
       res.json({ sessionId: session.id, cols, rows, status: session.status });
-    } catch (error) { res.status(400).json({ error: error?.message || 'Failed to restart terminal' }); }
+    } catch (error) { res.status(400).json(errorBody(error, 'Failed to restart terminal')); }
     finally { if (pendingSessionRestarts.get(session.id) === restart) pendingSessionRestarts.delete(session.id); }
   });
   app.delete('/api/terminal/:sessionId', async (req, res) => {

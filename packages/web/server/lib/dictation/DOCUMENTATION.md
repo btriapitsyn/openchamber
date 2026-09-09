@@ -82,9 +82,11 @@ funasrWebsocket?: { url, apiKey, protocol?: 'python' | 'cpp-2pass' | 'cpp-offlin
 
 The Voice settings protocol selector must match the running FunASR server;
 it does not change or detect the upstream implementation. The non-secret
-`sttFunasrProtocol` preference follows the shared settings save/load and
-runtime-switch paths. A complete snapshot without it restores `python`;
-an unrelated partial update preserves the selected value. The API key stays
+`sttFunasrProtocol` instance setting follows the registry-owned save/load and
+runtime-switch paths. The store starts with `python`; a snapshot that omits
+or rejects the field leaves the current selection unchanged, including when
+switching to a server that does not expose it. The protocol stays beside the
+endpoint in `settings.json`, not per-surface profile preferences. The API key stays
 in client-local storage and is sent only with the dictation start options.
 
 ## Segmentation

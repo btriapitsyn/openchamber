@@ -3,7 +3,7 @@
  * Replaces the action methods from the old useSessionStore.
  */
 
-import type { OpencodeClient, Session, Message, Part } from "@opencode-ai/sdk/v2/client"
+import type { FilePart, OpencodeClient, Session, Message, Part } from "@opencode-ai/sdk/v2/client"
 import { Binary } from "./binary"
 import { useSessionUIStore } from "./session-ui-store"
 import { useInputStore } from "./input-store"
@@ -43,6 +43,7 @@ import { normalizePath } from "@/lib/pathNormalization"
 import { mergeMessages } from "./optimistic"
 import { messagesBefore, messagesFrom } from "./message-ordering"
 import { deleteChatDirectory } from "@/lib/chatDirectories"
+import { createChatDraftIdentity } from "@/lib/chatDraftPersistence"
 
 const MESSAGE_REFETCH_LIMIT = 100
 const SEND_CONFIRMATION_REFETCH_LIMIT = 30
@@ -1144,10 +1145,45 @@ function finalizeConfirmedSessionDeletion(
   }
 }
 
-async function cleanupDeletedChatDirectory(directory: string | undefined, deleteDirectory: boolean): Promise<void> {
-  if (!directory || !deleteDirectory) return
+type ChatDirectoryCleanupPlan = {
+  directory: string | undefined
+  /** Only a root session owns its managed chat directory. */
+  rootDeleted: boolean
+  /** The deleted session and the descendants the server cascade-deletes with it. */
+  cascadeIds: ReadonlySet<string>
+}
+
+function planChatDirectoryCleanup(sessionId: string, snapshot: Session | null, directory: string | undefined): ChatDirectoryCleanupPlan {
+  const global = useGlobalSessionsStore.getState()
+  return {
+    directory,
+    rootDeleted: Boolean(snapshot && snapshot.parentID == null),
+    cascadeIds: computeSubtreeIds([...global.activeSessions, ...global.archivedSessions], sessionId),
+  }
+}
+
+/**
+ * A managed chat directory is shared by every fork, side thread, and subagent
+ * of the chat that created it, and OpenCode fails every prompt in a session
+ * whose directory is gone. The directory is therefore removed only once no
+ * known session outside the deleted subtree still resolves to it. An unloaded
+ * global cache cannot prove that, so it keeps the directory: a leaked scratch
+ * directory is recoverable, a stranded session is not.
+ */
+function isChatDirectoryStillReferenced(directory: string, excludedIds: ReadonlySet<string>): boolean {
+  const global = useGlobalSessionsStore.getState()
+  if (!global.hasLoaded) return true
+  const normalized = normalizePath(directory)
+  return [...global.activeSessions, ...global.archivedSessions].some((session) => (
+    !excludedIds.has(session.id) && resolveGlobalSessionDirectory(session) === normalized
+  ))
+}
+
+async function cleanupDeletedChatDirectory(plan: ChatDirectoryCleanupPlan): Promise<void> {
+  if (!plan.directory || !plan.rootDeleted) return
+  if (isChatDirectoryStillReferenced(plan.directory, plan.cascadeIds)) return
   try {
-    await deleteChatDirectory(directory)
+    await deleteChatDirectory(plan.directory)
   } catch (error) {
     console.warn("[session-actions] deleted chat directory cleanup failed", error)
   }
@@ -1181,8 +1217,7 @@ export async function deleteSession(sessionId: string, options?: DeleteSessionOp
   const expectedRuntimeKey = options?.expectedRuntimeKey ?? getRuntimeKey()
   if (isStaleRuntime(expectedRuntimeKey)) return false
   const sessionDirectory = getSessionDirectory(sessionId)
-  const sessionSnapshot = getGlobalSessionSnapshot(sessionId)
-  const deleteManagedDirectory = Boolean(sessionSnapshot && sessionSnapshot.parentID == null)
+  const chatDirectoryCleanup = planChatDirectoryCleanup(sessionId, getGlobalSessionSnapshot(sessionId), sessionDirectory)
   try {
     await cleanupReviewMetadataBeforeDelete(sessionId, sessionDirectory, expectedRuntimeKey)
     if (isStaleRuntime(expectedRuntimeKey)) return false
@@ -1192,7 +1227,7 @@ export async function deleteSession(sessionId: string, options?: DeleteSessionOp
       throw new Error("session.delete failed: server did not confirm deletion")
     }
     finalizeConfirmedSessionDeletion(sessionId, sessionDirectory, expectedRuntimeKey)
-    await cleanupDeletedChatDirectory(sessionDirectory, deleteManagedDirectory)
+    await cleanupDeletedChatDirectory(chatDirectoryCleanup)
     return true
   } catch (error) {
     console.error("[session-actions] deleteSession failed", error)
@@ -1202,7 +1237,7 @@ export async function deleteSession(sessionId: string, options?: DeleteSessionOp
     if ((error as { status?: number })?.status === 404) {
       if (isStaleRuntime(expectedRuntimeKey)) return false
       finalizeConfirmedSessionDeletion(sessionId, sessionDirectory, expectedRuntimeKey)
-      await cleanupDeletedChatDirectory(sessionDirectory, deleteManagedDirectory)
+      await cleanupDeletedChatDirectory(chatDirectoryCleanup)
       return true
     }
     return false
@@ -1216,8 +1251,7 @@ export async function deleteSessionInDirectory(
   expectedRuntimeKey = getRuntimeKey(),
 ): Promise<boolean> {
   if (isStaleRuntime(expectedRuntimeKey)) return false
-  const sessionSnapshot = getGlobalSessionSnapshot(sessionId)
-  const deleteManagedDirectory = Boolean(sessionSnapshot && sessionSnapshot.parentID == null)
+  const chatDirectoryCleanup = planChatDirectoryCleanup(sessionId, getGlobalSessionSnapshot(sessionId), directory)
   try {
     await cleanupReviewMetadataBeforeDelete(sessionId, directory, expectedRuntimeKey)
     if (isStaleRuntime(expectedRuntimeKey)) return false
@@ -1227,14 +1261,14 @@ export async function deleteSessionInDirectory(
       throw new Error("session.delete failed: server did not confirm deletion")
     }
     finalizeConfirmedSessionDeletion(sessionId, directory, expectedRuntimeKey)
-    await cleanupDeletedChatDirectory(directory, deleteManagedDirectory)
+    await cleanupDeletedChatDirectory(chatDirectoryCleanup)
     return true
   } catch (error) {
     console.error("[session-actions] deleteSessionInDirectory failed", error)
     if ((error as { status?: number })?.status === 404) {
       if (isStaleRuntime(expectedRuntimeKey)) return false
       finalizeConfirmedSessionDeletion(sessionId, directory, expectedRuntimeKey)
-      await cleanupDeletedChatDirectory(directory, deleteManagedDirectory)
+      await cleanupDeletedChatDirectory(chatDirectoryCleanup)
       return true
     }
     return false
@@ -1498,65 +1532,6 @@ function commitArchivedSessions(sessions: Session[], directory: string): void {
  */
 const UNARCHIVED_TIMESTAMP = 0
 
-async function getProjectPrimaryDirectory(projectID?: string): Promise<string | null> {
-  if (!projectID) return null
-
-  try {
-    const result = await sdk().project.list()
-    const projects = assertSdkData(result, "project.list")
-    const projectDirectory = projects.find((candidate) => candidate.id === projectID)?.worktree?.trim()
-    return projectDirectory ? normalizePath(projectDirectory) ?? projectDirectory : null
-  } catch {
-    return null
-  }
-}
-
-type MissingWorktreeRestore = { sourceDirectory: string; destinationDirectory: string }
-
-async function resolveMissingWorktreeRestore(
-  session: Session & { project?: { worktree?: string | null } | null },
-): Promise<MissingWorktreeRestore | null> {
-  const ownedDirectory = resolveSessionOwnedDirectory(session)
-  const projectWorktree = session.project?.worktree?.trim()
-  if (!ownedDirectory || !projectWorktree) return null
-
-  let availability: Awaited<ReturnType<typeof opencodeClient.getDirectoryAvailability>>
-  try {
-    availability = await opencodeClient.getDirectoryAvailability(ownedDirectory)
-  } catch {
-    return null
-  }
-  if (availability !== "missing") return null
-
-  const projectDirectory = await getProjectPrimaryDirectory(session.projectID)
-  if (!projectDirectory || projectDirectory === ownedDirectory) return null
-  return { sourceDirectory: ownedDirectory, destinationDirectory: projectDirectory }
-}
-
-function getRestoreSubtree(rootSession: Session, sourceDirectory: string): Array<{ session: Session; sourceDirectory: string }> {
-  const global = useGlobalSessionsStore.getState()
-  const sessionsById = new Map<string, Session>()
-
-  for (const session of [...global.activeSessions, ...global.archivedSessions]) {
-    const current = sessionsById.get(session.id)
-    if (!current || Boolean(session.time?.archived)) sessionsById.set(session.id, session)
-  }
-  sessionsById.set(rootSession.id, rootSession)
-
-  return [...computeSubtreeIds([...sessionsById.values()], rootSession.id)]
-    .map((id) => sessionsById.get(id))
-    .filter((session): session is Session => Boolean(session))
-    .map((session) => ({ session, ownedDirectory: resolveSessionOwnedDirectory(session) }))
-    // Keep a node while it is still archived or still stranded in the
-    // confirmed-missing worktree. The second clause matters on retry: a prior
-    // attempt may have already unarchived the root (server echo made it active)
-    // but failed to move it, so filtering on `archived` alone would drop the
-    // root and report a false success while it stays in the deleted worktree.
-    .filter((entry) => Boolean(entry.session.time?.archived) || entry.ownedDirectory === sourceDirectory)
-    .map((entry) => (entry.ownedDirectory ? { session: entry.session, sourceDirectory: entry.ownedDirectory } : null))
-    .filter((entry): entry is { session: Session; sourceDirectory: string } => entry !== null)
-}
-
 /**
  * Restore one archived session back to the active list.
  *
@@ -1569,34 +1544,8 @@ function getRestoreSubtree(rootSession: Session, sourceDirectory: string): Array
  */
 export async function unarchiveSession(sessionId: string, expectedRuntimeKey = getRuntimeKey()): Promise<boolean> {
   if (isStaleRuntime(expectedRuntimeKey)) return false
-  const globalSession = getGlobalSessionSnapshot(sessionId)
   const sessionDirectory = getSessionDirectory(sessionId)
   try {
-    const restore = globalSession
-      ? await resolveMissingWorktreeRestore(globalSession)
-      : null
-    if (isStaleRuntime(expectedRuntimeKey)) return false
-
-    if (globalSession && restore) {
-      for (const { session, sourceDirectory } of getRestoreSubtree(globalSession, restore.sourceDirectory)) {
-        const restored = await opencodeClient.updateSession(
-          session.id,
-          { time: { archived: UNARCHIVED_TIMESTAMP } },
-          sourceDirectory,
-        )
-        if (isStaleRuntime(expectedRuntimeKey)) return false
-        if (!restored) {
-          throw new Error("session.update failed: server did not return the restored session")
-        }
-        if (restored.time?.archived) {
-          throw new Error("session.update failed: server kept the session archived")
-        }
-        await moveSessionToDirectory(restored, sourceDirectory, restore.destinationDirectory, false, expectedRuntimeKey)
-        if (isStaleRuntime(expectedRuntimeKey)) return false
-      }
-      return true
-    }
-
     const restored = await opencodeClient.updateSession(sessionId, { time: { archived: UNARCHIVED_TIMESTAMP } }, sessionDirectory)
     if (isStaleRuntime(expectedRuntimeKey)) return false
     if (!restored) {
@@ -1652,9 +1601,15 @@ export async function unarchiveSessions(
   return { restoredIds, failedIds }
 }
 
-export async function updateSessionTitle(sessionId: string, title: string): Promise<void> {
-  const sessionDirectory = getSessionDirectory(sessionId)
+export async function updateSessionTitle(
+  sessionId: string,
+  title: string,
+  options?: { directory?: string | null; expectedRuntimeKey?: string },
+): Promise<void> {
+  if (isStaleRuntime(options?.expectedRuntimeKey)) throw new Error("runtime changed")
+  const sessionDirectory = options?.directory ?? getSessionDirectory(sessionId)
   const session = await opencodeClient.updateSession(sessionId, { title }, sessionDirectory)
+  if (isStaleRuntime(options?.expectedRuntimeKey)) throw new Error("runtime changed")
   useGlobalSessionsStore.getState().upsertSession(session)
   mirrorSessionIntoLiveStores(session, sessionDirectory)
 }
@@ -2477,9 +2432,10 @@ export async function unrevertSession(sessionId: string): Promise<void> {
  * 1. Extract text from the message for input restoration
  * 2. Call the runtime fork endpoint
  * 3. Insert the new session into the child store (so sidebar updates immediately)
- * 4. Switch to new session and set pending input text
+ * 4. Switch to the new session and stage its composer replay
  */
 export async function forkFromMessage(sessionId: string, messageId: string): Promise<void> {
+  const expectedRuntimeKey = getRuntimeKey()
   const { store, directory } = dirStoreForSession(sessionId)
   const state = store.getState()
 
@@ -2494,9 +2450,12 @@ export async function forkFromMessage(sessionId: string, messageId: string): Pro
     .map((p: Part) => ((p as Record<string, unknown>).text as string) || ((p as Record<string, unknown>).content as string) || "")
     .join("\n")
     .trim()
-  const fileParts = parts.filter((p) => p.type === "file" && !isSyntheticPart(p)) as Array<Record<string, unknown>>
+  const fileParts = parts.filter((part): part is FilePart => part.type === "file" && !isSyntheticPart(part))
 
   const forkedSession = await opencodeClient.forkSession(sessionId, messageId, directory)
+  if (isStaleRuntime(expectedRuntimeKey)) return
+  const target = createChatDraftIdentity(expectedRuntimeKey, resolveSessionOwnedDirectory(forkedSession) ?? directory, forkedSession.id)
+  if (!target) throw new Error("Forked session has no composer directory")
 
   // Insert new session into child store so sidebar updates immediately
   const current = store.getState()
@@ -2508,22 +2467,24 @@ export async function forkFromMessage(sessionId: string, messageId: string): Pro
   }
 
   // Switch to new session
-  useSessionUIStore.getState().setCurrentSession(forkedSession.id)
+  useSessionUIStore.getState().setCurrentSession(forkedSession.id, target.directory)
 
-  // Restore forked message text and file attachments to input
-  if (messageText) {
-    useInputStore.setState({
-      pendingInputText: messageText,
-      pendingInputMode: "replace" as const,
-    })
-  }
-  // Clear existing attachments and restore file parts from the forked message.
-  restoreFilePartsToInput(fileParts)
+  // Navigation is deferred in the chat column. Leave the source composer alone
+  // until the rendered draft identity matches the fork, including for file-only prompts.
+  useInputStore.setState({
+    pendingComposerRestore: {
+      target,
+      text: messageText,
+      files: fileParts.filter((part) => part.url).map((part) => ({
+        url: part.url,
+        mimeType: part.mime,
+        filename: part.filename ?? "attachment",
+      })),
+    },
+  })
   // The forked session is a fresh draft target, so the attached context of the
   // forked message follows the text into its composer.
-  if (directory) {
-    restoreContextPartsToInput(parts, { directory, sessionKey: forkedSession.id })
-  }
+  restoreContextPartsToInput(parts, { directory: target.directory, sessionKey: forkedSession.id })
 }
 
 export async function fetchMessagesForSession(sessionID: string, directory?: string | null): Promise<void> {

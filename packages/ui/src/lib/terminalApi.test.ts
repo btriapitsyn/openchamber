@@ -2,7 +2,8 @@ import { describe, expect, mock, test } from 'bun:test';
 import type { TerminalSessionPurpose, TerminalStreamEvent } from './api/types';
 import type { RelayTunnelWebSocket } from './relay/tunnel-client';
 
-mock.module('./runtime-fetch', () => ({ runtimeFetch: async () => new Response(null, { status: 500 }) }));
+let nextFetchResponse = (): Response => new Response(null, { status: 500 });
+mock.module('./runtime-fetch', () => ({ runtimeFetch: async () => nextFetchResponse() }));
 mock.module('./runtime-url', () => ({ getRuntimeUrlResolver: () => ({ websocket: () => 'ws://example.test/terminal' }) }));
 mock.module('./runtime-auth', () => ({
   clearRuntimeUrlAuthToken: () => undefined,
@@ -10,7 +11,7 @@ mock.module('./runtime-auth', () => ({
 }));
 mock.module('./relay/runtime-socket', () => ({ openRuntimeWebSocket: () => { throw new Error('not used in tests'); } }));
 
-const { parseTerminalSession, parseTerminalSessionPurpose, TerminalTransport } = await import('./terminalApi');
+const { createTerminalSession, isTerminalCwdMissingError, parseTerminalSession, parseTerminalSessionPurpose, TerminalRequestError, TerminalTransport } = await import('./terminalApi');
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -21,6 +22,8 @@ type WireMessage = {
   v?: number;
   d?: string;
   r?: string;
+  cols?: number;
+  rows?: number;
   history?: string;
   status?: TerminalStreamEvent['status'];
   exitCode?: number;
@@ -101,6 +104,52 @@ describe('terminal transport', () => {
       status: 'running',
       purpose: { type: 'project-action', actionId: 'build' },
     })).toBeNull();
+  });
+
+  test('surfaces the server error code so a missing working directory is recoverable', async () => {
+    const options = { cwd: '/repo/.worktrees/gone', cols: 80, rows: 24 };
+    nextFetchResponse = () => new Response(JSON.stringify({ error: 'Invalid working directory', code: 'TERMINAL_CWD_MISSING' }), { status: 400, headers: { 'content-type': 'application/json' } });
+    try {
+      await expect(createTerminalSession(options)).rejects.toThrow(TerminalRequestError);
+      await expect(createTerminalSession(options)).rejects.toThrow('Invalid working directory');
+      expect(await createTerminalSession(options).then(() => false, isTerminalCwdMissingError)).toBe(true);
+
+      nextFetchResponse = () => new Response(JSON.stringify({ error: 'Invalid working directory' }), { status: 400, headers: { 'content-type': 'application/json' } });
+      await expect(createTerminalSession(options)).rejects.toThrow(TerminalRequestError);
+      expect(await createTerminalSession(options).then(() => false, isTerminalCwdMissingError)).toBe(false);
+    } finally {
+      nextFetchResponse = () => new Response(null, { status: 500 });
+    }
+  });
+
+  test('carries the PTY size through snapshots, projection replays, and accepted resizes', async () => {
+    const socket = new FakeSocket();
+    const transport = new TerminalTransport({ refreshAuth: async () => '', openSocket: () => socket });
+    const sizes: Array<[number | undefined, number | undefined]> = [];
+    transport.subscribe('term-1', { onEvent: (event) => { if (event.type === 'snapshot') sizes.push([event.cols, event.rows]); } });
+    await tick();
+    socket.open();
+    await tick();
+
+    socket.emit({ t: 'snapshot', v: 3, s: 'term-1', q: 1, history: 'prompt', status: 'running', cols: 94, rows: 56 });
+    await tick();
+    expect(sizes).toEqual([[94, 56]]);
+
+    const lateSizes: Array<[number | undefined, number | undefined]> = [];
+    transport.subscribe('term-1', { onEvent: (event) => { if (event.type === 'snapshot') lateSizes.push([event.cols, event.rows]); } });
+    expect(lateSizes).toEqual([[94, 56]]);
+
+    transport.noteResize('term-1', 80, 24);
+    const afterResize: Array<[number | undefined, number | undefined]> = [];
+    transport.subscribe('term-1', { onEvent: (event) => { if (event.type === 'snapshot') afterResize.push([event.cols, event.rows]); } });
+    expect(afterResize).toEqual([[80, 24]]);
+
+    socket.emit({ t: 'snapshot', v: 3, s: 'term-2', q: 0, history: '', status: 'running' });
+    const legacy: Array<[number | undefined, number | undefined]> = [];
+    transport.subscribe('term-2', { onEvent: (event) => { if (event.type === 'snapshot') legacy.push([event.cols, event.rows]); } });
+    await tick();
+    expect(legacy).toEqual([]);
+    transport.dispose();
   });
 
   test('hydrates simultaneous subscribers and rejects duplicate sequences', async () => {

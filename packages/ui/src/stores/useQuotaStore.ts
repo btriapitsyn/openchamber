@@ -3,10 +3,9 @@ import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import type { ProviderResult, QuotaProviderId } from '@/types';
 import { QUOTA_PROVIDERS } from '@/lib/quota';
-import { isVSCodeRuntime } from '@/lib/desktop';
-import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
+import type { DesktopSettings } from '@/lib/desktop';
 import { getDefaultModels } from '@/lib/quota/model-families';
-import { updateDesktopSettings } from '@/lib/persistence';
+import { loadDesktopSettings, updateDesktopSettings } from '@/lib/persistence';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { getRuntimeKey, isTransientRuntimeKey } from '@/lib/runtime-switch';
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -65,45 +64,22 @@ interface QuotaStore extends QuotaSettingsState {
   resetForRuntimeSwitch: () => void;
 }
 
-const parseSettings = (data: Record<string, unknown> | null): QuotaSettingsState => {
+const parseSettings = (data: DesktopSettings): QuotaSettingsState => {
   const allProviderIds = QUOTA_PROVIDERS.map((provider) => provider.id);
-  const displayMode = data?.usageDisplayMode === 'remaining' ? 'remaining' : 'usage';
-  const rawDropdownProviders = Array.isArray(data?.usageDropdownProviders)
-    ? data?.usageDropdownProviders
-    : null;
-  const dropdownProviderIds = rawDropdownProviders
-    ? rawDropdownProviders.filter((entry): entry is QuotaProviderId =>
-        typeof entry === 'string' && allProviderIds.includes(entry as QuotaProviderId)
+  const displayMode = data.usageDisplayMode === 'remaining' ? 'remaining' : 'usage';
+  const dropdownProviderIds = data.usageDropdownProviders
+    ? data.usageDropdownProviders.filter((entry): entry is QuotaProviderId =>
+        allProviderIds.some((id) => id === entry)
       )
     : allProviderIds;
-
-  // Parse selected models (providerId -> array of model names)
-  const selectedModels: Record<string, string[]> = {};
-  const rawSelectedModels = data?.usageSelectedModels;
-  if (rawSelectedModels && typeof rawSelectedModels === 'object') {
-    for (const [providerId, models] of Object.entries(rawSelectedModels)) {
-      if (Array.isArray(models)) {
-        selectedModels[providerId] = models.filter((m): m is string => typeof m === 'string');
-      }
-    }
-  }
-
-  // Parse expanded families (inverted collapsed logic for header dropdown)
-  const expandedFamilies: Record<string, string[]> = {};
-  const rawExpandedFamilies = data?.usageExpandedFamilies;
-  if (rawExpandedFamilies && typeof rawExpandedFamilies === 'object') {
-    for (const [providerId, families] of Object.entries(rawExpandedFamilies)) {
-      if (Array.isArray(families)) {
-        expandedFamilies[providerId] = families.filter((f): f is string => typeof f === 'string');
-      }
-    }
-  }
 
   return {
     displayMode,
     dropdownProviderIds,
-    selectedModels,
-    expandedFamilies,
+    // Map of providerId -> selected model names
+    selectedModels: data.usageSelectedModels ?? {},
+    // Expanded families (inverted collapsed logic for header dropdown)
+    expandedFamilies: data.usageExpandedFamilies ?? {},
   };
 };
 
@@ -115,29 +91,8 @@ const defaultQuotaSettings = (): QuotaSettingsState => ({
 });
 
 const loadSettingsFromRuntime = async (): Promise<QuotaSettingsState> => {
-  const runtimeSettings = getRegisteredRuntimeAPIs()?.settings;
-  if (runtimeSettings) {
-    try {
-      const result = await runtimeSettings.load();
-      const settings = result?.settings as Record<string, unknown> | undefined;
-      return parseSettings(settings ?? null);
-    } catch {
-      // fall through
-    }
-  }
-
-  if (!isVSCodeRuntime()) {
-    const response = await runtimeFetch('/api/config/settings', {
-      method: 'GET',
-      headers: { Accept: 'application/json' }
-    });
-    if (response.ok) {
-      const data = await response.json().catch(() => null);
-      return parseSettings(data as Record<string, unknown> | null);
-    }
-  }
-
-  return defaultQuotaSettings();
+  const settings = await loadDesktopSettings();
+  return settings ? parseSettings(settings) : defaultQuotaSettings();
 };
 
 export const useQuotaStore = create<QuotaStore>()(

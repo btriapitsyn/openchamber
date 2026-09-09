@@ -210,7 +210,10 @@ mock.module('@/lib/runtime-fetch', () => ({
 }));
 
 mock.module('@/lib/persistence', () => ({
-  updateDesktopSettings: mock(async () => undefined),
+  updateDesktopSettings: mock(async () => ({ ok: true })),
+  // The store reads the shared document through this; an empty document
+  // keeps every OpenChamber default unset, like the settings route used to.
+  loadDesktopSettings: mock(async () => ({})),
 }));
 
 mock.module('@/lib/startupTrace', () => ({

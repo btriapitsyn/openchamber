@@ -1,6 +1,5 @@
 import type { WorktreeMetadata } from '@/types/worktree';
-import type { DraftStarterRef } from '@/lib/draftStarters';
-import type { InputHistoryScope } from '@/lib/inputHistoryScope';
+import type { DesktopSettings } from '@/lib/settings/registry';
 
 type RuntimePlatform = 'web' | 'desktop' | 'vscode';
 
@@ -45,6 +44,9 @@ export interface TerminalStreamEvent {
   sequence?: number;
   data?: string;
   replayData?: string;
+  /** PTY size the snapshot history was drawn for; only `snapshot` events carry it. */
+  cols?: number;
+  rows?: number;
   status?: 'running' | 'exited' | 'error';
   exitCode?: number;
   signal?: number | null;
@@ -407,6 +409,8 @@ export interface GitWorktreeInfo {
   name: string;
   branch: string;
   path: string;
+  /** git still registers the worktree, but its directory is gone (deleted outside git). */
+  prunable?: boolean;
 }
 
 export interface GitWorktreeValidationError {
@@ -695,79 +699,11 @@ export interface ProjectEntry {
   sidebarCollapsed?: boolean;
 }
 
-export interface SettingsPayload {
-  themeId?: string;
-  useSystemTheme?: boolean;
-  themeVariant?: 'light' | 'dark';
-  lightThemeId?: string;
-  darkThemeId?: string;
-  lastDirectory?: string;
-  homeDirectory?: string;
-  opencodeBinary?: string;
-  projects?: ProjectEntry[];
-  activeProjectId?: string;
-  sidebarProjectDisplayMode?: 'all' | 'single';
-  sidebarSessionGroupingMode?: 'by-worktree' | 'flat';
-  sidebarProjectSortOrder?: 'manual' | 'a-z' | 'z-a' | 'date-added' | 'recent';
-  sidebarShowRecentSection?: boolean;
-  securityScopedBookmarks?: string[];
-  pinnedDirectories?: string[];
-  showReasoningTraces?: boolean;
-  collapsibleThinkingBlocks?: boolean;
-  showDeletionDialog?: boolean;
-  nativeNotificationsEnabled?: boolean;
-  notificationMode?: 'always' | 'hidden-only';
-  autoDeleteEnabled?: boolean;
-  autoSaveEnabled?: boolean;
-  autoDeleteAfterDays?: number;
-  sessionRetentionAction?: 'archive' | 'delete';
-  followUpBehavior?: 'steer' | 'queue';
-  queueModeEnabled?: boolean;
-  inputHistoryScope?: InputHistoryScope;
-  inputHistoryLimit?: number;
-  gitmojiEnabled?: boolean;
-  inputSpellcheckEnabled?: boolean;
-  enterToSend?: boolean;
-  enterToSendConfigured?: boolean;
-  showOpenCodeUpdateNotifications?: boolean;
-  openCodeUpdateToastDismissedVersion?: string;
-  showToolFileIcons?: boolean;
-  codeBlockLineWrap?: boolean;
-  showTurnChangedFiles?: boolean;
-  showExpandedBashTools?: boolean;
-  showExpandedEditTools?: boolean;
-  chatRenderMode?: 'sorted' | 'live';
-  messageStreamTransport?: 'auto' | 'ws' | 'sse';
-  activityRenderMode?: 'collapsed' | 'summary';
-  mermaidRenderingMode?: 'svg' | 'ascii';
-  showSplitAssistantMessageActions?: boolean;
-  fontSize?: number;
-  terminalFontSize?: number;
-  terminalShell?: TerminalShell;
-  terminalLoginShells?: TerminalShell[];
-  editorFontSize?: number;
-  uiFont?: string;
-  monoFont?: string;
-  padding?: number;
-  cornerRadius?: number;
-  inputBarOffset?: number;
-  shortcutOverrides?: Record<string, string>;
-  diffLayoutPreference?: 'dynamic' | 'inline' | 'side-by-side';
-  gitChangesViewMode?: 'flat' | 'tree';
-  toolJsonViewMode?: 'summary' | 'formatted' | 'raw';
-  directoryShowHidden?: boolean;
-  filesViewShowGitignored?: boolean;
-  openInAppId?: string;
-  gitProviderId?: string;
-  gitModelId?: string;
-  pwaAppName?: string;
-  mobileKeyboardMode?: 'native' | 'resize-content';
-  draftStarters?: DraftStarterRef[];
-  draftStartersVisible?: boolean;
-  draftStartersCraftGoalAdded?: boolean;
-
-  [key: string]: unknown;
-}
+/**
+ * The settings document on the wire. Defined once in the settings registry;
+ * this alias keeps the runtime `SettingsAPI` contract readable.
+ */
+export type SettingsPayload = DesktopSettings;
 
 export interface SettingsLoadResult {
   settings: SettingsPayload;
