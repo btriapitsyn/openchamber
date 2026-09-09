@@ -66,7 +66,7 @@ server-derived provider-user identity as `actor.providerAccountId`; request
 contexts continue to carry only exact credential and binding authority.
 
 The [binding contract](../../../../web/server/lib/source-control/DOCUMENTATION.md)
-defines capability readiness and persisted v1 conversion. `boundGitNetworkOperation`
+defines capability readiness and the strict persisted store contract. `boundGitNetworkOperation`
 checks the selected remote's readiness and exact saved fetch/push fingerprints,
 not aggregate binding state. Requests carry the current repository config revision;
 the binding retains its approved endpoints for independent repair. Provider contexts
