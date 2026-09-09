@@ -1763,6 +1763,26 @@ textarea[data-terminal-hidden-input="true"]::placeholder {
   animation: oc-busy-pulse 1.2s ease-in-out infinite;
 }
 
+@keyframes activity-spin {
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Running-session spinner (opt-in). steps() throttles to 20 value changes per
+   second; identical frames in between produce no new compositor output.
+   Technique from VS Code's codicon-modifier-spin. */
+.activity-spinner {
+  animation: activity-spin 1.5s steps(30) infinite;
+  transform-box: fill-box;
+  transform-origin: center center;
+}
+
+/* Static dot shown instead of the spinner under reduced motion. */
+.activity-spinner-fallback {
+  display: none;
+}
+
 @keyframes navrail-dot-wave {
   0%, 100% {
     transform: scale(0.72);
@@ -1885,6 +1905,14 @@ textarea[data-terminal-hidden-input="true"]::placeholder {
 
   .animate-busy-pulse {
     animation: none;
+  }
+
+  .activity-spinner {
+    display: none;
+  }
+
+  .activity-spinner-fallback {
+    display: inline-block;
   }
 
 }
