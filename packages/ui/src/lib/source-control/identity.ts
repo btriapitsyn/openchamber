@@ -249,6 +249,30 @@ export const selectableIdentities = <T extends { id: string }>(
   return [...unique.values()];
 };
 
+/**
+ * The identity a repository is currently acting as.
+ *
+ * The repository's own author decides it: a stored identity with that
+ * signature, else the machine's if it matches, else the author itself shown as
+ * it is. A repository that names no author is on the System identity, which is
+ * what having no override means — and is why every surface has to answer this
+ * the same way.
+ */
+export const activeIdentityFor = <T extends { id: string; name: string; userName: string; userEmail: string }>(
+  profiles: T[],
+  systemIdentity: T | null | undefined,
+  author: { userName?: string | null; userEmail?: string | null } | null | undefined,
+  fromAuthor: (author: { userName: string; userEmail: string }) => T,
+): T | null => {
+  const userName = author?.userName ?? '';
+  const userEmail = author?.userEmail ?? '';
+  if (!userName || !userEmail) return systemIdentity ?? null;
+  const stored = profiles.find((profile) => profile.userName === userName && profile.userEmail === userEmail);
+  if (stored) return stored;
+  if (systemIdentity && systemIdentity.userName === userName && systemIdentity.userEmail === userEmail) return systemIdentity;
+  return fromAuthor({ userName, userEmail });
+};
+
 /** What an identity is called on screen. The System one is named by the product, not by a record. */
 export const identityDisplayName = (
   profile: { id: string; name: string } | null | undefined,

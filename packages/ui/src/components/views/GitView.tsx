@@ -95,6 +95,7 @@ import { remoteTraits,
   selectableIdentities,
   identityDisplayName,
   identityAccountConnected,
+  activeIdentityFor,
 } from '@/lib/source-control/identity';
 import { SystemIdentityConfirmDialog } from '@/components/views/git/SystemIdentityConfirmDialog';
 
@@ -1579,38 +1580,12 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
     [profiles, globalIdentity, connectedAccountIds],
   );
 
-  const activeIdentityProfile = React.useMemo((): GitIdentityProfile | null => {
-    if (currentIdentity?.userName && currentIdentity?.userEmail) {
-      const match = profiles.find(
-        (profile) =>
-          profile.userName === currentIdentity.userName &&
-          profile.userEmail === currentIdentity.userEmail
-      );
-
-      if (match) {
-        return match;
-      }
-
-      if (
-        globalIdentity &&
-        globalIdentity.userName === currentIdentity.userName &&
-        globalIdentity.userEmail === currentIdentity.userEmail
-      ) {
-        return globalIdentity;
-      }
-
-      return {
-        id: 'local-config',
-        name: currentIdentity.userName,
-        userName: currentIdentity.userName,
-        userEmail: currentIdentity.userEmail,
-        color: 'info',
-        icon: 'user',
-      };
-    }
-
-    return globalIdentity ?? null;
-  }, [currentIdentity, profiles, globalIdentity]);
+  const activeIdentityProfile = React.useMemo(
+    () => activeIdentityFor(profiles, globalIdentity, currentIdentity, (author) => ({
+      id: 'local-config', name: author.userName, ...author, color: 'info', icon: 'user',
+    })),
+    [currentIdentity, profiles, globalIdentity],
+  );
 
   const stagedCount = stagedChangeEntries.length;
   const isBusy = isLoading || syncAction !== null || commitAction !== null;

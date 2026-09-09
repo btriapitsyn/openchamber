@@ -20,6 +20,7 @@ import { remoteTraits,
   selectableIdentities,
   identityDisplayName,
   identityAccountConnected,
+  activeIdentityFor,
 } from '@/lib/source-control/identity';
 import { useConnectedAccountIds, useSourceControlAuthStore } from '@/stores/useSourceControlAuthStore';
 import { SystemIdentityConfirmDialog } from '@/components/views/git/SystemIdentityConfirmDialog';
@@ -112,10 +113,12 @@ export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onCl
         && identityAccountConnected(identity, connectedAccountIds)),
     [gitIdentityProfiles, globalGitIdentity, connectedAccountIds],
   );
-  // The repository's own author decides which identity it is already acting as.
-  const activeIdentityProfile = React.useMemo(() => availableIdentities.find((identity) =>
-    identity.userName === currentIdentity?.userName && identity.userEmail === currentIdentity?.userEmail) ?? null,
-  [availableIdentities, currentIdentity]);
+  const activeIdentityProfile = React.useMemo(
+    () => activeIdentityFor(gitIdentityProfiles, globalGitIdentity, currentIdentity, (author) => ({
+      id: 'local-config', name: author.userName, ...author, color: 'info', icon: 'user',
+    })),
+    [currentIdentity, gitIdentityProfiles, globalGitIdentity],
+  );
 
   /**
    * Switching identity here writes the same three answers the add and clone

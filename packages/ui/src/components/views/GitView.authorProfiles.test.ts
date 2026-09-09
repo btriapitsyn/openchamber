@@ -4,7 +4,7 @@ import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
 import type { GitIdentityProfile } from '@/lib/api/types';
 import { isCompleteIdentity } from '@/lib/api/git-identity';
-import { identityAccountConnected, selectableIdentities } from '@/lib/source-control/identity';
+import { activeIdentityFor, identityAccountConnected, selectableIdentities } from '@/lib/source-control/identity';
 import { isSignatureOnlyIdentity } from '@/lib/source-control/applyIdentity';
 
 // Execute the component's actual author callbacks without mocking React or exporting UI internals.
@@ -47,7 +47,7 @@ const plain: GitIdentityProfile = { id: 'plain', name: 'Author', userName: 'Plai
 const incomplete: GitIdentityProfile = { id: 'legacy', name: 'Legacy', userName: 'Legacy Author', userEmail: 'legacy@example.com' };
 // The callback also asks whether the identity's account is still connected;
 // an instance that has not been read answers null, which keeps it offered.
-const helpers = { selectableIdentities, isCompleteIdentity, isSignatureOnlyIdentity, identityAccountConnected, connectedAccountIds: () => null };
+const helpers = { selectableIdentities, isCompleteIdentity, isSignatureOnlyIdentity, identityAccountConnected, activeIdentityFor, connectedAccountIds: () => null };
 const profiles = [work, signed, plain];
 
 // The clone screen no longer chooses an author on its own: it proposes one
@@ -68,20 +68,20 @@ describe('Git view authors', () => {
   });
 
   test('prefers a matching stored author over a matching global author and preserves signing', () => {
-    expect(runInNewContext(activeAuthor, {
+    expect(runInNewContext(activeAuthor, { ...helpers,
       profiles, globalIdentity: { ...globalIdentity, userName: signed.userName, userEmail: signed.userEmail },
       currentIdentity: { userName: signed.userName, userEmail: signed.userEmail },
     })).toBe(signed);
   });
 
   test('uses the matching global author when no stored author matches', () => {
-    expect(runInNewContext(activeAuthor, {
+    expect(runInNewContext(activeAuthor, { ...helpers,
       profiles, globalIdentity, currentIdentity: { userName: globalIdentity.userName, userEmail: globalIdentity.userEmail },
     })).toBe(globalIdentity);
   });
 
   test('derives a local author from name and email without transport fields', () => {
-    expect(runInNewContext(activeAuthor, {
+    expect(runInNewContext(activeAuthor, { ...helpers,
       profiles, globalIdentity, currentIdentity: { userName: 'Local Author', userEmail: 'local@example.com' },
     })).toEqual({
       id: 'local-config', name: 'Local Author', userName: 'Local Author', userEmail: 'local@example.com', color: 'info', icon: 'user',
@@ -90,8 +90,10 @@ describe('Git view authors', () => {
 
   test('preserves the global fallback when current author data is absent or incomplete', () => {
     for (const currentIdentity of [null, { userName: 'Incomplete', userEmail: null }]) {
-      expect(runInNewContext(activeAuthor, { profiles, globalIdentity, currentIdentity })).toBe(globalIdentity);
+      expect(runInNewContext(activeAuthor, { ...helpers,
+ profiles, globalIdentity, currentIdentity })).toBe(globalIdentity);
     }
-    expect(runInNewContext(activeAuthor, { profiles: [], globalIdentity: null, currentIdentity: null })).toBeNull();
+    expect(runInNewContext(activeAuthor, { ...helpers,
+ profiles: [], globalIdentity: null, currentIdentity: null })).toBeNull();
   });
 });

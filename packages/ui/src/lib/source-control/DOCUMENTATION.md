@@ -119,8 +119,12 @@ none; a remote the agent already answers for records none either. The same rule 
 (`DirectoryExplorerDialog`), the Git panel (`IdentityDropdown` in `GitHeader`),
 and the mobile Changes surface.
 
-The Git panel button shows the identity's icon and name, drawn from the
-committed binding read and the repository author, never from an unsaved choice.
+`activeIdentityFor` decides which identity a repository is acting as, for the
+panel and the mobile Changes surface alike: the repository's own author picks
+it, a repository that names none is on the System identity, and an author no
+identity carries is shown as itself. The Git panel button shows that identity's
+icon and name, drawn from the committed binding read and the repository author,
+never from an unsaved choice.
 Managed HTTPS presentation comes only from the exact revision-pinned credential
 projection in the binding read; account IDs, credential IDs, key paths and tokens
 are never labels. Failed reads retain explicitly stale context, not an

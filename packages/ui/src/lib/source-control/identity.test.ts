@@ -14,6 +14,7 @@ import {
   identityDisplayName,
   identityAccountConnected,
   buildManagedAccountOptions,
+  activeIdentityFor,
   remoteTraits,
   instanceHost,
 } from './identity';
@@ -292,5 +293,27 @@ describe('buildManagedAccountOptions', () => {
     const [option] = buildManagedAccountOptions(identity, [account('occred:v1:gitlab:new:r1', 'gitlab#7', true)], () => 'Personal access token');
     expect(option.label).toBe('GitLab @ada · https://gitlab.com · Personal access token');
     expect(option.label).not.toContain('occred');
+  });
+});
+
+describe('activeIdentityFor', () => {
+  const fromAuthor = (author: { userName: string; userEmail: string }) =>
+    ({ id: 'local-config', name: author.userName, ...author });
+  const work = { id: 'work', name: 'Work', userName: 'Ada', userEmail: 'ada@work.example' };
+  const system = { id: 'global', name: 'Machine', userName: 'Machine', userEmail: 'machine@example.invalid' };
+
+  test('a repository with no author of its own is on the system identity', () => {
+    // Both surfaces have to answer this the same way: the mobile Changes view
+    // used to read "no identity" where the panel read "system identity".
+    expect(activeIdentityFor([work], system, null, fromAuthor)).toBe(system);
+    expect(activeIdentityFor([work], system, { userName: '', userEmail: '' }, fromAuthor)).toBe(system);
+    expect(activeIdentityFor([work], null, null, fromAuthor)).toBeNull();
+  });
+
+  test('the repository author picks the identity, and is shown as itself when none matches', () => {
+    expect(activeIdentityFor([work], system, { userName: 'Ada', userEmail: 'ada@work.example' }, fromAuthor)).toBe(work);
+    expect(activeIdentityFor([work], system, system, fromAuthor)).toBe(system);
+    expect(activeIdentityFor([work], system, { userName: 'Someone', userEmail: 'else@example.invalid' }, fromAuthor))
+      .toEqual({ id: 'local-config', name: 'Someone', userName: 'Someone', userEmail: 'else@example.invalid' });
   });
 });
