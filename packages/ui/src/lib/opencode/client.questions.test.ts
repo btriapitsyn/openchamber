@@ -121,7 +121,7 @@ describe('opencodeClient.listPendingQuestions', () => {
     ).rejects.toThrow('question.list failed');
   });
 
-  test('skips malformed items (missing or non-string id) in the merge', async () => {
+  test('ignores entries without a usable string id during the V1 merge', async () => {
     const valid = makeQuestion('q1');
     questionListResults.push(
       makeListResult([valid, null, { sessionID: 'ses_x' }, { id: 42 }, { id: '' }, 'not-an-object']),
