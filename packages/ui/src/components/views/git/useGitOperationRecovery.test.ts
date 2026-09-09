@@ -111,12 +111,30 @@ const mount = async (saved = new Map<string, string>(), existingOwner?: ReturnTy
   };
 };
 
+// `subtle` is a non-configurable getter on the Crypto prototype under Bun, so the
+// property cannot be shadowed. Stand in for the whole global instead, keeping the
+// random generators the rest of the suite may reach for.
+const withoutSubtle = async <T>(run: () => Promise<T>): Promise<T> => {
+  const real = globalThis.crypto;
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
+  const stub = {
+    getRandomValues: <A extends ArrayBufferView>(array: A): A => real.getRandomValues(array),
+    randomUUID: () => real.randomUUID(),
+  };
+  Object.defineProperty(globalThis, 'crypto', { configurable: true, writable: true, value: stub });
+  try {
+    // Fail loudly rather than let the fallback silently stop being covered.
+    if (globalThis.crypto?.subtle) throw new Error('SubtleCrypto is still reachable');
+    return await run();
+  } finally {
+    if (descriptor) Object.defineProperty(globalThis, 'crypto', descriptor);
+    else Reflect.deleteProperty(globalThis, 'crypto');
+  }
+};
+
 describe('mounted Git action recovery', () => {
   test('missing SubtleCrypto does not show a storage failure or block the Git UI', async () => {
-    const crypto = globalThis.crypto;
-    const descriptor = Object.getOwnPropertyDescriptor(crypto, 'subtle');
-    Object.defineProperty(crypto, 'subtle', { configurable: true, value: undefined });
-    try {
+    await withoutSubtle(async () => {
       const fixture = await mount();
       expect(fixture.recovery.blocked).toBe(false);
       expect(fixture.recovery.entry?.problem ?? null).toBeNull();
@@ -125,10 +143,7 @@ describe('mounted Git action recovery', () => {
       fixture.setStorageFailure(true);
       act(() => { expect(fixture.recovery.start()).toBeNull(); });
       expect(fixture.recovery.entry?.problem).toBe('storage');
-    } finally {
-      if (descriptor) Object.defineProperty(crypto, 'subtle', descriptor);
-      else Reflect.deleteProperty(crypto, 'subtle');
-    }
+    });
   });
   test('unmount, remount and reload preserve uncertainty until GET proves a terminal result', async () => {
     const first = await mount();

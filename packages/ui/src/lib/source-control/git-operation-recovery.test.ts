@@ -30,13 +30,24 @@ const setup = () => {
   return { storage, owner };
 };
 
+// `subtle` is a non-configurable getter on the Crypto prototype under Bun, so the
+// property cannot be shadowed. Stand in for the whole global instead, keeping the
+// random generators the rest of the suite may reach for.
 const withoutSubtle = async <T>(run: () => Promise<T>): Promise<T> => {
-  const crypto = globalThis.crypto;
-  const descriptor = Object.getOwnPropertyDescriptor(crypto, 'subtle');
-  Object.defineProperty(crypto, 'subtle', { configurable: true, value: undefined });
-  try { return await run(); } finally {
-    if (descriptor) Object.defineProperty(crypto, 'subtle', descriptor);
-    else Reflect.deleteProperty(crypto, 'subtle');
+  const real = globalThis.crypto;
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
+  const stub = {
+    getRandomValues: <A extends ArrayBufferView>(array: A): A => real.getRandomValues(array),
+    randomUUID: () => real.randomUUID(),
+  };
+  Object.defineProperty(globalThis, 'crypto', { configurable: true, writable: true, value: stub });
+  try {
+    // Fail loudly rather than let the fallback silently stop being covered.
+    if (globalThis.crypto?.subtle) throw new Error('SubtleCrypto is still reachable');
+    return await run();
+  } finally {
+    if (descriptor) Object.defineProperty(globalThis, 'crypto', descriptor);
+    else Reflect.deleteProperty(globalThis, 'crypto');
   }
 };
 

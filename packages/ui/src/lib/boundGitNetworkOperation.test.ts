@@ -139,6 +139,27 @@ const captureBoundErrorCode = (callback: () => void): BoundGitNetworkOperationEr
   }
 };
 
+// `subtle` is a non-configurable getter on the Crypto prototype under Bun, so the
+// property cannot be shadowed. Stand in for the whole global instead, keeping the
+// random generators the rest of the suite may reach for.
+const withoutSubtle = async <T>(run: () => Promise<T>): Promise<T> => {
+  const real = globalThis.crypto;
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
+  const stub = {
+    getRandomValues: <A extends ArrayBufferView>(array: A): A => real.getRandomValues(array),
+    randomUUID: () => real.randomUUID(),
+  };
+  Object.defineProperty(globalThis, 'crypto', { configurable: true, writable: true, value: stub });
+  try {
+    // Fail loudly rather than let the fallback silently stop being covered.
+    if (globalThis.crypto?.subtle) throw new Error('SubtleCrypto is still reachable');
+    return await run();
+  } finally {
+    if (descriptor) Object.defineProperty(globalThis, 'crypto', descriptor);
+    else Reflect.deleteProperty(globalThis, 'crypto');
+  }
+};
+
 describe('structured Git operation recovery', () => {
   test('anonymous bindings permit reads but block publishing before a plan request', async () => {
     const anonymous: SourceControlBindingRead = { ...boundRead, binding: { ...boundRead.binding,
@@ -163,10 +184,7 @@ describe('structured Git operation recovery', () => {
   });
 
   test('ordinary LAN plan and execute work without SubtleCrypto and keep persistence enabled', async () => {
-    const crypto = globalThis.crypto;
-    const descriptor = Object.getOwnPropertyDescriptor(crypto, 'subtle');
-    Object.defineProperty(crypto, 'subtle', { configurable: true, value: undefined });
-    try {
+    await withoutSubtle(async () => {
       const calls: string[] = [];
       const storage = window.sessionStorage;
       const result = await runBoundGitNetworkOperation({
@@ -189,10 +207,7 @@ describe('structured Git operation recovery', () => {
       expect(result.state).toBe('succeeded');
       expect(calls).toEqual(['plan', 'execute:operation-one']);
       expect(storage.getItem('openchamber.git.pending-operations.v1')).toBe('{"version":1,"references":[]}');
-    } finally {
-      if (descriptor) Object.defineProperty(crypto, 'subtle', descriptor);
-      else Reflect.deleteProperty(crypto, 'subtle');
-    }
+    });
   });
 
   for (const failAt of [1, 2, 3]) {
