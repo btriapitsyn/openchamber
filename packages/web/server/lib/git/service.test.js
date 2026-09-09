@@ -4,6 +4,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
 import simpleGit from 'simple-git';
+import { registerGitRoutes } from './routes.js';
+import { splitPatchIntoHunks as splitHunks } from '../../../../ui/src/lib/diff/patchFileDiff.ts';
 
 import {
   checkoutBranch,
@@ -20,6 +22,7 @@ import {
   getBranches,
   getUnpushedBranchCounts,
   getRangeDiff,
+  getBranchBase,
   getStatus,
   getWorktrees,
   isGitRepository,
@@ -37,6 +40,7 @@ import {
   unstageFiles,
   applyHunk,
   getDiff,
+  getUntrackedDiffs,
   getFileDiff,
   parseCommitChangesRaw,
   validateWorktreeCreate,
@@ -261,28 +265,24 @@ describeIfGit('setLocalIdentity', () => {
       "ssh -i '/tmp/test key' -o IdentitiesOnly=yes"
     );
   });
+
+  it('configures the local credential helper with the targeted simple-git opt-in', async () => {
+    const { tmpDir } = await createTempRepo();
+
+    await setLocalIdentity(tmpDir, {
+      userName: 'Token User',
+      userEmail: 'token@example.com',
+      authType: 'token',
+      host: 'github.com',
+    });
+
+    expect(runGit(tmpDir, ['config', '--local', '--get', 'credential.helper']).trim()).toBe('store');
+  });
 });
 
 // ---------------------------------------------------------------------------
 // applyHunk (per-hunk stage / unstage / discard)
 // ---------------------------------------------------------------------------
-
-/** Minimal unified-diff splitter: returns standalone per-hunk patches. */
-const splitHunks = (patch) => {
-  const lines = patch.split(/\r?\n/);
-  const headerEnd = lines.findIndex((line) => /^@@\s/.test(line));
-  if (headerEnd === -1) return [];
-  const header = lines.slice(0, headerEnd);
-  const hunks = [];
-  for (let i = headerEnd; i < lines.length; i += 1) {
-    const line = lines[i];
-    if (/^@@\s/.test(line)) hunks.push([...header, line]);
-    else if (hunks.length > 0) hunks[hunks.length - 1].push(line);
-  }
-  return hunks.map((hunk) => hunk.join('\n'))
-    .filter((hunk) => hunk.trim().length > 0)
-    .map((hunk) => (hunk.endsWith('\n') ? hunk : `${hunk}\n`));
-};
 
 const writeFile = (repo, name, contents) =>
   fs.promises.writeFile(path.join(repo, name), contents, 'utf8');
@@ -298,6 +298,74 @@ const readWorking = (repo) => fs.promises.readFile(path.join(repo, 'file.txt'), 
 const readStaged = async (git) => (await git.raw(['show', ':file.txt'])).replace(/\r\n/g, '\n');
 
 describe('applyHunk', () => {
+  it('stages successive hunks and never discards a stale staged or committed patch', async () => {
+    if (!canRunGit()) return;
+    const { tmpDir, git } = await createTempRepo();
+    const original = Array.from({ length: 60 }, (_, index) => `line${index}`);
+    const changed = [...original];
+    changed[1] = 'FIRST'; changed[25] = 'SECOND'; changed[50] = 'THIRD';
+    await writeFile(tmpDir, 'file.txt', original.join('\n') + '\n');
+    await git.add('file.txt'); await git.commit('Initial');
+    await writeFile(tmpDir, 'file.txt', changed.join('\n') + '\n');
+    const historical = splitHunks(await getDiff(tmpDir, { path: 'file.txt' }));
+    expect(historical).toHaveLength(3);
+    await applyHunk(tmpDir, 'file.txt', { patch: historical[0], action: 'stage' });
+    const remaining = splitHunks(await getDiff(tmpDir, { path: 'file.txt' }));
+    expect(remaining).toHaveLength(2);
+    await applyHunk(tmpDir, 'file.txt', { patch: remaining[0], action: 'stage' });
+    const stalePath = path.join(tmpDir, 'stale.patch');
+    await fs.promises.writeFile(stalePath, historical[0]);
+    await git.raw(['apply', '--reverse', '--check', stalePath]);
+    await expect(applyHunk(tmpDir, 'file.txt', { patch: historical[0], action: 'discard' })).rejects.toThrow('refresh and try again');
+    expect(await readWorking(tmpDir)).toBe(changed.join('\n') + '\n');
+    const last = splitHunks(await getDiff(tmpDir, { path: 'file.txt' }));
+    expect(last).toHaveLength(1);
+    await applyHunk(tmpDir, 'file.txt', { patch: last[0], action: 'discard' });
+    changed[50] = original[50];
+    expect(await readWorking(tmpDir)).toBe(changed.join('\n') + '\n');
+    expect(await readStaged(git)).toBe(changed.join('\n') + '\n');
+    const staged = splitHunks(await getDiff(tmpDir, { path: 'file.txt', staged: true }));
+    await applyHunk(tmpDir, 'file.txt', { patch: staged[0], action: 'unstage' });
+    expect(await readWorking(tmpDir)).toBe(changed.join('\n') + '\n');
+    await git.add('file.txt'); await git.commit('Committed changes');
+    await expect(applyHunk(tmpDir, 'file.txt', { patch: historical[0], action: 'discard' })).rejects.toThrow('refresh and try again');
+  });
+
+  it.each(['crlf', 'mixed'])('preserves %s file bytes through stage, unstage and discard', async (endings) => {
+    if (!canRunGit()) return;
+    const { tmpDir, git } = await createTempRepo();
+    await git.addConfig('core.autocrlf', 'false');
+    const serialize = (first, last) => Array.from({ length: 30 }, (_, index) => {
+      const text = index === 0 ? first : index === 29 ? last : `line${index}`;
+      return text + (endings === 'crlf' || index % 2 === 0 ? '\r\n' : '\n');
+    }).join('');
+    const original = serialize('first', 'last');
+    const edited = serialize('FIRST', 'LAST');
+    await writeFile(tmpDir, 'file.txt', original);
+    await git.add('file.txt'); await git.commit('Initial');
+    await writeFile(tmpDir, 'file.txt', edited);
+    const hunks = splitHunks(await getDiff(tmpDir, { path: 'file.txt' }));
+    await applyHunk(tmpDir, 'file.txt', { patch: hunks[0], action: 'stage' });
+    expect(await git.raw(['show', ':file.txt'])).toBe(serialize('FIRST', 'last'));
+    const staged = splitHunks(await getDiff(tmpDir, { path: 'file.txt', staged: true }));
+    await applyHunk(tmpDir, 'file.txt', { patch: staged[0], action: 'unstage' });
+    expect(await git.raw(['show', ':file.txt'])).toBe(original);
+    const working = splitHunks(await getDiff(tmpDir, { path: 'file.txt' }));
+    await applyHunk(tmpDir, 'file.txt', { patch: working[0], action: 'discard' });
+    expect(await fs.promises.readFile(path.join(tmpDir, 'file.txt'), 'utf8')).toBe(serialize('first', 'LAST'));
+  });
+
+  it('rejects extra files hidden before the requested patch', async () => {
+    if (!canRunGit()) return;
+    const { tmpDir, git } = await createTempRepo();
+    for (const name of ['file.txt', 'other.txt']) await writeFile(tmpDir, name, ORIGINAL_FILE);
+    await git.add('.'); await git.commit('Initial');
+    for (const name of ['file.txt', 'other.txt']) await writeFile(tmpDir, name, EDITED_FILE);
+    const other = splitHunks(await getDiff(tmpDir, { path: 'other.txt' }))[0];
+    const requested = splitHunks(await getDiff(tmpDir, { path: 'file.txt' }))[0];
+    await expect(applyHunk(tmpDir, 'file.txt', { patch: requested + other, action: 'stage' })).rejects.toThrow('refresh and try again');
+    expect(await git.raw(['diff', '--cached'])).toBe('');
+  });
   it('rejects an invalid action or a patch without a hunk header', async () => {
     const { tmpDir } = await createTempRepo();
     await expect(applyHunk(tmpDir, 'file.txt', { patch: '@@ -1 +1 @@\n a\n', action: 'bogus' })).rejects.toThrow(
@@ -417,6 +485,70 @@ describe('symlink diffs', () => {
       modified: 'source',
       isBinary: false,
     });
+  });
+});
+
+describeIfGit('untracked diffs', () => {
+  it.each(['false', 'warn'])('returns only the patch with core.safecrlf=%s', async (safecrlf) => {
+    const { tmpDir, git } = await createTempRepo();
+    await git.addConfig('core.autocrlf', 'true');
+    await git.addConfig('core.safecrlf', safecrlf);
+    fs.writeFileSync(path.join(tmpDir, 'new file.txt'), 'first\nsecond\n');
+
+    let expectedPatch;
+    try {
+      runGit(tmpDir, ['diff', '--no-color', '--full-index', '--no-index', '--', '/dev/null', 'new file.txt']);
+      throw new Error('Expected git diff to exit with differences');
+    } catch (error) {
+      expect(error.status).toBe(1);
+      expectedPatch = error.stdout;
+      if (safecrlf === 'warn') {
+        expect(error.stderr).toContain('LF will be replaced by CRLF');
+      }
+    }
+
+    const diff = await getDiff(tmpDir, { path: 'new file.txt' });
+    expect(diff).toBe(expectedPatch);
+    expect(diff).toContain('+first\n+second\n');
+    expect(diff).not.toContain('warning:');
+    expect(await getUntrackedDiffs(tmpDir, ['new file.txt'])).toEqual([diff]);
+  });
+
+  it('accepts an empty untracked file without a process error', async () => {
+    const { tmpDir } = await createTempRepo();
+    fs.writeFileSync(path.join(tmpDir, 'empty.txt'), '');
+    const diff = await getDiff(tmpDir, { path: 'empty.txt' });
+    expect(diff).toContain('new file mode 100644');
+    expect(diff).not.toContain('@@');
+    expect(await getUntrackedDiffs(tmpDir, ['empty.txt'])).toEqual([diff]);
+  });
+
+  it('rejects fatal conversion errors while preserving other batch entries', async () => {
+    const { tmpDir } = await createTempRepo();
+    runGit(tmpDir, ['config', 'diff.broken.textconv', 'false']);
+    fs.writeFileSync(path.join(tmpDir, '.gitattributes'), 'bad.txt diff=broken\n');
+    fs.writeFileSync(path.join(tmpDir, 'first.safe'), 'first\n');
+    fs.writeFileSync(path.join(tmpDir, 'bad.txt'), 'bad\n');
+    fs.writeFileSync(path.join(tmpDir, 'last.safe'), 'last\n');
+
+    await expect(getDiff(tmpDir, { path: 'bad.txt' })).rejects.toThrow('unable to read files to diff');
+    const diffs = await getUntrackedDiffs(tmpDir, ['first.safe', 'bad.txt', 'last.safe'], { concurrency: 1 });
+    expect(diffs).toHaveLength(3);
+    expect(diffs[0]).toContain('+first\n');
+    expect(diffs[1]).toBe('');
+    expect(diffs[2]).toContain('+last\n');
+  });
+
+  it('rejects truncated patches when the process output exceeds the buffer limit', async () => {
+    const { tmpDir } = await createTempRepo();
+    fs.writeFileSync(path.join(tmpDir, 'large.txt'), 'x'.repeat(21 * 1024 * 1024) + '\n');
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      await expect(getDiff(tmpDir, { path: 'large.txt' })).rejects.toThrow('maxBuffer');
+      expect(await getUntrackedDiffs(tmpDir, ['large.txt'])).toEqual(['']);
+    } finally {
+      errorSpy.mockRestore();
+    }
   });
 });
 
@@ -2189,6 +2321,144 @@ describe.runIf(canRunGit())('getUnpushedBranchCounts', () => {
 });
 
 describeIfGit('getRangeDiff', () => {
+  it('loads a committed deletion that no longer exists in HEAD or the working tree', async () => {
+    const { repository } = createRepositoryWithRemote();
+    runGit(repository, ['rm', 'README.md']);
+    runGit(repository, ['commit', '-m', 'delete file']);
+    const diff = await getRangeDiff(repository, { base: 'origin/react', head: 'next', path: 'README.md', includeWorkingTree: true });
+    expect(diff).toContain('deleted file mode');
+    expect(diff).toContain('-# Test');
+  });
+
+  it('carries the working-tree option through the actual HTTP route handlers', async () => {
+    const { repository } = createRepositoryWithRemote();
+    fs.writeFileSync(path.join(repository, 'local.txt'), 'current local work\n');
+    const routes = new Map();
+    registerGitRoutes({
+      get: (url, handler) => routes.set(url, handler),
+      post() {},
+      put() {},
+      delete() {},
+    });
+    const query = { directory: repository, base: 'origin/react', head: 'next', includeWorkingTree: 'true' };
+    for (const endpoint of ['range-diff', 'range-files']) {
+      let status = 200;
+      let body;
+      const response = {
+        status(value) { status = value; return this; },
+        json(value) { body = value; },
+      };
+      await routes.get(`/api/git/${endpoint}`)({ query }, response);
+      expect(status).toBe(200);
+      if (endpoint === 'range-diff') expect(body.diff).toContain('+current local work');
+      else expect(body.files).toEqual([{ path: 'local.txt', status: 'A' }]);
+    }
+  });
+
+  it('asks for a new base after restacking and compares against the selected parent', async () => {
+    const { repository } = createRepositoryWithRemote();
+    runGit(repository, ['checkout', '-b', 'child', 'origin/react']);
+    fs.writeFileSync(path.join(repository, 'child.txt'), 'child\n');
+    runGit(repository, ['add', '.']);
+    runGit(repository, ['commit', '-m', 'child']);
+    expect(await getBranchBase(repository, 'child')).toEqual({ base: 'origin/react' });
+    runGit(repository, ['checkout', '-b', 'parent', 'origin/react']);
+    fs.writeFileSync(path.join(repository, 'parent.txt'), 'parent\n');
+    runGit(repository, ['add', '.']);
+    runGit(repository, ['commit', '-m', 'parent']);
+    runGit(repository, ['checkout', 'child']);
+    runGit(repository, ['rebase', 'parent']);
+    expect(await getBranchBase(repository, 'child')).toEqual({ base: null });
+    fs.writeFileSync(path.join(repository, 'child.txt'), 'current child\n');
+    const options = { base: 'refs/heads/parent', head: 'child', includeWorkingTree: true };
+    expect(await getRangeFiles(repository, options)).toEqual([{ path: 'child.txt', status: 'A' }]);
+    const diff = await getRangeDiff(repository, options);
+    expect(diff).toContain('+current child');
+    expect(diff).not.toContain('parent.txt');
+  });
+
+  it('combines committed, staged, unstaged and untracked work without changing the real index', async () => {
+    const { repository } = createRepositoryWithRemote();
+    fs.writeFileSync(path.join(repository, 'README.md'), '# Committed\n');
+    runGit(repository, ['add', 'README.md']);
+    runGit(repository, ['commit', '-m', 'branch change']);
+    fs.writeFileSync(path.join(repository, 'README.md'), '# Staged\n');
+    fs.writeFileSync(path.join(repository, 'staged.txt'), 'staged only\n');
+    runGit(repository, ['add', '.']);
+    fs.writeFileSync(path.join(repository, 'README.md'), '# Current\n');
+    fs.writeFileSync(path.join(repository, 'untracked.txt'), 'new local file\n');
+    fs.writeFileSync(path.join(repository, ' leading space.txt'), 'space path\n');
+    const indexBefore = fs.readFileSync(path.join(repository, '.git/index'));
+    const options = { base: 'origin/react', head: 'next', includeWorkingTree: true };
+
+    const diff = await getRangeDiff(repository, options);
+    expect(diff).toContain('-# Test');
+    expect(diff).toContain('+# Current');
+    expect(diff).not.toContain('+# Staged');
+    expect(diff).not.toContain('+# Committed');
+    expect(diff).toContain('+new local file');
+    expect(diff).toContain('+staged only');
+    expect(await getRangeFiles(repository, options)).toEqual(expect.arrayContaining([
+      { path: 'README.md', status: 'M' },
+      { path: 'staged.txt', status: 'A' },
+      { path: 'untracked.txt', status: 'A' },
+      { path: ' leading space.txt', status: 'A' },
+    ]));
+    expect(fs.readFileSync(path.join(repository, '.git/index'))).toEqual(indexBefore);
+
+    const committed = await getRangeDiff(repository, { base: options.base, head: options.head });
+    expect(committed).toContain('+# Committed');
+    expect(committed).not.toContain('+new local file');
+    fs.writeFileSync(path.join(repository, 'README.md'), '# Latest\n');
+    expect(await getRangeDiff(repository, { ...options, path: 'README.md' })).toContain('+# Latest');
+  });
+
+  it('reports the final file after a staged deletion is recreated, and omits undone branch changes', async () => {
+    const { repository } = createRepositoryWithRemote();
+    runGit(repository, ['rm', 'README.md']);
+    fs.writeFileSync(path.join(repository, 'README.md'), '# Recreated\n');
+    const options = { base: 'origin/react', head: 'next', includeWorkingTree: true };
+    expect(await getRangeFiles(repository, options)).toEqual([{ path: 'README.md', status: 'M' }]);
+    const diff = await getRangeDiff(repository, options);
+    expect(diff).toContain('-# Test');
+    expect(diff).toContain('+# Recreated');
+    expect(diff.match(/diff --git/g)).toHaveLength(1);
+    fs.writeFileSync(path.join(repository, 'README.md'), '# Test\n');
+    expect(await getRangeFiles(repository, options)).toEqual([]);
+    expect(await getRangeDiff(repository, options)).toBe('');
+  });
+
+  it('keeps local and remote bases distinct and rejects a different checked-out branch', async () => {
+    const { repository } = createRepositoryWithRemote();
+    runGit(repository, ['branch', 'react']);
+    fs.writeFileSync(path.join(repository, 'parent.txt'), 'parent work\n');
+    runGit(repository, ['add', '.']);
+    runGit(repository, ['commit', '-m', 'parent work']);
+    runGit(repository, ['branch', '-f', 'react', 'HEAD']);
+    fs.writeFileSync(path.join(repository, 'child.txt'), 'child work\n');
+    const options = { head: 'next', includeWorkingTree: true };
+    const local = await getRangeDiff(repository, { ...options, base: 'react' });
+    const remote = await getRangeDiff(repository, { ...options, base: 'origin/react' });
+    expect(local).not.toContain('parent.txt');
+    expect(remote).toContain('parent.txt');
+    expect(local).toContain('child.txt');
+    expect(await getRangeFiles(repository, { ...options, base: 'react' })).toEqual([{ path: 'child.txt', status: 'A' }]);
+    runGit(repository, ['checkout', 'react']);
+    await expect(getRangeDiff(repository, { ...options, base: 'origin/react' })).rejects.toThrow(/checked-out branch/);
+  });
+
+  it('includes untracked symlinks as links without reading their targets', async () => {
+    if (process.platform === 'win32') return;
+    const { repository } = createRepositoryWithRemote();
+    const outside = path.join(createTempDir(), 'outside.txt');
+    fs.writeFileSync(outside, 'must not be in a diff\n');
+    fs.symlinkSync(outside, path.join(repository, 'link.txt'));
+    const diff = await getRangeDiff(repository, { base: 'origin/react', head: 'next', includeWorkingTree: true });
+    expect(diff).toContain('new file mode 120000');
+    expect(diff).toContain(outside);
+    expect(diff).not.toContain('must not be in a diff');
+  });
+
   it('resolves a base that exists only on a remote other than origin', async () => {
     const { repository } = createRepositoryWithRemote({ remoteName: 'upstream', defaultBranch: 'react' });
     // Only refs/remotes/upstream/react carries the base — git cannot resolve the
@@ -2212,6 +2482,10 @@ describeIfGit('getRangeDiff', () => {
 });
 
 describe('parseBranchCreationSource', () => {
+  it('does not reuse the creation base after a rebase', () => {
+    expect(parseBranchCreationSource('rebase (finish): refs/heads/feature onto abc123\nbranch: Created from main')).toBeNull();
+  });
+
   it('returns the source ref from the oldest creation entry', () => {
     // Reflog lists newest entries first; creation is the last line.
     const reflog = [

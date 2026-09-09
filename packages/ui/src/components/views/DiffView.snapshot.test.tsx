@@ -167,6 +167,9 @@ mock.module('@/components/ui/dropdown-menu', () => ({
   DropdownMenuRadioGroup: ({ children }: React.PropsWithChildren) => React.createElement('div', null, children),
   DropdownMenuRadioItem: ({ children, value }: React.PropsWithChildren<{ value: string }>) => React.createElement('div', { 'data-value': value }, children),
   DropdownMenuTrigger: ({ children }: React.PropsWithChildren) => React.createElement(React.Fragment, null, children),
+  DropdownMenuLabel: ({ children }: React.PropsWithChildren) => React.createElement('div', null, children),
+  DropdownMenuSeparator: () => React.createElement('div', null),
+  DropdownMenuItem: ({ children }: React.PropsWithChildren) => React.createElement('div', null, children),
 }));
 
 mock.module('@/components/ui/tooltip', () => ({
@@ -264,6 +267,8 @@ mock.module('@/lib/gitApi', () => ({
   getBranchBase: async () => ({ base: null }),
   getGitRangeDiff: async () => ({ diff: '' }),
   getGitRangeFiles: async () => [],
+  getCommitFiles: async () => ({ files: [] }),
+  getGitCommitDiff: async () => ({ diff: '' }),
 }));
 
 mock.module('@/lib/toolHelpers', () => ({
@@ -313,6 +318,7 @@ mock.module('@/lib/device', () => ({
     hasTouchInput: false,
     hasTouchOnlyPointer: false,
   }),
+  useTabletLayout: () => false,
 }));
 
 mock.module('@/lib/contextFileOpenGuard', () => ({

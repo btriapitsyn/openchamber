@@ -91,7 +91,7 @@ test('comparison reads preserve scope, report failures, retry, and stop while hi
     await render();
     expect(current().files).toBeNull();
     expect(requests[4].url.pathname).toBe('/api/git/commit-files');
-    await finish(4, Response.json({ files: [{ path: 'new.ts', previousPath: 'old.ts', changeType: 'R', insertions: 1, deletions: 1, isBinary: false }] }));
+    await finish(4, Response.json({ files: [{ path: 'new.ts', originalPath: 'old.ts', status: 'R', kind: 'file', insertions: 1, deletions: 1, isBinary: false }] }));
     const commitPatch = current().fetchDiff('new.ts', 20);
     await act(async () => { await Promise.resolve(); });
     expect(requests[5].url.pathname).toBe('/api/git/commit-diff');
