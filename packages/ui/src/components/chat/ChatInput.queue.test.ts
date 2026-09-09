@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from 'bun:test';
+import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 import { buildQueuedAutoSendPayload } from '@/hooks/useQueuedMessageAutoSend';
 import {
@@ -9,6 +9,11 @@ import {
 } from '@/stores/messageQueueStore';
 import { isAutoReviewRunActiveForTarget } from '@/stores/useAutoReviewStore';
 import { getRuntimeKey } from '@/lib/runtime-switch';
+
+// The local queue is the VS Code behavior; every other runtime hands the
+// queue to the server (see messageQueueStore.server.test.ts).
+const desktop = await import('@/lib/desktop');
+mock.module('@/lib/desktop', () => ({ ...desktop, isVSCodeRuntime: () => true }));
 
 const target = createMessageQueueTarget('session-3195', '/repo', 'runtime-3195');
 if (!target) {

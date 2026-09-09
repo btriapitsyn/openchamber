@@ -49,6 +49,11 @@ mock.module('@/lib/runtime-switch', () => ({
   getRuntimeKey: () => 'test-runtime',
 }));
 
+// The local queue is the VS Code behavior; every other runtime hands the
+// queue to the server (see messageQueueStore.server.test.ts).
+const desktop = await import('@/lib/desktop');
+mock.module('@/lib/desktop', () => ({ ...desktop, isVSCodeRuntime: () => true }));
+
   // The component reads only runsByOriginalSessionID for the current session.
   type AutoReviewStateStub = {
   runsByOriginalSessionID: Record<string, { originalSessionID: string; directory: string; status: string; runtimeKey: string }>;

@@ -159,6 +159,11 @@ mock.module('@/sync/sync-context', () => ({
   },
 }));
 
+// The local queue is the VS Code behavior; every other runtime hands the
+// queue to the server (see messageQueueStore.server.test.ts).
+const desktop = await import('@/lib/desktop');
+mock.module('@/lib/desktop', () => ({ ...desktop, isVSCodeRuntime: () => true }));
+
 import {
   buildQueuedAutoSendPayload,
   createQueuedAutoSendRetryScheduler,
@@ -746,7 +751,16 @@ describe('useQueuedMessageAutoSend integration', () => {
 
     expect(sendMessageCalls).toHaveLength(1);
     expect(sendMessageCalls[0]?.[0]).toBe('queued prompt');
-    expect(sendMessageCalls[0]?.[9]).toEqual({ target });
+    expect(sendMessageCalls[0]?.[9]).toEqual({
+      target,
+      historySubmissions: [
+        {
+          text: 'queued prompt',
+          attachmentKeys: [],
+          restorableAttachments: [],
+        },
+      ],
+    });
     expect(queueOf(target.sessionId, worktreeDirectory)).toHaveLength(0);
   });
 
@@ -871,8 +885,26 @@ describe('useQueuedMessageAutoSend integration', () => {
     expect(bootstrapAttempts).toBe(2);
     expect(sendMessageCalls).toHaveLength(2);
     expect(sendMessageCalls.map((call) => call[9])).toEqual([
-      { target: firstTarget },
-      { target: secondTarget },
+      {
+        target: firstTarget,
+        historySubmissions: [
+          {
+            text: 'queued prompt',
+            attachmentKeys: [],
+            restorableAttachments: [],
+          },
+        ],
+      },
+      {
+        target: secondTarget,
+        historySubmissions: [
+          {
+            text: 'queued prompt',
+            attachmentKeys: [],
+            restorableAttachments: [],
+          },
+        ],
+      },
     ]);
     expect(queueOf(firstTarget.sessionId, sharedDirectory)).toHaveLength(0);
     expect(queueOf(secondTarget.sessionId, sharedDirectory)).toHaveLength(0);
@@ -930,7 +962,16 @@ describe('useQueuedMessageAutoSend integration', () => {
     });
 
     expect(sendMessageCalls).toHaveLength(1);
-    expect(sendMessageCalls[0]?.[9]).toEqual({ target });
+    expect(sendMessageCalls[0]?.[9]).toEqual({
+      target,
+      historySubmissions: [
+        {
+          text: 'queued prompt',
+          attachmentKeys: [],
+          restorableAttachments: [],
+        },
+      ],
+    });
     expect(queueOf(target.sessionId, worktreeDirectory)).toHaveLength(0);
     cleanupBootstrap();
   });
@@ -949,7 +990,16 @@ describe('useQueuedMessageAutoSend integration', () => {
     await rerenderHook();
 
     expect(sendMessageCalls).toHaveLength(1);
-    expect(sendMessageCalls[0]?.[9]).toEqual({ target: firstTarget });
+    expect(sendMessageCalls[0]?.[9]).toEqual({
+      target: firstTarget,
+      historySubmissions: [
+        {
+          text: 'queued prompt',
+          attachmentKeys: [],
+          restorableAttachments: [],
+        },
+      ],
+    });
     expect(queueOf(secondTarget.sessionId, secondDirectory)).toHaveLength(1);
   });
 

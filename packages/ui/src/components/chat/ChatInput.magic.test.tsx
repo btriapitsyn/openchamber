@@ -62,8 +62,11 @@ mock.module('@/lib/chatDraftPersistence', () => ({
         directory: directory ?? '',
         sessionId,
     }),
+    getChatDraftIdentityKey: (identity: { runtimeKey: string; directory: string; sessionId: string | null }) =>
+        `${identity.runtimeKey}\n${identity.directory}\n${identity.sessionId}`,
     readChatDraft: () => ({ text: '', confirmedMentions: new Set<string>() }),
     writeChatDraft: () => undefined,
+    clearChatDraft: () => undefined,
 }));
 mock.module('@/hooks/useQueuedMessageAutoSend', () => ({
     isQueuedSendBlockedForTarget: () => false,
@@ -79,7 +82,22 @@ mock.module('@/hooks/useRuntimeAPIs', () => ({ useRuntimeAPIs: () => ({ git: nul
 mock.module('@/hooks/useKeybind', () => ({ useKeybind: () => undefined }));
 mock.module('@/lib/hardwareKeyboard', () => ({ useHardwareKeyboard: () => false }));
 mock.module('@/lib/device', () => ({ useTabletLayout: () => ({ enabled: false }) }));
-mock.module('@/lib/desktop', () => ({ isVSCodeRuntime: () => false }));
+mock.module('@/lib/desktop', () => ({ isVSCodeRuntime: () => true }));
+// ChatInput reads the auto-review store both as a hook and via getState. The
+// hook-only mock QueuedMessageChips.test.tsx registers leaks into this file
+// when the group runs in one process, so keep a self-contained stub here.
+type AutoReviewStateStub = {
+    runsByOriginalSessionID: Record<string, never>;
+};
+const autoReviewMockState: AutoReviewStateStub = { runsByOriginalSessionID: {} };
+const useAutoReviewStoreMock = Object.assign(
+    <T,>(selector: (state: AutoReviewStateStub) => T): T => selector(autoReviewMockState),
+    { getState: (): AutoReviewStateStub => autoReviewMockState },
+);
+mock.module('@/stores/useAutoReviewStore', () => ({
+    useAutoReviewStore: useAutoReviewStoreMock,
+    isAutoReviewRunActiveForTarget: () => false,
+}));
 mock.module('@/lib/ime', () => ({ isIMECompositionEvent: () => false }));
 mock.module('@/contexts/useThemeSystem', () => ({ useThemeSystem: () => ({ currentTheme: getDefaultTheme(true) }) }));
 mock.module('@/lib/runtime-fetch', () => ({ runtimeFetch: async () => new Response(null, { status: 404 }) }));
@@ -99,6 +117,7 @@ mock.module('@/lib/systemReminder', () => ({ wrapSystemReminder: (text: string) 
 mock.module('@/lib/btw', () => ({
     buildBtwSyntheticTexts: () => [],
     destroyBtwSession: async () => undefined,
+    preparePendingBtwSend: async () => null,
     startBtwSession: async () => undefined,
 }));
 mock.module('@/lib/sessionBtwMetadata', () => ({ wasPromotedBtwSession: () => false }));
@@ -110,6 +129,7 @@ type ConfigState = {
     currentProviderId: string;
     currentModelId: string;
     currentVariant: string | undefined;
+    currentVariantSelection: { override: string | undefined; inherited: string | undefined };
     currentAgentName: string | null;
     modelsMetadata: Record<string, never>;
     providers: Record<string, never>;
@@ -121,6 +141,7 @@ const configState: ConfigState = {
     currentProviderId: 'provider-chat-input',
     currentModelId: 'model-chat-input',
     currentVariant: undefined,
+    currentVariantSelection: { override: undefined, inherited: undefined },
     currentAgentName: null,
     modelsMetadata: {},
     providers: {},
@@ -268,7 +289,7 @@ mock.module(localModule('./composer/state/useMessageHistory.ts'), () => ({
     useMessageHistory: () => ({ reset: () => undefined, older: () => null, newer: () => null }),
 }));
 mock.module(localModule('./composer/state/useComposerDraft.ts'), () => ({
-    useComposerDraft: () => ({ persistNow: () => undefined }),
+    useComposerDraft: () => ({ persistNow: () => undefined, restoreDraft: () => undefined }),
 }));
 mock.module(localModule('./composer/state/useDraftTarget.ts'), () => ({
     useDraftTarget: () => ({
@@ -333,12 +354,23 @@ mock.module(localModule('./composer/submit/slashCommands.ts'), () => ({
     },
     findMagicPromptCommand: (name: string) => name === 'summary' ? summaryCommand : null,
     canRunCommand: () => true,
+    planLocalSlashCommand: (text: string, inputMode: string | undefined, hasAttachedContext: boolean) => {
+        if (inputMode !== 'normal') return null;
+        const match = /^\s*\/([^\s]+)(?:\s+([\s\S]*))?$/.exec(text);
+        if (!match) return null;
+        const name = match[1]?.toLowerCase() ?? '';
+        if (name === 'btw' || name === 'summary') {
+            return { command: { name, argument: match[2] ?? '' }, kind: 'prompt', attachedContext: hasAttachedContext ? 'send' : 'none' };
+        }
+        return null;
+    },
     renderMagicPromptCommand: async () => {
         throw new Error('magic render failed');
     },
 }));
 
 import { createMessageQueueTarget, useMessageQueueStore } from '@/stores/messageQueueStore';
+import { useInputStore } from '@/sync/input-store';
 
 describe('ChatInput magic prompt failure', () => {
     let windowInstance: Window;
@@ -385,6 +417,7 @@ describe('ChatInput magic prompt failure', () => {
             sendConfig: { providerID: 'provider-chat-input', modelID: 'model-chat-input' },
         });
         const beforeSend = useMessageQueueStore.getState().getQueueForTarget(target);
+        useInputStore.getState().setPendingInputText('/summary latency', 'replace');
 
         await act(async () => {
             root.render(React.createElement(ChatInput));
