@@ -36,11 +36,31 @@ const isString = (value) => Object.prototype.toString.call(value) === '[object S
 const operationError = (code, message, status = 500, details = {}) => Object.assign(new Error(message), { code, status, ...details });
 const publicError = (code, message) => ({ code, message });
 const terminal = (state, code, message) => ({ state, error: publicError(code, message) });
+const fileIdentity = (stats) => `${stats.dev}:${stats.ino}`;
 // Linux reuses an inode number when a directory is removed and recreated in the
-// same parent, so device and inode alone cannot tell a replaced pathname from
-// the one we created. Creation time is immutable for a given object, so adding
-// it only ever makes the check stricter.
-const fileIdentity = (stats) => `${stats.dev}:${stats.ino}:${stats.birthtimeMs}`;
+// same parent, so device and inode alone cannot tell a replaced directory from
+// the one we made. Creation time can, but only where the filesystem keeps one:
+// without it Node fills the field from the change time, which moves whenever
+// entries are written into the directory, and every clone would then look
+// replaced the moment it filled its own checkout. So change the directory once
+// on purpose and see whether the reported creation time sits still. A
+// filesystem that fails this, or answers too coarsely to tell, falls back to
+// device and inode rather than to a false conflict.
+const birthtimeHoldsStill = async (fsImpl, pathImpl, directory) => {
+  const probe = pathImpl.join(directory, '.openchamber-clone-probe');
+  try {
+    const before = await fsImpl.stat(directory);
+    await fsImpl.mkdir(probe);
+    await fsImpl.rm(probe, { recursive: true });
+    const after = await fsImpl.stat(directory);
+    return after.ctimeMs !== before.ctimeMs && after.birthtimeMs === before.birthtimeMs;
+  } catch {
+    await fsImpl.rm(probe, { recursive: true, force: true }).catch(() => {});
+    return false;
+  }
+};
+const directoryIdentity = (stats, birthtimeHolds) => (birthtimeHolds
+  ? `${fileIdentity(stats)}:${stats.birthtimeMs}` : fileIdentity(stats));
 const lstatSnapshot = (stats) => ({
   identity: fileIdentity(stats),
   mode: stats.mode,
@@ -1071,6 +1091,7 @@ export function createNetworkOperations({
             if (transfer.authority.transportMode === 'managed') await controls.markStepCompleted('authenticated');
             let keepChild = childExists;
             let childIdentity;
+            let childBirthtimeHolds = false;
             try {
               if (!childExists) {
                 await ensureSubmoduleParentDirectories(directory, module.path, controls, deadline);
@@ -1079,7 +1100,8 @@ export function createNetworkOperations({
                   if (stats.isSymbolicLink() || !stats.isDirectory()) {
                     throw operationError('CONFLICT', 'Submodule checkout path ownership changed', 409);
                   }
-                  childIdentity = fileIdentity(stats);
+                  childBirthtimeHolds = await birthtimeHoldsStill(fsImpl, pathImpl, childDirectory);
+                  childIdentity = directoryIdentity(await fsImpl.lstat(childDirectory), childBirthtimeHolds);
                 });
               }
               await commandResult(transfer.auxiliaryPlan, controls, [
@@ -1097,7 +1119,7 @@ export function createNetworkOperations({
               if (!keepChild && childIdentity) {
                 const cleanup = await quarantineAndClean(childDirectory, hydrationPlan.operationId, async (moved) => {
                   const stats = await fsImpl.lstat(moved);
-                  return stats.isDirectory() && fileIdentity(stats) === childIdentity;
+                  return stats.isDirectory() && directoryIdentity(stats, childBirthtimeHolds) === childIdentity;
                 });
                 if (!cleanup.removed) throw operationError('UNKNOWN', 'Submodule checkout cleanup failed', 500);
               }
@@ -1648,7 +1670,7 @@ export function createNetworkOperations({
     }
   };
 
-  const copyCheckout = async (source, destination, copiedEntries, controls, deadline) => {
+  const copyCheckout = async (source, destination, copiedEntries, controls, deadline, birthtimeHolds) => {
     const entries = await awaitPhase(() => fsImpl.readdir(source), controls, deadline);
     for (const entry of entries) {
       const sourcePath = pathImpl.join(source, entry);
@@ -1656,9 +1678,9 @@ export function createNetworkOperations({
       const sourceStats = await awaitPhase(() => fsImpl.lstat(sourcePath), controls, deadline);
       if (sourceStats.isDirectory()) {
         await awaitMutation(() => fsImpl.mkdir(destinationPath), controls, deadline, async () => {
-          copiedEntries.push({ path: destinationPath, kind: 'directory', identity: fileIdentity(await fsImpl.lstat(destinationPath)) });
+          copiedEntries.push({ path: destinationPath, kind: 'directory', identity: directoryIdentity(await fsImpl.lstat(destinationPath), birthtimeHolds) });
         });
-        await copyCheckout(sourcePath, destinationPath, copiedEntries, controls, deadline);
+        await copyCheckout(sourcePath, destinationPath, copiedEntries, controls, deadline, birthtimeHolds);
       } else if (sourceStats.isSymbolicLink()) {
         const link = await awaitPhase(() => fsImpl.readlink(sourcePath), controls, deadline);
         await awaitMutation(() => fsImpl.symlink(link, destinationPath), controls, deadline, async () => {
@@ -1679,9 +1701,9 @@ export function createNetworkOperations({
     }
   };
 
-  const checkoutMatches = async (quarantined, destination, destinationIdentity, copiedEntries) => {
+  const checkoutMatches = async (quarantined, destination, destinationIdentity, copiedEntries, birthtimeHolds) => {
     const rootStats = await fsImpl.lstat(quarantined);
-    if (!rootStats.isDirectory() || fileIdentity(rootStats) !== destinationIdentity) return false;
+    if (!rootStats.isDirectory() || directoryIdentity(rootStats, birthtimeHolds) !== destinationIdentity) return false;
     const expected = new Map(copiedEntries.map((entry) => [pathImpl.relative(destination, entry.path), entry]));
     const inspect = async (directory, relativeDirectory = '') => {
       const names = await fsImpl.readdir(directory);
@@ -1692,7 +1714,7 @@ export function createNetworkOperations({
         const entryPath = pathImpl.join(directory, name);
         const stats = await fsImpl.lstat(entryPath);
         if (entry.kind === 'directory') {
-          if (!stats.isDirectory() || fileIdentity(stats) !== entry.identity || !await inspect(entryPath, relative)) return false;
+          if (!stats.isDirectory() || directoryIdentity(stats, birthtimeHolds) !== entry.identity || !await inspect(entryPath, relative)) return false;
         } else if (!sameLstat(stats, entry.snapshot)) {
           return false;
         } else if (entry.kind === 'symlink') {
@@ -1747,6 +1769,7 @@ export function createNetworkOperations({
   const executeClone = async (plan, controls, deadline = Date.now() + timeoutMs) => {
     let temporaryIdentity;
     let destinationIdentity;
+    let birthtimeHolds = false;
     let context;
     let result;
     let cleanupFailed = false;
@@ -1755,7 +1778,8 @@ export function createNetworkOperations({
     try {
       await awaitMutation(() => fsImpl.mkdir(pathImpl.dirname(plan.destination), { recursive: true }), controls, deadline);
       await awaitMutation(() => fsImpl.mkdir(plan.temporaryDirectory), controls, deadline, async () => {
-        temporaryIdentity = fileIdentity(await fsImpl.stat(plan.temporaryDirectory));
+        birthtimeHolds = await birthtimeHoldsStill(fsImpl, pathImpl, plan.temporaryDirectory);
+        temporaryIdentity = directoryIdentity(await fsImpl.stat(plan.temporaryDirectory), birthtimeHolds);
       });
       await controls.markStepCompleted('validated');
       if (controls.isCancellationRequested()) result = cancellationResult(plan, controls, {});
@@ -1766,7 +1790,7 @@ export function createNetworkOperations({
           'clone', '--no-checkout', '--', plan.rawEndpoint, plan.temporaryDirectory,
         ], { ...context, env: { ...context.env, GIT_LFS_SKIP_SMUDGE: '1' } }, deadline, { transfer: true });
         await controls.markStepCompleted('transferred');
-        if (fileIdentity(await awaitPhase(() => fsImpl.stat(plan.temporaryDirectory), controls, deadline)) !== temporaryIdentity) {
+        if (directoryIdentity(await awaitPhase(() => fsImpl.stat(plan.temporaryDirectory), controls, deadline), birthtimeHolds) !== temporaryIdentity) {
           throw operationError('CONFLICT', 'Clone temporary directory ownership changed', 409);
         }
         if (controls.isCancellationRequested()) result = cancellationResult(plan, controls, {});
@@ -1807,13 +1831,13 @@ export function createNetworkOperations({
               throw Object.assign(new Error(failure.message), { hydrationHandled: true });
             }
             await awaitMutation(() => fsImpl.mkdir(plan.destination), controls, deadline, async () => {
-              destinationIdentity = fileIdentity(await fsImpl.stat(plan.destination));
+              destinationIdentity = directoryIdentity(await fsImpl.stat(plan.destination), birthtimeHolds);
             });
-            if (fileIdentity(await awaitPhase(() => fsImpl.stat(plan.temporaryDirectory), controls, deadline)) !== temporaryIdentity) {
+            if (directoryIdentity(await awaitPhase(() => fsImpl.stat(plan.temporaryDirectory), controls, deadline), birthtimeHolds) !== temporaryIdentity) {
               throw operationError('CONFLICT', 'Clone temporary directory ownership changed', 409);
             }
-            await copyCheckout(plan.temporaryDirectory, plan.destination, copiedEntries, controls, deadline);
-            if (fileIdentity(await awaitPhase(() => fsImpl.lstat(plan.destination), controls, deadline)) !== destinationIdentity) {
+            await copyCheckout(plan.temporaryDirectory, plan.destination, copiedEntries, controls, deadline, birthtimeHolds);
+            if (directoryIdentity(await awaitPhase(() => fsImpl.lstat(plan.destination), controls, deadline), birthtimeHolds) !== destinationIdentity) {
               throw operationError('CONFLICT', 'Clone destination ownership changed', 409);
             }
             checkoutPublished = true;
@@ -1869,14 +1893,14 @@ export function createNetworkOperations({
     let cleanupComplete = true;
     if (!checkoutPublished && destinationIdentity) {
       const cleanup = await quarantineAndClean(plan.destination, plan.operationId,
-        (moved) => checkoutMatches(moved, plan.destination, destinationIdentity, copiedEntries));
+        (moved) => checkoutMatches(moved, plan.destination, destinationIdentity, copiedEntries, birthtimeHolds));
       cleanupFailed ||= cleanup.failed;
       cleanupComplete &&= cleanup.removed;
     }
     if (temporaryIdentity) {
       const cleanup = await quarantineAndClean(plan.temporaryDirectory, plan.operationId, async (moved) => {
         const stats = await fsImpl.lstat(moved);
-        return stats.isDirectory() && fileIdentity(stats) === temporaryIdentity;
+        return stats.isDirectory() && directoryIdentity(stats, birthtimeHolds) === temporaryIdentity;
       });
       cleanupFailed ||= cleanup.failed || !cleanup.removed;
       cleanupComplete &&= cleanup.removed;
