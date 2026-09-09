@@ -2361,5 +2361,5 @@ export const settingsDict = {
   'settings.openchamber.visual.option.enterToSend.modifier.label': 'Ctrl/Cmd+Enter로 전송',
   ...linearIntegrationI18n.ko,
   'settings.page.integrations.title': '통합',
-  'settings.page.integrations.description': 'GitHub와 Linear를 연결하면 OpenChamber가 이슈와 풀 리퀘스트를 다룰 수 있습니다.',
+  'settings.page.integrations.description': 'GitHub, GitLab, Linear를 연결하면 OpenChamber가 이슈, 풀 리퀘스트, 머지 리퀘스트를 다룰 수 있습니다.',
 } as const;

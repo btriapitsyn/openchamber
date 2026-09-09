@@ -2361,5 +2361,5 @@ export const settingsDict = {
   'settings.openchamber.visual.option.enterToSend.modifier.label': '按 Ctrl/Cmd+Enter 傳送',
   ...linearIntegrationI18n['zh-TW'],
   'settings.page.integrations.title': '整合',
-  'settings.page.integrations.description': '連接 GitHub 和 Linear，讓 OpenChamber 可以處理你的 issue 和 pull request。',
+  'settings.page.integrations.description': '連接 GitHub、GitLab 和 Linear，讓 OpenChamber 可以處理你的 issue、pull request 和 merge request。',
 } as const;

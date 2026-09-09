@@ -2361,5 +2361,5 @@ export const settingsDict = {
   'settings.openchamber.visual.option.enterToSend.modifier.label': 'Ctrl/Cmd+Enter で送信',
   ...linearIntegrationI18n.ja,
   'settings.page.integrations.title': '連携',
-  'settings.page.integrations.description': 'GitHub と Linear を接続すると、OpenChamber が Issue やプルリクエストを扱えるようになります。',
+  'settings.page.integrations.description': 'GitHub、GitLab、Linear を接続すると、OpenChamber が Issue、プルリクエスト、マージリクエストを扱えるようになります。',
 } as const;

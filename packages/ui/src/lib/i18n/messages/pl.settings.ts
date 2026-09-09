@@ -2354,5 +2354,5 @@ export const settingsDict = {
   'settings.openchamber.visual.option.enterToSend.modifier.label': 'Wyślij klawiszami Ctrl/Cmd+Enter',
   ...linearIntegrationI18n.pl,
   'settings.page.integrations.title': 'Integracje',
-  'settings.page.integrations.description': 'Połącz GitHub i Linear, aby OpenChamber mógł pracować z Twoimi issue i pull requestami.',
+  'settings.page.integrations.description': 'Połącz GitHub, GitLab i Linear, aby OpenChamber mógł pracować z Twoimi issue, pull requestami i merge requestami.',
 };

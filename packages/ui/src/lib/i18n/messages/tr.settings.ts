@@ -2267,7 +2267,7 @@ export const settingsDict = {
   'settings.openchamber.visual.field.sessionTabsAria': 'Başlıktaki session sekmelerini aç/kapat',
   'settings.openchamber.visual.field.sessionTabsInfo': 'Açtığınız session\'lar başlıkta sekmeler olarak dizilir. Kapatırsanız düz session başlığına döner.',
   'settings.page.integrations.title': 'Entegrasyonlar',
-  'settings.page.integrations.description': 'OpenChamber’ın issue’lar ve pull request’lerle çalışabilmesi için GitHub ve Linear’ı bağlayın.',
+  'settings.page.integrations.description': 'OpenChamber’ın issue’lar, pull request’ler ve merge request’lerle çalışabilmesi için GitHub, GitLab ve Linear’ı bağlayın.',
   ...linearIntegrationI18n.tr,
   'settings.sourceControl.ssh.title': 'Yönetilen SSH kimlik bilgileri',
   'settings.sourceControl.ssh.load': 'Sunucu anahtarlarını yükle',

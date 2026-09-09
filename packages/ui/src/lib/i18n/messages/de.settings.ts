@@ -2352,5 +2352,5 @@ export const settingsDict = {
   'settings.sourceControl.transport.remove': 'Transportberechtigung entfernen',
   ...linearIntegrationI18n.de,
   'settings.page.integrations.title': 'Integrationen',
-  'settings.page.integrations.description': 'Verbinde GitHub und Linear, damit OpenChamber mit deinen Issues und Pull Requests arbeiten kann.',
+  'settings.page.integrations.description': 'Verbinde GitHub, GitLab und Linear, damit OpenChamber mit deinen Issues, Pull Requests und Merge Requests arbeiten kann.',
 };
