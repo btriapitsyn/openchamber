@@ -26,7 +26,7 @@ import {
 import type { AttachedFile } from '@/stores/types/sessionTypes';
 import * as sessionActions from '@/sync/session-actions';
 import { buildLinkedIssue, buildLinkedLinearIssue } from '@/lib/linkedIssues';
-import { getInlineCommentDraftKey, useInlineCommentDraftStore, type InlineCommentDraft, type InlineCommentDraftTarget } from '@/stores/useInlineCommentDraftStore';
+import { getInlineCommentDraftKey, useInlineCommentDraftStore, type InlineCommentDraftTarget } from '@/stores/useInlineCommentDraftStore';
 import { useSnippetsStore } from '@/stores/useSnippetsStore';
 import { startReviewFlow } from '@/lib/reviewFlow';
 import { getRuntimeKey } from '@/lib/runtime-switch';
@@ -2347,7 +2347,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             return;
         }
 
-        const isCtrlEnter = e.ctrlKey || e.metaKey;
         if (e.key === 'Enter' && shouldSubmitEnter({
             isMobile,
             isDesktopExpanded,
