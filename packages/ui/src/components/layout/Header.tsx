@@ -1072,7 +1072,9 @@ export const Header: React.FC = () => {
   // `--oc-titlebar-left-inset` so the sidebar strip can mirror it.
   const titlebarLeftInset = React.useMemo(() => {
     if (isDesktopApp && isMacPlatform && !isDesktopWindowFullscreen) {
-      return '5.5rem';
+      // Native traffic lights have a fixed physical footprint. Keep this
+      // clearance in pixels so shrinking the interface cannot overlap them.
+      return '88px';
     }
     if (isTabletStandalonePwa) {
       return 'max(calc(0.75rem + var(--oc-wco-left-inset, 0px)), 5.5rem)';

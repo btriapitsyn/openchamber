@@ -49,6 +49,7 @@ import { messagesBefore } from "./message-ordering"
 import { opencodeClient } from "@/lib/opencode/client"
 import { usePermissionStore } from "@/stores/permissionStore"
 import { applyMessageQueueUpdatedEvent, useMessageQueueStore } from "@/stores/messageQueueStore"
+import { subscribeMessageQueueSync } from "./message-queue-sync"
 import {
   processVSCodePermissionAutoAccept,
   processVSCodeReconciledPermissionAutoAccept,
@@ -2508,6 +2509,10 @@ export function SyncProvider(props: {
   // Event pipeline — created once per mount. No class, no start/stop.
   // Abort controller owned by the pipeline closure. Cleanup aborts + flushes.
   useEffect(() => {
+    const unsubscribeQueueEvents = subscribeMessageQueueSync(runtimeKey)
+    const resyncAfterStreamGap = (reason: SessionMaterializationReason) => {
+      for (const dir of childStores.children.keys()) triggerDirectoryResync(dir, reason)
+    }
     const pipeline = createEventPipeline({
       sdk: props.sdk,
       transport: messageStreamTransport,
@@ -2541,6 +2546,8 @@ export function SyncProvider(props: {
         }
       },
       onReconnect: () => {
+        // Queue recovery is independent of the directory-bootstrap debounce.
+        void useMessageQueueStore.getState().resync().catch(() => undefined)
         useConfigStore.setState({
           isConnected: true,
           hasEverConnected: true,
@@ -2554,9 +2561,7 @@ export function SyncProvider(props: {
         if (isRecentBoot()) {
           return
         }
-        for (const dir of childStores.children.keys()) {
-          triggerDirectoryResync(dir, "stream-reconnect")
-        }
+        resyncAfterStreamGap("stream-reconnect")
       },
       onDisconnect: (reason) => {
         if (!pipelineHasConnectedRef.current) {
@@ -2570,6 +2575,7 @@ export function SyncProvider(props: {
         })
       },
       onTransportSwitch: () => {
+        void useMessageQueueStore.getState().resync().catch(() => undefined)
         // Transport changes are gap-prone in real networks. Treat them like a
         // reconnect and refresh active session snapshots from HTTP.
         useConfigStore.setState({
@@ -2577,9 +2583,7 @@ export function SyncProvider(props: {
           hasEverConnected: true,
           connectionPhase: "connected",
         })
-        for (const dir of childStores.children.keys()) {
-          triggerDirectoryResync(dir, "transport-switch")
-        }
+        resyncAfterStreamGap("transport-switch")
       },
     })
     pipelineReconnectRef.current = pipeline.reconnect
@@ -2588,6 +2592,7 @@ export function SyncProvider(props: {
         pipelineReconnectRef.current = null
       }
       pipeline.cleanup()
+      unsubscribeQueueEvents()
     }
   }, [props.sdk, childStores, routingIndex, messageStreamTransport, runtimeKey, triggerDirectoryResync])
 

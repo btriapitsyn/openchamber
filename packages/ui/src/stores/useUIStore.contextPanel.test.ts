@@ -6,6 +6,7 @@ import { useUIStore } from './useUIStore';
 const getContextPanelTabs = (directory: string) => useUIStore.getState().contextPanelByDirectory[directory]?.tabs ?? [];
 
 const getTerminalTab = (directory: string) => getContextPanelTabs(directory).find((tab) => tab.mode === 'terminal');
+const originalPersistOptions = useUIStore.persist.getOptions();
 
 beforeEach(() => {
   useUIStore.setState({ contextPanelByDirectory: {}, contextRailOrder: [] });
@@ -178,6 +179,48 @@ describe('useUIStore context panel tabs', () => {
 
     const tabs = useUIStore.getState().contextPanelByDirectory[directory]?.tabs ?? [];
     expect(tabs.some((tab) => tab.mode === 'plan')).toBe(true);
+  });
+
+  test('drops invalid persisted context-panel width fractions', async () => {
+    const directory = '/repo';
+    useUIStore.persist.setOptions({ storage: {
+      getItem: () => ({
+        version: 20,
+        state: {
+          contextPanelByDirectory: {
+            [directory]: {
+              isOpen: true,
+              expanded: false,
+              widthByMode: { walkthrough: 800 },
+              widthFractionByMode: {
+                diff: 0,
+                file: 1.25,
+                context: Number.NaN,
+                plan: '0.4',
+                chat: 0.4,
+                walkthrough: 0.8,
+              },
+              touchedAt: 1,
+              activeTabId: null,
+              tabs: [],
+            },
+          },
+        },
+      }),
+      setItem: () => undefined,
+      removeItem: () => undefined,
+    } });
+
+    try {
+      useUIStore.setState(useUIStore.getInitialState(), true);
+      await useUIStore.persist.rehydrate();
+
+      const panel = useUIStore.getState().contextPanelByDirectory[directory];
+      expect(panel?.widthFractionByMode).toEqual({ chat: 0.4, walkthrough: 0.8 });
+      expect(panel?.widthByMode.walkthrough).toBe(800);
+    } finally {
+      useUIStore.persist.setOptions(originalPersistOptions);
+    }
   });
 
   test('drops a persisted saved-plan tab carrying an owner but no plan id', () => {
@@ -672,8 +715,29 @@ describe('useUIStore per-surface panel widths', () => {
 
     const state = useUIStore.getState().contextPanelByDirectory[directory];
     expect(state?.widthByMode.diff).toBe(700);
-    expect(state?.widthByMode.git).toBe(380);
+    expect(state?.widthByMode.git).toBe(320);
     expect(state?.widthByMode.browser).toBe(undefined);
+  });
+
+  test('captures the clamped width as a responsive ratio when the panel area is known', () => {
+    useUIStore.getState().openContextPanelTab(directory, { mode: 'diff' });
+    useUIStore.getState().setContextPanelWidth(directory, 'diff', 100, 1000);
+    useUIStore.getState().setContextPanelWidth(directory, 'git', 700, 1000);
+
+    const state = useUIStore.getState().contextPanelByDirectory[directory];
+    expect(state?.widthByMode.diff).toBe(320);
+    expect(state?.widthFractionByMode.diff).toBe(0.32);
+    expect(state?.widthFractionByMode.git).toBe(0.7);
+    expect(state?.widthFractionByMode.browser).toBe(undefined);
+  });
+
+  test('a pixel resize without a valid area replaces the previous ratio', () => {
+    const store = useUIStore.getState();
+    store.setContextPanelWidth(directory, 'walkthrough', 800, 1000);
+    store.setContextPanelWidth(directory, 'walkthrough', 600, Number.POSITIVE_INFINITY);
+    const panel = useUIStore.getState().contextPanelByDirectory[directory];
+    expect(panel?.widthByMode.walkthrough).toBe(600);
+    expect(panel?.widthFractionByMode.walkthrough).toBeUndefined();
   });
 });
 

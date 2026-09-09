@@ -310,7 +310,7 @@ export function DraftTargetSelectors(props: DraftTargetProps) {
                 >
                     <span className="flex min-w-0 items-center gap-1.5">
                         {selectedProject.kind === 'chat'
-                            ? <span className="truncate">{t('chat.chatInput.chooseProject')}</span>
+                            ? <span className="truncate typography-ui-label">{t('chat.chatInput.chooseProject')}</span>
                             : <ProjectLabel project={selectedProject} theme={theme} />}
                         <Icon name="arrow-down-s" className="size-4 shrink-0 opacity-50" />
                     </span>
@@ -498,7 +498,7 @@ export function MobileDraftTargetTriggers(
                 onClick={() => onOpenPicker('project')}
             >
                 {selectedProject.kind === 'chat'
-                    ? <span className="truncate">{t('chat.chatInput.chooseProject')}</span>
+                    ? <span className="truncate typography-ui-label">{t('chat.chatInput.chooseProject')}</span>
                     : <ProjectLabel project={selectedProject} theme={theme} />}
                 <Icon name="arrow-down-s" className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
             </button>

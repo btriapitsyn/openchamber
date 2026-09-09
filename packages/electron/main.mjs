@@ -258,6 +258,7 @@ const { autoUpdater } = updaterPkg;
 const state = {
   serverHandle: null,
   sidecarUrl: null,
+  localUiUrl: null,
   localOrigin: null,
   apiBaseUrl: null,
   clientToken: null,
@@ -2308,6 +2309,13 @@ const getMenuTargetWindow = () => {
 
 const dispatchMenuAction = (action) => {
   const target = getMenuTargetWindow();
+  // Zoom actions are consumed by the renderer's DOM listener. Sending them
+  // through both the IPC bridge and the DOM event would invoke the handler
+  // multiple times because preload fans the IPC event back into both paths.
+  if (action === 'zoom-in' || action === 'zoom-out' || action === 'zoom-reset') {
+    dispatchDomEventToWindow(target, 'openchamber:zoom', action);
+    return;
+  }
   emitToWindow(target, 'openchamber:menu-action', action);
   dispatchDomEventToWindow(target, 'openchamber:menu-action', action);
 };
@@ -2748,7 +2756,7 @@ const createAdditionalWindow = async (url, runtimeConfig = {}) => {
 const buildMiniChatUrl = ({ mode, sessionId, directory, projectId }) => {
   const base = shouldUsePackagedUi()
     ? buildPackagedUiUrl('/mini-chat.html')
-    : state.localOrigin || state.sidecarUrl;
+    : state.localUiUrl || state.localOrigin || state.sidecarUrl;
   if (!base) {
     throw new Error('Local UI is not available');
   }
@@ -2963,6 +2971,7 @@ const resolveInitialUrl = async () => {
     : localUrl;
 
   state.sidecarUrl = localUrl;
+  state.localUiUrl = localUiUrl;
   const localAvailable = Boolean(localUrl);
 
   const localOrigin = localUrl ? new URL(localUrl).origin : null;
@@ -4864,6 +4873,10 @@ const buildMacMenu = () => {
         { role: 'minimize' },
         { role: 'zoom' },
         { type: 'separator' },
+        { label: 'Zoom In', accelerator: 'CmdOrCtrl+=', click: () => dispatchAction('zoom-in') },
+        { label: 'Zoom Out', accelerator: 'CmdOrCtrl+-', click: () => dispatchAction('zoom-out') },
+        { label: 'Reset Zoom', accelerator: 'CmdOrCtrl+0', click: () => dispatchAction('zoom-reset') },
+        { type: 'separator' },
         { role: 'close' },
       ],
     },
@@ -4977,6 +4990,9 @@ const buildAutoHiddenMenu = () => {
       label: 'Window',
       submenu: [
         { role: 'minimize' },
+        { label: 'Zoom In', accelerator: 'Ctrl+=', click: () => dispatchAction('zoom-in') },
+        { label: 'Zoom Out', accelerator: 'Ctrl+-', click: () => dispatchAction('zoom-out') },
+        { label: 'Reset Zoom', accelerator: 'Ctrl+0', click: () => dispatchAction('zoom-reset') },
         { role: 'togglefullscreen' },
         { type: 'separator' },
         { role: 'close' },

@@ -81,4 +81,44 @@ describe('openchamber events', () => {
     ]);
     unsubscribe();
   });
+
+  test('a connected control SSE stream clears delivered queues without reconnecting or polling', async () => {
+    const { subscribeMessageQueueSync } = await import('@/sync/message-queue-sync');
+    const { getRuntimeKey } = await import('./runtime-switch');
+    const { useMessageQueueStore, createMessageQueueTarget, getMessageQueueKey } = await import('@/stores/messageQueueStore');
+    const runtimeKey = getRuntimeKey();
+    const target = createMessageQueueTarget('session-sse', '/repo', runtimeKey);
+    if (!target) throw new Error('Missing queue target');
+    useMessageQueueStore.getState().resetForRuntimeSwitch(runtimeKey);
+    useMessageQueueStore.setState({ queuedMessages: {}, sendingIds: {} });
+    const originalFetch = globalThis.fetch;
+    let reads = 0;
+    globalThis.fetch = Object.assign(async (input: RequestInfo | URL) => {
+      const url = new URL(input instanceof Request ? input.url : String(input), 'http://runtime.test');
+      if (url.pathname === '/api/message-queue') reads += 1;
+      return Response.json({ revision: 1, sessions: [] });
+    }, originalFetch);
+    const unsubscribe = subscribeMessageQueueSync(runtimeKey);
+    const source = MockEventSource.instances[0];
+    try {
+      source.onmessage?.({ data: JSON.stringify({ type: 'openchamber:event-stream-ready', properties: {} }) });
+      await useMessageQueueStore.getState().hydrate();
+      expect(reads).toBe(1);
+      const session = { sessionId: target.sessionId, directory: target.directory, sendingId: 'q1', items: [{ id: 'q1', content: 'queued', text: 'queued', createdAt: 1, attachments: [], sendConfig: { providerID: 'p', modelID: 'm' } }] };
+      source.onmessage?.({ data: JSON.stringify({ type: 'openchamber:message-queue.updated', properties: { revision: 2, session } }) });
+      const key = getMessageQueueKey(target);
+      expect(useMessageQueueStore.getState().queuedMessages[key]).toHaveLength(1);
+      source.onmessage?.({ data: JSON.stringify({ type: 'openchamber:message-queue.updated', properties: { revision: 3, session: { ...session, items: [], sendingId: null } } }) });
+      expect(useMessageQueueStore.getState().queuedMessages[key]).toBeUndefined();
+      expect(useMessageQueueStore.getState().sendingIds[key]).toBeUndefined();
+      expect(reads).toBe(1);
+      expect(MockEventSource.instances).toHaveLength(1);
+      unsubscribe();
+      source.onmessage?.({ data: JSON.stringify({ type: 'openchamber:message-queue.updated', properties: { revision: 4, session } }) });
+      expect(useMessageQueueStore.getState().queuedMessages[key]).toBeUndefined();
+    } finally {
+      unsubscribe();
+      globalThis.fetch = originalFetch;
+    }
+  });
 });

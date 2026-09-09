@@ -170,6 +170,10 @@ Use an explicit override when testing a different OpenCode CLI build or when a u
 ## Native Features Owned Here
 
 - Floating Mini Chat windows.
+- Mini Chat loads from the resolved local UI origin in HMR development, not the
+  API server origin. Bundled mode keeps `openchamber-ui://` assets. Native zoom
+  targets the focused window directly; composer focus adjusts interface scale,
+  while terminal and file-editor focus adjust their own font sizes.
 - New Mini Chat windows default to the managed Chats target. Explicit project/worktree drafts retain their target, existing managed chat sessions reopen in their own directory, and the compact header omits project/branch metadata for Chats. Opening a managed draft back in the main window preserves that target.
 - Multiple native windows.
 - Native notifications.

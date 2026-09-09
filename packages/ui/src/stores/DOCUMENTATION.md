@@ -94,7 +94,27 @@ These stores coordinate persistent project/session metadata across multiple view
 
 `useProjectContextStore.ts` caches server-owned project notes, todos, and plan links, keyed by the path-derived project id. It replaced a pair of `window` CustomEvents that made every mounted notes panel re-read the whole project config. Writes are optimistic and roll back on failure; they are serialized per project, because the server's own store does a read-modify-write and two concurrent saves would otherwise race it. A load that resolves while a write is in flight keeps the local value for that field group only, so a slow snapshot cannot undo newer typing while still delivering the plan list it fetched. A failed load sets `error` and preserves the cached snapshot — an unreachable server must never render as "this project has no notes". Note and plan creation are deliberately not optimistic, since ids and timestamps are assigned by the server. Notes, todos, and plans are written through separate routes and tracked by separate in-flight flags, so a todo toggle cannot clobber a note edit in the same window. Pinned notes and plans are assembled into a synthetic context part by `lib/projectContextPinning.ts` at send time; that module tracks per-session what it already sent so an unchanged pinned set is not re-sent every turn.
 
-`messageQueueStore.ts` has two owners, decided by `isServerOwnedMessageQueue()`. On web, desktop, and mobile the OpenChamber server owns the queue (`packages/web/server/lib/message-queue/`): it delivers queued messages when the session goes idle whether or not any UI is open, and the store is a projection of it — `hydrate()` loads the server snapshot for the active runtime, `openchamber:message-queue.updated` broadcasts keep it current, and every mutation is optimistic locally then settled on the server's copy of that session (a failed round-trip re-reads the server instead of guessing). A per-key server revision rejects stale snapshots. An empty session that arrives without a directory (servers before 1.22.2 dropped it once the queue emptied) clears every projection of that session id in the runtime, because a session id is unique across directories. Projection items carry attachment metadata only and no captured context; `popToInput()`/`takeForSend()` remove the message on the server and get the full payload back, which is why both are async.
+`messageQueueStore.ts` has two owners, decided by `isServerOwnedMessageQueue()`.
+On web, desktop, and mobile the server delivers the queue independently of the
+UI. The store projects authoritative snapshots and revisioned session updates.
+`sync/message-queue-sync.ts` receives queue events through the shared control SSE
+stream at `/api/openchamber/events`, including while OpenCode uses SSE fallback.
+It adds no poller or per-session connection. Either stream reconnecting requests
+`resync()`, independently of directory-bootstrap suppression.
+
+Hydration and recovery share one in-flight request per runtime. A recovery edge
+during its snapshot read earns one trailing read; legacy uploads are attempted
+once per runtime rather than repeated on reconnect or snapshot failure. Snapshot
+reads have a 15-second deadline. Failure preserves the projection and runtime
+switches reject stale completions. Full-snapshot revisions also cover omitted
+sessions, so a delayed mutation response cannot resurrect a cleared queue;
+session events newer than that snapshot survive reconciliation.
+
+Mutations are optimistic and then settled on the server's copy; failed
+round-trips re-read instead of guessing. Empty legacy events without a directory
+clear all projections of their session in that runtime. Projection items carry
+attachment metadata only, so `popToInput()` and `takeForSend()` asynchronously
+remove the message on the server and retrieve its complete captured payload.
 
 A queued message is captured whole, so whoever delivers it sends exactly what the composer would have: `text` (the content with its agent mention stripped and `@file` mentions already resolved into `attachments`), `agentMention`, and `context` — every chip the composer had attached (inline comments, terminal selections, browser annotations, PR comments/checks, quotes, linked issue/PR/Linear references, pending synthetic parts) plus the skill instruction derived from the text. `QueuedContextPart` distinguishes attached items (restored to the chips when the message is edited) from derived instructions (re-derived on send, never restored) and from synthetic parts other surfaces handed the composer (restored as pending). Context is captured by `buildComposerContext` and delivered by `queuedContextToParts` (`components/chat/composer/submit/buildOutgoingMessage.ts`), the same functions the composer uses for its own send. Nothing is re-resolved at delivery: the server has no agent list, no confirmed mentions, and no draft store. Messages a previous build left in this browser are uploaded once on the first hydration of a runtime and then dropped from persistence for that runtime (`partialize` skips server-owned runtime keys). VS Code has no server and keeps the local queue with the foreground auto-send hook (`useQueuedMessageAutoSend`, enabled only there); `useMessageQueueHoldSync` tells the server to hold a session's queue while a UI-driven auto-review run is going.
 

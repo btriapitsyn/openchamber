@@ -918,7 +918,13 @@ const messageQueueRuntime = createMessageQueueRuntime({
   buildOpenCodeUrl,
   getOpenCodeAuthHeaders,
   sessionKnowledgeRuntime,
-  broadcastGlobalUiEvent,
+  // OpenCode's /global/event SSE proxy cannot carry OpenChamber-owned events.
+  // Use the shared control stream for SSE clients and the existing WS fan-out.
+  broadcastGlobalUiEvent: createGlobalUiEventBroadcaster({
+    sseClients: uiOpenChamberEventClients,
+    wsClients: uiNotificationWsClients,
+    writeSseEvent,
+  }),
   onPromptSent: (sessionId) => sessionRuntime.markUserMessageSent(sessionId),
   dataDir: OPENCHAMBER_DATA_DIR,
 });

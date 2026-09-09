@@ -140,7 +140,10 @@ allowlists.
 
 Every mutation broadcasts `openchamber:message-queue.updated` with
 `{ revision, session }` to all connected clients (SSE and WS), so several
-devices on one server see one queue. The session in that payload always names
+devices on one server see one queue. SSE uses the shared control stream at
+`/api/openchamber/events`; `/api/global/event` carries no OpenChamber events.
+The UI subscribes independently of its OpenCode transport and re-reads the
+snapshot whenever either stream reconnects. The session in that payload always names
 its `directory`, including the broadcast that removes the last item: the UI
 keys its projection by directory, and a broadcast without one left the
 delivered message on screen (a session's directory is remembered until the
