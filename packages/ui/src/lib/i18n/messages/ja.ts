@@ -1310,7 +1310,6 @@ export const dict: Record<I18nKey, string> = {
   'contextRail.surface.walkthrough.description': 'AI による変更のガイド付きウォークスルー',
   'walkthrough.scope.all': '未コミットすべて',
   'walkthrough.scope.group.workingTree': '作業ツリー',
-  'walkthrough.scope.group.committed': 'コミット済み',
   'walkthrough.scope.staged': 'ステージ済み',
   'walkthrough.scope.working': '未ステージ',
   'walkthrough.scope.branch': 'このブランチ',

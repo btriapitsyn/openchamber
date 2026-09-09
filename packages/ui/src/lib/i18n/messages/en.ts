@@ -1313,7 +1313,6 @@ export const dict = {
   'contextRail.surface.walkthrough.description': 'An AI-guided walkthrough of your changes',
   'walkthrough.scope.all': 'All uncommitted',
   'walkthrough.scope.group.workingTree': 'Working tree',
-  'walkthrough.scope.group.committed': 'Committed',
   'walkthrough.scope.staged': 'Staged',
   'walkthrough.scope.working': 'Unstaged',
   'walkthrough.scope.branch': 'This branch',

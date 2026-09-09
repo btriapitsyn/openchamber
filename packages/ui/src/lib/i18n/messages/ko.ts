@@ -1314,7 +1314,6 @@ export const dict: Record<I18nKey, string> = {
   'contextRail.surface.walkthrough.description': 'AI가 안내하는 변경 사항 워크스루',
   'walkthrough.scope.all': '커밋되지 않은 전체',
   'walkthrough.scope.group.workingTree': '작업 트리',
-  'walkthrough.scope.group.committed': '커밋됨',
   'walkthrough.scope.staged': '스테이지됨',
   'walkthrough.scope.working': '스테이지 안 됨',
   'walkthrough.scope.branch': '이 브랜치',

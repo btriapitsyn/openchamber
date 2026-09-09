@@ -1632,7 +1632,6 @@ export const dict: Record<I18nKey, string> = {
   'contextRail.surface.walkthrough.description': 'Przewodnik po zmianach prowadzony przez AI',
   'walkthrough.scope.all': 'Wszystko niezatwierdzone',
   'walkthrough.scope.group.workingTree': 'Drzewo robocze',
-  'walkthrough.scope.group.committed': 'Zatwierdzone',
   'walkthrough.scope.staged': 'W poczekalni',
   'walkthrough.scope.working': 'Poza poczekalnią',
   'walkthrough.scope.branch': 'Ta gałąź',

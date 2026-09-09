@@ -217,7 +217,7 @@ const CONTEXT_PANEL_MAX_WIDTH = 1400;
 /** Per surface, not per panel: see clampContextPanelTabs. */
 const CONTEXT_PANEL_MAX_TABS = 12;
 const CONTEXT_PANEL_MAX_LABEL_LENGTH = 120;
-const LEFT_SIDEBAR_MIN_WIDTH = 168;
+const LEFT_SIDEBAR_DEFAULT_WIDTH = 280;
 /** Separates browser tabs opened in the same millisecond. */
 let browserTabSequence = 0;
 
@@ -762,7 +762,6 @@ interface UIStore {
   multiRunLauncherPrefillPrompt: string;
   isSidebarOpen: boolean;
   sidebarWidth: number;
-  hasManuallyResizedLeftSidebar: boolean;
   contextPanelByDirectory: Record<string, ContextPanelDirectoryState>;
   contextRailOrder: string[];
   /** Surface ids the user hid from the context rail; stored as the hidden set
@@ -1190,8 +1189,7 @@ export const useUIStore = create<UIStore>()(
         isMultiRunLauncherOpen: false,
         multiRunLauncherPrefillPrompt: '',
         isSidebarOpen: true,
-        sidebarWidth: LEFT_SIDEBAR_MIN_WIDTH,
-        hasManuallyResizedLeftSidebar: false,
+        sidebarWidth: LEFT_SIDEBAR_DEFAULT_WIDTH,
         contextPanelByDirectory: {},
         contextRailOrder: [],
         contextRailHiddenSurfaces: [],
@@ -1354,45 +1352,15 @@ export const useUIStore = create<UIStore>()(
         },
 
         toggleSidebar: () => {
-          set((state) => {
-            const newOpen = !state.isSidebarOpen;
-
-            if (newOpen && !state.hasManuallyResizedLeftSidebar) {
-              return {
-                isSidebarOpen: newOpen,
-                sidebarWidth: LEFT_SIDEBAR_MIN_WIDTH,
-              };
-            }
-            return { isSidebarOpen: newOpen };
-          });
+          set((state) => ({ isSidebarOpen: !state.isSidebarOpen }));
         },
 
         setSidebarOpen: (open) => {
-          set((state) => {
-            if (state.isSidebarOpen === open) {
-              if (!open) {
-                return state;
-              }
-              if (!state.hasManuallyResizedLeftSidebar && state.sidebarWidth !== LEFT_SIDEBAR_MIN_WIDTH) {
-                return {
-                  isSidebarOpen: open,
-                  sidebarWidth: LEFT_SIDEBAR_MIN_WIDTH,
-                };
-              }
-              return state;
-            }
-            if (open && !state.hasManuallyResizedLeftSidebar) {
-              return {
-                isSidebarOpen: open,
-                sidebarWidth: LEFT_SIDEBAR_MIN_WIDTH,
-              };
-            }
-            return { isSidebarOpen: open };
-          });
+          set((state) => state.isSidebarOpen === open ? state : { isSidebarOpen: open });
         },
 
         setSidebarWidth: (width) => {
-          set({ sidebarWidth: width, hasManuallyResizedLeftSidebar: true });
+          set({ sidebarWidth: width });
         },
 
         setContextRailOrder: (order) => {

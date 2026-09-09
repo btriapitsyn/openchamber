@@ -1314,7 +1314,6 @@ export const dict: Record<I18nKey, string> = {
   'contextRail.surface.walkthrough.description': '由 AI 引导的改动导读',
   'walkthrough.scope.all': '全部未提交',
   'walkthrough.scope.group.workingTree': '工作区',
-  'walkthrough.scope.group.committed': '已提交',
   'walkthrough.scope.staged': '已暂存',
   'walkthrough.scope.working': '未暂存',
   'walkthrough.scope.branch': '当前分支',

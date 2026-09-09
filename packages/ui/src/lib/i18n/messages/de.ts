@@ -3246,7 +3246,6 @@ export const dict = {
   'contextRail.surface.walkthrough.description': 'Walkthrough-Kontext',
   'walkthrough.scope.all': 'Alle',
   'walkthrough.scope.group.workingTree': 'Arbeitsbaum',
-  'walkthrough.scope.group.committed': 'Eingecheckt',
   'walkthrough.scope.staged': 'Bereitgestellt',
   'walkthrough.scope.working': 'Arbeitsstand',
   'walkthrough.scope.branch': 'Branch',

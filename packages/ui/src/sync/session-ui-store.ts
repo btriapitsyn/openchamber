@@ -526,6 +526,11 @@ const getAuthoritativeSessionDirectory = (sessionId: string): string | null => {
   const target = getAllSyncSessions().find((s) => s.id === sessionId)
   const recordDirectory = target ? resolveDirectoryKey(target) : null
   if (recordDirectory) return normalizePath(recordDirectory)
+  // The sidebar can know this session before its directory store bootstraps.
+  // Use that record's own directory before falling back to local routing hints.
+  const globalSession = useGlobalSessionsStore.getState().entityById.get(sessionId)
+  const globalDirectory = normalizePath(globalSession?.directory)
+  if (globalDirectory) return globalDirectory
   const owningDirectory = getSyncSessionDirectory(sessionId)
   return owningDirectory ? normalizePath(owningDirectory) : null
 }

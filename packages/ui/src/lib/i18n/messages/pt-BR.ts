@@ -1304,7 +1304,6 @@ export const dict: Record<I18nKey, string> = {
   "contextRail.surface.walkthrough.description": "Um percurso pelas suas mudanças guiado por IA",
   "walkthrough.scope.all": "Tudo sem commit",
   "walkthrough.scope.group.workingTree": "Árvore de trabalho",
-  "walkthrough.scope.group.committed": "Com commit",
   "walkthrough.scope.staged": "No stage",
   "walkthrough.scope.working": "Fora do stage",
   "walkthrough.scope.branch": "Este branch",

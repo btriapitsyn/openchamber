@@ -362,15 +362,24 @@ The following functions are internal helpers used by exported functions:
 - Commit comparison uses the same server boundary through optional `GitAPI.getGitCommitDiff`. Desktop Changes, mobile Changes, and the existing walkthrough surface share branch/commit comparison semantics. Mobile Changes uses the same selectors and `useGitComparison` file-list owner, with a read-only list-to-detail flow. VS Code keeps its existing modes because its Git bridge does not provide these comparison operations. The HTTP operations are available to web, Electron, hosted mobile, and Capacitor clients.
 
 ### Staged and unstaged change handling
-- Desktop Changes keeps a canonical three-line-context action patch separate
-  from its full-file display patch. Multi-hunk actions require identical file
-  headers and full blob identities for the display/action pair, including cached
-  action patches; mismatch or missing identity leaves actions unavailable until
-  Retry obtains a matching pair. Successful file/hunk mutations invalidate
+- Desktop Changes floats a compact action capsule after each hunk's last changed row,
+  including single-hunk files. Whole-file controls remain in the Git panel.
+  `getPatchHunkAnchors` uses the canonical patch's final changed row and side, so a hunk
+  ending in deletions is anchored after those deletions rather than above them.
+  Zero-height Pierre annotation slots anchor the capsule over following context
+  without a separate band. At EOF the capsule lifts inside the code column;
+  a one-line code column has a minimum hit-target height. React controls mount only
+  for currently rendered slots and only after their rendered diff and anchor
+  identities match the current props. Comment annotations remain independent.
+- The canonical three-line-context action patch stays separate from the full-file
+  display patch. Their bytes must be identical, or their file headers and full
+  blob identities must match, including when reusing a cached action patch.
+  Mismatch leaves actions unavailable until Retry obtains a matching pair.
+  Successful hunk mutations invalidate
   every mounted view of that path through `sessionEvents.requestGitRefresh`.
   Actions remain unavailable until the refresh succeeds. Last turn, Branch and
   Commit snapshots never expose hunk mutations. Mobile uses its separate Changes
-  surface and VS Code does not mount this menu.
+  surface and VS Code does not mount these controls.
 - Untracked patches from `getDiff` and `getUntrackedDiffs` use `git diff --no-index` with separate stdout, stderr, and process exit status. Exit codes 0 and 1 return stdout only, so line-ending warnings never become patch text or request failures. Other exits and process failures reject the single-file request; the batch keeps an empty entry for the failed path and preserves the other results.
 - `status.files` exposes both `index` and `working_dir` codes. Shared UI uses these as separate scopes: staged rows are derived from non-empty `index` statuses, while unstaged rows are derived from `working_dir` statuses and untracked files.
 - A file with both staged and unstaged changes can appear in both UI sections. Staged rows request diffs with `staged: true`; unstaged rows request normal working-tree diffs.

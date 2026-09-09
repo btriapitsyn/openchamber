@@ -37,6 +37,7 @@ import { getResolvedShikiTheme } from '@/lib/shiki/appThemeRegistry';
 import { File as PierreFile, VirtualizerContext, WorkerPoolContext } from '@pierre/diffs/react';
 import { useWorkerPool } from '@/contexts/DiffWorkerProvider';
 import { useFileViewVirtualizer, type FileViewVirtualizer } from './useFileViewVirtualizer';
+import { useFilePreviewScrollPosition } from './useFilePreviewScrollPosition';
 import {
   Dialog,
   DialogContent,
@@ -692,6 +693,59 @@ interface FilesViewProps {
   mode?: 'full' | 'editor-only';
 }
 
+type FileEditorPosition = {
+  scroll: ReturnType<EditorView['scrollSnapshot']>;
+  anchor: number;
+  head: number;
+};
+
+// Keep only position metadata, not editor instances or file contents. This
+// survives FilesView unmounts without retaining every file visited indefinitely.
+const fileEditorPositions = new Map<string, FileEditorPosition>();
+const MAX_FILE_EDITOR_POSITIONS = 100;
+
+const FilePositionEditor = ({
+  positionKey,
+  onViewReady,
+  ...props
+}: React.ComponentProps<typeof CodeMirrorEditor> & { positionKey: string }) => {
+  const viewRef = React.useRef<EditorView | null>(null);
+
+  React.useLayoutEffect(() => () => {
+    const view = viewRef.current;
+    if (!view) return;
+
+    // Read before React removes the editor DOM and its scroll offsets collapse.
+    const { anchor, head } = view.state.selection.main;
+    fileEditorPositions.delete(positionKey);
+    fileEditorPositions.set(positionKey, { scroll: view.scrollSnapshot(), anchor, head });
+    if (fileEditorPositions.size > MAX_FILE_EDITOR_POSITIONS) {
+      const oldestKey = fileEditorPositions.keys().next().value;
+      if (oldestKey !== undefined) fileEditorPositions.delete(oldestKey);
+    }
+  }, [positionKey]);
+
+  return (
+    <CodeMirrorEditor
+      {...props}
+      onViewReady={(view) => {
+        viewRef.current = view;
+        const position = fileEditorPositions.get(positionKey);
+        if (position) {
+          view.dispatch({
+            selection: {
+              anchor: Math.min(position.anchor, view.state.doc.length),
+              head: Math.min(position.head, view.state.doc.length),
+            },
+            effects: position.scroll,
+          });
+        }
+        onViewReady?.(view);
+      }}
+    />
+  );
+};
+
 /**
  * Keeps a token-bearing asset preview (image/HTML/PDF) authenticated. While
  * `assetKey` is set this registers an active url-token consumer (so runtime-auth
@@ -922,6 +976,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
   const [desktopImageSrc, setDesktopImageSrc] = React.useState<string>('');
 
   const [loadedFilePath, setLoadedFilePath] = React.useState<string | null>(null);
+  const filePositionKey = JSON.stringify([getRuntimeKey(), root, loadedFilePath]);
 
   const [draftContent, setDraftContent] = React.useState('');
   const [isSaving, setIsSaving] = React.useState(false);
@@ -3210,6 +3265,34 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
 
   const mainViewVirtualizer = useFileViewVirtualizer();
   const fullscreenViewVirtualizer = useFileViewVirtualizer();
+  const previewReady = !fileLoading && !fileError && loadedFilePath === selectedFilePath;
+  const codePreviewActive = previewReady && canUseShikiFileView && textViewMode === 'view'
+    && !(isJson && jsonViewMode === 'tree');
+  const markdownPreviewActive = previewReady && isMarkdown && getMdViewMode() === 'preview';
+  const { setScroller: setMainCodeScroller, restore: restoreMainCodeScroll } = useFilePreviewScrollPosition(codePreviewActive ? `${filePositionKey}:code` : null);
+  const { setScroller: setFullscreenCodeScroller, restore: restoreFullscreenCodeScroll } = useFilePreviewScrollPosition(codePreviewActive ? `${filePositionKey}:code:fullscreen` : null);
+  const { setScroller: setMainMarkdownScroll } = useFilePreviewScrollPosition(markdownPreviewActive ? `${filePositionKey}:markdown` : null);
+  const { setScroller: setFullscreenMarkdownScroll } = useFilePreviewScrollPosition(markdownPreviewActive ? `${filePositionKey}:markdown:fullscreen` : null);
+  const { setScroller: connectMainVirtualizer } = mainViewVirtualizer;
+  const { setScroller: connectFullscreenVirtualizer } = fullscreenViewVirtualizer;
+
+  const setMainPreviewScroller = React.useCallback((node: HTMLElement | null) => {
+    connectMainVirtualizer(node);
+    setMainCodeScroller(node);
+  }, [connectMainVirtualizer, setMainCodeScroller]);
+  const setFullscreenPreviewScroller = React.useCallback((node: HTMLElement | null) => {
+    connectFullscreenVirtualizer(node);
+    setFullscreenCodeScroller(node);
+  }, [connectFullscreenVirtualizer, setFullscreenCodeScroller]);
+  const setMainMarkdownScroller = React.useCallback((node: HTMLDivElement | null) => {
+    markdownPreviewRef.current = node;
+    mdPreviewContainerRef.current = node;
+    setMainMarkdownScroll(node);
+  }, [setMainMarkdownScroll]);
+  const setFullscreenMarkdownScroller = React.useCallback((node: HTMLDivElement | null) => {
+    mdFullscreenPreviewContainerRef.current = node;
+    setFullscreenMarkdownScroll(node);
+  }, [setFullscreenMarkdownScroll]);
   const shikiWorkerPool = useWorkerPool('unified');
   // Files above the editable size cap are rendered as a read-only preview; give
   // them the full file content plus pierre's viewport virtualization and the
@@ -3220,7 +3303,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     [fileContent, isLargeFile],
   );
 
-  const renderShikiFileView = React.useCallback((file: FileNode, content: string, virtualizer: FileViewVirtualizer) => {
+  const renderShikiFileView = React.useCallback((file: FileNode, content: string, virtualizer: FileViewVirtualizer, restoreScroll: ReturnType<typeof useFilePreviewScrollPosition>['restore']) => {
     const fileContents = {
       name: file.name,
       contents: content,
@@ -3235,6 +3318,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
           overflow: wrapLines ? 'wrap' : 'scroll',
           theme: pierreTheme,
           themeType: currentTheme.metadata.variant === 'dark' ? 'dark' : 'light',
+          onPostRender: restoreScroll,
         }}
         className={isLargeFile ? 'block w-full' : 'block h-full w-full'}
         style={isLargeFile ? undefined : { height: '100%' }}
@@ -3883,7 +3967,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
       </div>
 
       <div className="flex-1 min-h-0 min-w-0 relative">
-        <ScrollableOverlay ref={mainViewVirtualizer.setScroller} outerClassName="h-full min-w-0" className={cn('h-full min-w-0', isLargeFile && '[overflow-anchor:none]')}>
+        <ScrollableOverlay ref={setMainPreviewScroller} outerClassName="h-full min-w-0" className={cn('h-full min-w-0', isLargeFile && '[overflow-anchor:none]')}>
           {!selectedFile ? (
             <div className="p-3 typography-ui text-muted-foreground">{t('filesView.editor.pickFileFromTree')}</div>
           ) : (fileLoading || isPdfAssetAuthLoading) ? (
@@ -3968,10 +4052,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
                 // plain div never holds focus. -1 keeps it out of the tab order.
                 tabIndex={-1}
                 onMouseDown={focusMdPreviewContainer}
-                ref={(node) => {
-                  markdownPreviewRef.current = node;
-                  mdPreviewContainerRef.current = node;
-                }}
+                ref={setMainMarkdownScroller}
               >
                 <FilePreviewCommentMenu
                   containerRef={markdownPreviewRef}
@@ -4035,14 +4116,16 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
             </div>
             )
           ) : selectedFile && canUseShikiFileView && textViewMode === 'view' ? (
-            renderShikiFileView(selectedFile, isLargeFile ? fileContent : draftContent, mainViewVirtualizer)
+            renderShikiFileView(selectedFile, isLargeFile ? fileContent : draftContent, mainViewVirtualizer, restoreMainCodeScroll)
           ) : (
             <div
               className={cn('relative h-full', shouldMaskEditorForPendingNavigation && 'overflow-hidden')}
               ref={editorWrapperRef}
             >
               <div className={cn('h-full', shouldMaskEditorForPendingNavigation && 'invisible')}>
-                <CodeMirrorEditor
+                <FilePositionEditor
+                  key={filePositionKey}
+                  positionKey={filePositionKey}
                   value={draftContent}
                   onChange={setDraftContent}
                   readOnly={!canEdit}
@@ -4305,7 +4388,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
         <div className="absolute right-4 top-4 z-30">
           {renderFloatingFileControls({ exitFullscreenOnly: true })}
         </div>
-        <ScrollableOverlay ref={fullscreenViewVirtualizer.setScroller} outerClassName="h-full min-w-0" className={cn('h-full min-w-0', isLargeFile && '[overflow-anchor:none]')}>
+        <ScrollableOverlay ref={setFullscreenPreviewScroller} outerClassName="h-full min-w-0" className={cn('h-full min-w-0', isLargeFile && '[overflow-anchor:none]')}>
           {(fileLoading || isPdfAssetAuthLoading) ? (
             suppressFileLoadingIndicator
               ? <div className="p-4" />
@@ -4360,14 +4443,11 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
               className="oc-file-preview h-full overflow-auto p-4 outline-none"
               tabIndex={-1}
               onMouseDown={focusMdPreviewContainer}
-              ref={(node) => {
-                markdownPreviewRef.current = node;
-                mdFullscreenPreviewContainerRef.current = node;
-              }}
+              ref={setFullscreenMarkdownScroller}
             >
               {selectedFile ? (
                 <FilePreviewCommentMenu
-                  containerRef={markdownPreviewRef}
+                  containerRef={mdFullscreenPreviewContainerRef}
                   filePath={selectedFile.path}
                   fileContent={fileContent}
                 />
@@ -4404,11 +4484,13 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
               />
             </div>
           ) : canUseShikiFileView && textViewMode === 'view' ? (
-            renderShikiFileView(selectedFile, isLargeFile ? fileContent : draftContent, fullscreenViewVirtualizer)
+            renderShikiFileView(selectedFile, isLargeFile ? fileContent : draftContent, fullscreenViewVirtualizer, restoreFullscreenCodeScroll)
           ) : (
             <div className={cn('relative h-full', shouldMaskEditorForPendingNavigation && 'overflow-hidden')}>
               <div className={cn('h-full', shouldMaskEditorForPendingNavigation && 'invisible')}>
-              <CodeMirrorEditor
+              <FilePositionEditor
+                key={`${filePositionKey}:fullscreen`}
+                positionKey={`${filePositionKey}:fullscreen`}
                 value={draftContent}
                 onChange={setDraftContent}
                 readOnly={!canEdit}

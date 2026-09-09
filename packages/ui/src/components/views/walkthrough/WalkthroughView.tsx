@@ -656,9 +656,6 @@ export const WalkthroughView = ({ directory: rootDirectory, visible = true }: Wa
                 </>
               )}
               <DropdownMenuSeparator />
-              <DropdownMenuLabel className={SCOPE_GROUP_LABEL_CLASS}>
-                {t('walkthrough.scope.group.committed')}
-              </DropdownMenuLabel>
               <DropdownMenuRadioItem value="commit">
                 {t('commitComparison.mode')}
               </DropdownMenuRadioItem>

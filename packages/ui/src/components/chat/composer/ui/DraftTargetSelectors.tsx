@@ -64,7 +64,7 @@ export interface DraftTargetProps {
      * unprompted. Off for a draft the app opened on its own at boot: that
      * draft is often only a placeholder until the last session restores, and
      * a tooltip on an otherwise empty screen reads as a glitch. The warning
-     * icon still shows and the tooltip stays reachable by hover or long press.
+     * icon still shows on desktop and the tooltip stays reachable by hover.
      */
     announceDirtyState: boolean;
     projectRootBranchOption: BranchOption | null;
@@ -483,12 +483,11 @@ export function DraftTargetSelectors(props: DraftTargetProps) {
 
 /** Mobile: buttons that open the bottom sheets below. */
 export function MobileDraftTargetTriggers(
-    props: Pick<DraftTargetProps, 'selectedProject' | 'selectedBranchLabel' | 'showBranchSelector' | 'hasUncommittedChanges' | 'announceDirtyState' | 'theme'>
+    props: Pick<DraftTargetProps, 'selectedProject' | 'selectedBranchLabel' | 'showBranchSelector' | 'theme'>
         & { onOpenPicker: (picker: 'project' | 'branch') => void },
 ) {
     const { t } = useI18n();
-    const { selectedProject, selectedBranchLabel, showBranchSelector, hasUncommittedChanges, announceDirtyState, theme, onOpenPicker } = props;
-    const dirtyTooltip = useDirtyFlashTooltip(hasUncommittedChanges, announceDirtyState);
+    const { selectedProject, selectedBranchLabel, showBranchSelector, theme, onOpenPicker } = props;
 
     return (
         <div className="mb-1.5 flex min-w-0 items-center gap-x-2 px-0.5">
@@ -503,30 +502,14 @@ export function MobileDraftTargetTriggers(
                 <Icon name="arrow-down-s" className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
             </button>
             {showBranchSelector ? (
-                <Tooltip open={dirtyTooltip.open} onOpenChange={dirtyTooltip.onOpenChange}>
-                    <TooltipTrigger asChild>
-                        <button
-                            type="button"
-                            className="inline-flex h-7 min-w-0 max-w-[48vw] flex-shrink cursor-pointer items-center gap-1 rounded-lg px-1.5 typography-micro font-medium text-foreground/80 hover:bg-[var(--interactive-hover)]"
-                            onClick={() => onOpenPicker('branch')}
-                        >
-                            {hasUncommittedChanges ? (
-                                <Icon
-                                    name="alert"
-                                    className="h-3.5 w-3.5 flex-shrink-0 text-[var(--status-warning)]"
-                                    aria-label={t('chat.draftDirtyNotice.indicatorAria')}
-                                />
-                            ) : null}
-                            <span className="truncate">{selectedBranchLabel ?? t('chat.chatInput.branch')}</span>
-                            <Icon name="arrow-down-s" className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
-                        </button>
-                    </TooltipTrigger>
-                    {hasUncommittedChanges ? (
-                        <TooltipContent showArrow side="top" sideOffset={8} className="max-w-72">
-                            <span className="block whitespace-pre-line">{t('chat.draftDirtyNotice.tooltip')}</span>
-                        </TooltipContent>
-                    ) : null}
-                </Tooltip>
+                <button
+                    type="button"
+                    className="inline-flex h-7 min-w-0 max-w-[48vw] flex-shrink cursor-pointer items-center gap-1 rounded-lg px-1.5 typography-micro font-medium text-foreground/80 hover:bg-[var(--interactive-hover)]"
+                    onClick={() => onOpenPicker('branch')}
+                >
+                    <span className="truncate">{selectedBranchLabel ?? t('chat.chatInput.branch')}</span>
+                    <Icon name="arrow-down-s" className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                </button>
             ) : null}
         </div>
     );

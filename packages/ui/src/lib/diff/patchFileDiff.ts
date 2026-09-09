@@ -3,6 +3,7 @@ import {
   parsePatchFiles,
   processFile,
   trimPatchContext,
+  type AnnotationSide,
   type FileDiffMetadata,
 } from '@pierre/diffs';
 
@@ -176,4 +177,36 @@ export const extractHunkPatch = (patch: string, hunkIndex: number): string | nul
   if (!Number.isInteger(hunkIndex) || hunkIndex < 0) return null;
   const hunks = splitPatchIntoHunks(patch);
   return hunks[hunkIndex] ?? null;
+};
+
+export interface PatchHunkAnchor {
+  index: number;
+  side: AnnotationSide;
+  lineNumber: number;
+}
+
+/** Anchor each action after the final changed row, before trailing context. */
+export const getPatchHunkAnchors = (patch: string): PatchHunkAnchor[] => {
+  const anchors: PatchHunkAnchor[] = [];
+  for (const [index, hunk] of splitPatchIntoHunks(patch).entries()) {
+    const header = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@[^\n]*(?:\n|$)/m.exec(hunk);
+    if (!header) continue;
+    let deletionLine = Number(header[1]);
+    let additionLine = Number(header[3]);
+    let anchor: PatchHunkAnchor | undefined;
+    for (const line of hunk.slice(header.index + header[0].length).split('\n')) {
+      if (line.startsWith('-')) {
+        anchor = { index, side: 'deletions', lineNumber: deletionLine++ };
+      } else if (line.startsWith('+')) {
+        anchor = { index, side: 'additions', lineNumber: additionLine++ };
+      } else if (line.startsWith(' ')) {
+        deletionLine += 1;
+        additionLine += 1;
+      }
+    }
+    if (anchor && Number.isSafeInteger(anchor.lineNumber) && anchor.lineNumber > 0) {
+      anchors.push(anchor);
+    }
+  }
+  return anchors;
 };

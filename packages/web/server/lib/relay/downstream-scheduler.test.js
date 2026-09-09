@@ -131,15 +131,19 @@ describe('relay downstream scheduling', () => {
     let acknowledged = 0;
     let maxFlight = 0;
     const pending = Array.from({ length: 400 }, () => scheduler.send(body(1)));
-    for (let round = 0; round < 8; round++) {
+    for (let round = 0; round < 12; round++) {
+      // Keep enough queued output to exercise growth all the way to the cap.
+      while (pending.length < sent.length + 400) pending.push(scheduler.send(body(1)));
       await tick();
       const delivered = sent.reduce((sum, frame) => sum + frame.length, 0);
       maxFlight = Math.max(maxFlight, delivered - acknowledged);
+      expect(delivered - acknowledged).toBeLessThanOrEqual(1024 * 1024);
       advance(200);
       scheduler.acknowledge(delivered);
       acknowledged = delivered;
     }
-    expect(maxFlight).toBeGreaterThan(256 * 1024);
+    // Reach the cap with a backlogged sender, allowing for whole-frame sizing.
+    expect(maxFlight).toBeGreaterThan(1024 * 1024 - body(1).length);
     // Keep the sender backlogged while ACK latency jumps to a second.
     for (let round = 0; round < 12; round++) {
       for (let i = 0; i < 30; i++) pending.push(scheduler.send(body(1)));

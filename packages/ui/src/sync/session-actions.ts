@@ -891,6 +891,7 @@ export async function createSession(
   metadata?: Record<string, unknown>,
   selectionTransition?: "submitted-draft",
 ): Promise<Session | null> {
+  const runtimeKey = getRuntimeKey()
   try {
     // Capture the effective directory used for session creation so we can fall
     // back to it when the server response omits the `directory` field.
@@ -904,11 +905,22 @@ export async function createSession(
       metadata,
     }, effectiveDirectory)
 
+    if (getRuntimeKey() !== runtimeKey) return null
     const sessionDirectory = (session as { directory?: string | null }).directory ?? effectiveDirectory ?? null
     // Pre-populate routing index so SSE events arriving before session.created
     // can be routed to the correct child store
     if (sessionDirectory) {
       registerSessionDirectory(session.id, sessionDirectory)
+      const store = _childStores?.ensureChild(sessionDirectory, { bootstrap: false })
+      if (store) {
+        const current = store.getState().session
+        const existing = Binary.search(current, session.id, (candidate) => candidate.id)
+        // An event may have published newer metadata before the create response.
+        if (!existing.found) {
+          store.setState({ session: [...current.slice(0, existing.index), session, ...current.slice(existing.index)] })
+        }
+      }
+      getImperativeSessionMessageLoader()?.initializeCreatedSession({ directory: sessionDirectory, sessionID: session.id })
     }
     useSessionUIStore.getState().setCurrentSession(session.id, sessionDirectory, selectionTransition)
     useSessionUIStore.getState().markSessionAsOpenChamberCreated(session.id)

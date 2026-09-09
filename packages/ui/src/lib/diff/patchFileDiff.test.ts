@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { extractHunkPatch, splitPatchIntoHunks, haveMatchingPatchVersions } from "./patchFileDiff";
+import { extractHunkPatch, splitPatchIntoHunks, haveMatchingPatchVersions, getPatchHunkAnchors } from "./patchFileDiff";
 
 const SAMPLE_PATCH = `diff --git a/foo.txt b/foo.txt
 index 1111111..2222222 100644
@@ -95,5 +95,33 @@ describe("extractHunkPatch", () => {
     expect(extractHunkPatch(SAMPLE_PATCH, 2)).toBeNull();
     expect(extractHunkPatch(SAMPLE_PATCH, 1.5)).toBeNull();
     expect(extractHunkPatch("", 0)).toBeNull();
+  });
+});
+
+describe('hunk action anchors', () => {
+  const header = 'diff --git a/f b/f\n--- a/f\n+++ b/f\n';
+  test('anchors below trailing deletions rather than above them on the shorter new side', () => {
+    expect(getPatchHunkAnchors(header + '@@ -8,5 +8,3 @@\n line8\n line9\n line10\n-gone11\n-gone12\n')).toEqual([
+      { index: 0, side: 'deletions', lineNumber: 12 },
+    ]);
+  });
+  test('anchors before trailing context and preserves canonical hunk indices', () => {
+    expect(getPatchHunkAnchors(header + '@@ -1,2 +1,2 @@\n-old\n+new\n context\n@@ -20 +20 @@\n-before\n+after\n')).toEqual([
+      { index: 0, side: 'additions', lineNumber: 1 },
+      { index: 1, side: 'additions', lineNumber: 20 },
+    ]);
+  });
+  test('supports added and fully deleted files with an empty opposite side', () => {
+    expect(getPatchHunkAnchors(header + '@@ -0,0 +1,2 @@\n+a\n+b\n')).toEqual([{ index: 0, side: 'additions', lineNumber: 2 }]);
+    expect(getPatchHunkAnchors(header + '@@ -1,2 +0,0 @@\n-a\n-b\n')).toEqual([{ index: 0, side: 'deletions', lineNumber: 2 }]);
+  });
+  test('ignores no-newline metadata when selecting the final row', () => {
+    expect(getPatchHunkAnchors(header + '@@ -1 +1 @@\n-before\r\n+after\r\n\\ No newline at end of file\n')).toEqual([
+      { index: 0, side: 'additions', lineNumber: 1 },
+    ]);
+  });
+  test('does not create controls for an empty or malformed patch', () => {
+    expect(getPatchHunkAnchors('')).toEqual([]);
+    expect(getPatchHunkAnchors(header + '@@ -0,0 +0,0 @@\n')).toEqual([]);
   });
 });

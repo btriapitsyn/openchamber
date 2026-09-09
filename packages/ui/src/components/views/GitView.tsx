@@ -1122,7 +1122,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
   );
 
   React.useEffect(() => {
-    if (!gitDirectory || changeEntries.length === 0) {
+    if (!isActive || !gitDirectory || changeEntries.length === 0) {
       return;
     }
 
@@ -1152,7 +1152,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [changeEntries, gitDirectory, git, prefetchDiffs, stagedChangeEntries, visibleChangePaths]);
+  }, [isActive, changeEntries, gitDirectory, git, prefetchDiffs, stagedChangeEntries, visibleChangePaths]);
 
   const handleSyncAction = async (action: Exclude<SyncAction, null>, remote?: GitRemote, forceChoose = false) => {
     if (!gitDirectory) return;

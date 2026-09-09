@@ -1304,7 +1304,6 @@ export const dict: Record<I18nKey, string> = {
   "contextRail.surface.walkthrough.description": "Покроковий розбір ваших змін за допомогою AI",
   "walkthrough.scope.all": "Усе незакомічене",
   "walkthrough.scope.group.workingTree": "Робоче дерево",
-  "walkthrough.scope.group.committed": "Закомічене",
   "walkthrough.scope.staged": "В індексі",
   "walkthrough.scope.working": "Поза індексом",
   "walkthrough.scope.branch": "Ця гілка",

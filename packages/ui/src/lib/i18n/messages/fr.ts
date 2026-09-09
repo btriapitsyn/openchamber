@@ -1127,7 +1127,6 @@ export const dict = {
   'contextRail.surface.walkthrough.description': 'Un parcours de vos modifications guidé par l’IA',
   'walkthrough.scope.all': 'Tout non validé',
   'walkthrough.scope.group.workingTree': 'Copie de travail',
-  'walkthrough.scope.group.committed': 'Validé',
   'walkthrough.scope.staged': 'Indexées',
   'walkthrough.scope.working': 'Non indexées',
   'walkthrough.scope.branch': 'Cette branche',
