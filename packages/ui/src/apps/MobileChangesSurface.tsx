@@ -734,6 +734,11 @@ export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onCl
         <IdentityDropdown
           activeProfile={activeIdentityProfile}
           identities={availableIdentities}
+          // On a phone the branch, the identity and the sync action cannot all
+          // carry text: a name truncated to "system i…" tells nobody anything,
+          // so below the small breakpoint the identity keeps its icon and the
+          // branch keeps its name. The menu names it in full either way.
+          triggerClassName="max-w-[10rem] shrink [&_.git-identity-label]:hidden sm:[&_.git-identity-label]:inline"
           onOpen={() => void refreshIdentityAccounts(sourceControl, gitIdentityProfiles.map((profile) => profile.account))}
           onSelect={(profile) => void handleApplyIdentity(profile)}
           isApplying={isApplyingIdentity}
