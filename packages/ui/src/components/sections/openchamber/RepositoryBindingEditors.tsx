@@ -26,6 +26,7 @@ import type {
 } from '@/lib/api/types';
 import { identityTransport, isCompleteIdentity } from '@/lib/api/git-identity';
 import {
+  auxiliaryGrantIntent,
   describeIdentityApplicability,
   grantIdentityToRemote,
   identityApplicability,
@@ -317,17 +318,10 @@ export const AuxiliaryBindingSettings: React.FC<SourceControlBindingSettingsProp
       path: selected.path,
       expectedEndpointFingerprint: selected.endpoint.fingerprint,
     };
-    // The identity names how this endpoint authenticates; the grant records it
-    // in the terms the binding is written in.
-    let intent: GitAuxiliaryBindingIntent;
-    if (operation === 'remove') intent = { ...authority, operation };
-    else if (transport === 'system') intent = { ...authority, operation, transport, unverifiedConfirmed: true };
-    else if (transport === 'account' && identity?.account) {
-      intent = { ...authority, operation, transport: 'https', credentialAccount: identity.account };
-    } else if (transport === 'ssh' && identity?.sshCredentialId) {
-      intent = { ...authority, operation, transport, sshCredentialId: identity.sshCredentialId };
-    } else if (transport === 'anonymous') intent = { ...authority, operation, transport };
-    else return;
+    const intent: GitAuxiliaryBindingIntent | null = operation === 'remove'
+      ? { ...authority, operation }
+      : identity && auxiliaryGrantIntent(identity, authority, unverifiedConfirmed);
+    if (!intent) return;
     const mutationScope = repositoryBindingOwner.captureMutation(binding.scope, read);
     setSaving(true);
     setError(false);

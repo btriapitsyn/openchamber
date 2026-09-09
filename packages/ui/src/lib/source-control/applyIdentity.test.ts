@@ -6,7 +6,7 @@ import type {
   SourceControlProviderBindingMutation,
   SourceControlRepositoryBinding,
 } from '@/lib/api/types';
-import { applyIdentityToRepository, describeIdentityApplicability, identityApplicability, isSignatureOnlyIdentity, needsSystemAcknowledgement } from './applyIdentity';
+import { applyIdentityToRepository, auxiliaryGrantIntent, describeIdentityApplicability, grantIdentityToRemote, identityApplicability, isSignatureOnlyIdentity, needsSystemAcknowledgement } from './applyIdentity';
 import { repositoryBindingOwner } from './repository-binding';
 import { usePendingOpenCodeRestartStore } from '@/stores/usePendingOpenCodeRestartStore';
 
@@ -303,6 +303,177 @@ describe('applyIdentityToRepository', () => {
     )).toEqual({ status: 'applied' });
     expect(authorCalls).toEqual(['/repo:work']);
     expect(providerCalls).toEqual([]);
+    expect(transportCalls).toEqual([]);
+  });
+});
+
+describe('auxiliaryGrantIntent', () => {
+  const authority = {
+    directory: '/repo',
+    expectedRepositoryId: 'repo_one',
+    expectedRevision: 2,
+    expectedConfigRevision: 'config_one',
+    parentRemote: 'origin',
+    expectedParentFingerprint: 'fetch-one',
+    kind: 'submodule' as const,
+    path: 'vendor/lib',
+    expectedEndpointFingerprint: 'endpoint-one',
+  };
+
+  test('an account answers over HTTPS with its own credential', () => {
+    expect(auxiliaryGrantIntent(identity({ account, transport: 'account' }), authority, false))
+      .toEqual({ ...authority, operation: 'configure', transport: 'https', credentialAccount: account });
+  });
+
+  test('a managed key answers over SSH', () => {
+    expect(auxiliaryGrantIntent(identity({ transport: 'ssh', sshCredentialId: 'ocgit:v1:ssh:key' }), authority, false))
+      .toEqual({ ...authority, operation: 'configure', transport: 'ssh', sshCredentialId: 'ocgit:v1:ssh:key' });
+  });
+
+  test('an anonymous identity reads without naming anyone', () => {
+    expect(auxiliaryGrantIntent(identity({ transport: 'anonymous' }), authority, false))
+      .toEqual({ ...authority, operation: 'configure', transport: 'anonymous' });
+  });
+
+  test('System Git is written only once someone has said so', () => {
+    const system = identity({ id: 'global', transport: 'system' });
+    expect(auxiliaryGrantIntent(system, authority, false)).toBeNull();
+    expect(auxiliaryGrantIntent(system, authority, true))
+      .toEqual({ ...authority, operation: 'configure', transport: 'system', unverifiedConfirmed: true });
+  });
+
+  test('names nothing when the identity carries no way to reach the endpoint', () => {
+    // An identity from an earlier release claims no credentials, so confirming
+    // System Git on its behalf would grant what it never named.
+    expect(auxiliaryGrantIntent(identity({ id: 'profile-1' }), authority, true)).toBeNull();
+    // An account with no credential, and a key that is not there.
+    expect(auxiliaryGrantIntent(identity({ transport: 'account' }), authority, false)).toBeNull();
+    expect(auxiliaryGrantIntent(identity({ transport: 'ssh' }), authority, false)).toBeNull();
+  });
+});
+
+describe('grantIdentityToRemote', () => {
+  const fork = {
+    name: 'fork',
+    fetch: { displayUrl: 'https://github.com/ada/repo.git', fingerprint: 'fork-fetch' },
+    push: { displayUrl: 'https://github.com/ada/repo.git', fingerprint: 'fork-push' },
+  };
+  const bound = {
+    provider: 'github' as const, instance: 'github.com', accountId: 'occred:v1:github:one:r1',
+    primaryRemote: 'origin', readiness: 'ready' as const, endpoint: endpoint('fetch-one'),
+  };
+  const withFork = (): SourceControlBindingRead => {
+    const state = read([bound]);
+    state.repository.remotes = [remote, fork];
+    state.binding!.remotes = [{ ...remote, mode: 'managed', credentialId: 'grant-origin', readiness: 'ready' }];
+    return state;
+  };
+  const pending = () => usePendingOpenCodeRestartStore.getState().changes.map((change) => change.id);
+
+  test('writes the transfer half for the named remote and leaves the account alone', async () => {
+    const { apis, transportCalls, providerCalls, authorCalls } = harness(withFork());
+
+    expect(await grantIdentityToRemote(
+      { directory: '/repo', remoteName: 'fork', identity: identity({ account, transport: 'account' }) },
+      apis,
+    )).toEqual({ status: 'applied' });
+
+    expect(transportCalls).toEqual([{
+      directory: '/repo',
+      expectedRepositoryId: 'repo_one',
+      expectedRevision: 2,
+      expectedConfigRevision: 'config_one',
+      expectedFetchFingerprint: 'fork-fetch',
+      expectedPushFingerprint: 'fork-push',
+      remote: 'fork',
+      transport: 'https',
+      credentialAccount: account,
+    }]);
+    // Which account the repository answers to, and who commits, were settled
+    // when the identity was applied; naming one more address revisits neither.
+    expect(providerCalls).toEqual([]);
+    expect(authorCalls).toEqual([]);
+  });
+
+  test('gives nothing away for an identity from an earlier release', async () => {
+    const { apis, transportCalls } = harness(withFork());
+    expect(await grantIdentityToRemote(
+      { directory: '/repo', remoteName: 'fork', identity: identity({ id: 'profile-1' }) },
+      apis,
+    )).toEqual({ status: 'failed', reason: 'binding' });
+    expect(transportCalls).toEqual([]);
+  });
+
+  test('asks before trusting whatever the machine holds', async () => {
+    const system = identity({ id: 'global', transport: 'system' });
+    const unconfirmed = harness(withFork());
+    expect(await grantIdentityToRemote({ directory: '/repo', remoteName: 'fork', identity: system }, unconfirmed.apis))
+      .toEqual({ status: 'acknowledgement-required' });
+    expect(unconfirmed.transportCalls).toEqual([]);
+
+    const confirmed = harness(withFork());
+    expect(await grantIdentityToRemote(
+      { directory: '/repo', remoteName: 'fork', identity: system, acknowledgedSystem: true },
+      confirmed.apis,
+    )).toEqual({ status: 'applied' });
+    expect(confirmed.transportCalls[0]).toEqual({
+      directory: '/repo',
+      expectedRepositoryId: 'repo_one',
+      expectedRevision: 2,
+      expectedConfigRevision: 'config_one',
+      expectedFetchFingerprint: 'fork-fetch',
+      expectedPushFingerprint: 'fork-push',
+      remote: 'fork',
+      transport: 'system',
+      unverifiedConfirmed: true,
+    });
+  });
+
+  test('asks for an OpenCode restart only when the new address travels over HTTPS', async () => {
+    usePendingOpenCodeRestartStore.getState().clear();
+    await grantIdentityToRemote(
+      { directory: '/repo', remoteName: 'fork', identity: identity({ account, transport: 'account' }) },
+      harness(withFork()).apis,
+    );
+    expect(pending().some((id) => id.startsWith('cli:agent-git:/repo:'))).toBe(true);
+
+    // A key travels over SSH and never through the credential helper.
+    const sshFork = withFork();
+    sshFork.repository.remotes = [remote, {
+      name: 'fork',
+      fetch: { displayUrl: 'git@github.com:ada/repo.git', fingerprint: 'fork-fetch' },
+      push: { displayUrl: 'git@github.com:ada/repo.git', fingerprint: 'fork-push' },
+    }];
+    usePendingOpenCodeRestartStore.getState().clear();
+    await grantIdentityToRemote(
+      { directory: '/repo', remoteName: 'fork', identity: identity({ transport: 'ssh', sshCredentialId: 'ocgit:v1:ssh:key' }) },
+      harness(sshFork).apis,
+    );
+    expect(pending()).toEqual([]);
+  });
+
+  test('reports what it could not write, and names a remote the repository does not have', async () => {
+    const { apis } = harness(withFork());
+    apis.git.configureTransportBinding = async () => { throw new Error('conflict'); };
+    expect(await grantIdentityToRemote(
+      { directory: '/repo', remoteName: 'fork', identity: identity({ account, transport: 'account' }) },
+      apis,
+    )).toEqual({ status: 'failed', reason: 'binding' });
+
+    const missing = harness(withFork());
+    expect(await grantIdentityToRemote(
+      { directory: '/repo', remoteName: 'nowhere', identity: identity({ account, transport: 'account' }) },
+      missing.apis,
+    )).toEqual({ status: 'failed', reason: 'binding' });
+    expect(missing.transportCalls).toEqual([]);
+  });
+
+  test('gives nothing away in a runtime that holds no bindings', async () => {
+    const { apis, transportCalls } = harness(withFork());
+    expect(await grantIdentityToRemote(
+      { directory: '/repo', remoteName: 'fork', identity: identity({ account, transport: 'account' }) },
+      { ...apis, git: { setGitIdentity: apis.git.setGitIdentity } },
+    )).toEqual({ status: 'failed', reason: 'binding' });
     expect(transportCalls).toEqual([]);
   });
 });

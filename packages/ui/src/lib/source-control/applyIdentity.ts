@@ -1,5 +1,6 @@
 import type {
   GitAPI,
+  GitAuxiliaryBindingIntent,
   GitIdentityProfile,
   GitTransportBindingIntent,
   SourceControlAPI,
@@ -174,6 +175,41 @@ export const applyIdentityToRepository = async (
   return outcome;
 };
 
+/** What a checkout-hydration grant needs beyond the identity that answers for it. */
+type AuxiliaryGrantAuthority = Omit<GitAuxiliaryBindingIntent & { operation: 'remove' }, 'operation'>;
+
+/**
+ * The grant an identity gives one submodule or Git LFS endpoint.
+ *
+ * A submodule server authenticates the way a remote does, so the endpoint is
+ * answered with an identity and this puts that answer in the terms the binding
+ * is written in. Null means the identity names no way to reach the endpoint:
+ * an account with no credential, a key that is not there, or System Git before
+ * anyone has said they trust whatever the machine holds.
+ */
+export const auxiliaryGrantIntent = (
+  identity: GitIdentityProfile,
+  authority: AuxiliaryGrantAuthority,
+  acknowledgedSystem: boolean,
+): GitAuxiliaryBindingIntent | null => {
+  const operation = 'configure' as const;
+  const transport = identityTransport(identity);
+  // An identity from an earlier release claims no credentials at all, so
+  // confirming System Git on its behalf would grant what it never named.
+  if (isSignatureOnlyIdentity(identity)) return null;
+  if (transport === 'system') {
+    return acknowledgedSystem ? { ...authority, operation, transport, unverifiedConfirmed: true } : null;
+  }
+  if (transport === 'account' && identity.account) {
+    return { ...authority, operation, transport: 'https', credentialAccount: identity.account };
+  }
+  if (transport === 'ssh' && identity.sshCredentialId) {
+    return { ...authority, operation, transport, sshCredentialId: identity.sshCredentialId };
+  }
+  if (transport === 'anonymous') return { ...authority, operation, transport };
+  return null;
+};
+
 /**
  * Lets the repository's identity answer for one more of its remotes.
  *
@@ -208,6 +244,8 @@ export const grantIdentityToRemote = async (
     return identityTransport(identity) === 'system' ? { status: 'acknowledgement-required' } : { status: 'failed', reason: 'binding' };
   }
   const mutation = repositoryBindingOwner.captureMutation(scope, read);
+  const remoteIsHttps = read.repository.remotes.find((entry) => entry.name === remoteName)
+    ?.fetch.displayUrl.startsWith('https://') ?? false;
   let outcome: ApplyIdentityOutcome = { status: 'applied' };
   try {
     const result = await git.configureTransportBinding(intent);
@@ -215,8 +253,9 @@ export const grantIdentityToRemote = async (
       repositoryBindingOwner.setMutationResult(mutation, result.binding);
       // Git in the agent's shell learns an HTTPS host only from the environment
       // the managed OpenCode child starts with, so a newly granted one asks for
-      // a restart the way the first grant does.
-      if (intent.transport === 'https' || intent.transport === 'system') {
+      // a restart the way the first grant does. A key travels over SSH and
+      // never through the credential helper, so it asks for nothing.
+      if (remoteIsHttps && (intent.transport === 'https' || intent.transport === 'system')) {
         recordDeferredOpenCodeRestart('cli', { id: `agent-git:${directory}` });
       }
     } else {
