@@ -7,7 +7,7 @@ import type {
   SourceControlBindingRead,
 } from '@/lib/api/types';
 import { identityTransport } from '@/lib/api/git-identity';
-import { instanceHost, type RemoteTraits, GLOBAL_IDENTITY_ID } from './identity';
+import { instanceHost, remoteTraits, type RemoteTraits, GLOBAL_IDENTITY_ID } from './identity';
 import { repositoryBindingOwner } from './repository-binding';
 import { recordDeferredOpenCodeRestart } from '@/lib/opencode/deferredRestart';
 
@@ -56,7 +56,7 @@ type ApplyIdentityInput = {
 };
 
 type ApplyIdentityAPIs = {
-  git: Pick<GitAPI, 'configureTransportBinding' | 'setGitIdentity'>;
+  git: Pick<GitAPI, 'configureTransportBinding' | 'removeTransportBinding' | 'setGitIdentity'>;
   sourceControl: Pick<SourceControlAPI, 'repositoryBinding' | 'repositoryProviderBindingMutate'>;
 };
 
@@ -159,7 +159,7 @@ export const applyIdentityToRepository = async (
   let outcome: ApplyIdentityOutcome = remoteName && git.configureTransportBinding && !isSignatureOnlyIdentity(identity)
     ? await applyBinding(
       { directory, identity, remoteName, acknowledgedSystem },
-      { configureTransportBinding: git.configureTransportBinding, sourceControl },
+      { configureTransportBinding: git.configureTransportBinding, removeTransportBinding: git.removeTransportBinding, sourceControl },
     )
     : { status: 'applied' };
 
@@ -275,8 +275,9 @@ const applyBinding = async (
   { directory, identity, remoteName, acknowledgedSystem }: {
     directory: string; identity: GitIdentityProfile; remoteName: string; acknowledgedSystem: boolean;
   },
-  { configureTransportBinding, sourceControl }: {
+  { configureTransportBinding, removeTransportBinding, sourceControl }: {
     configureTransportBinding: NonNullable<GitAPI['configureTransportBinding']>;
+    removeTransportBinding: GitAPI['removeTransportBinding'];
     sourceControl: ApplyIdentityAPIs['sourceControl'];
   },
 ): Promise<ApplyIdentityOutcome> => {
@@ -331,6 +332,43 @@ const applyBinding = async (
       }
     } else if (identityTransport(identity) === 'system') {
       outcome = { status: 'acknowledgement-required' };
+    }
+    // The identity is the whole answer for this repository, so the other
+    // addresses it was already given follow it rather than keeping the
+    // previous person's credential. One it cannot serve — another instance,
+    // an address its transport cannot reach — loses its grant instead, and is
+    // offered again beside the repository's own remotes.
+    for (const name of (read.binding?.remotes ?? []).map((entry) => entry.name)) {
+      if (name === remoteName) continue;
+      const current = read.repository.remotes.find((entry) => entry.name === name);
+      const granted = read.binding?.remotes.find((entry) => entry.name === name);
+      // A grant whose address moved under it, or whose credential is already
+      // in question, is flagged for attention on its own and cannot be
+      // rewritten from here: the authority it was written against is gone.
+      if (!current || granted?.readiness !== 'ready') continue;
+      const fits = identityApplicability(identity, remoteTraits(current.fetch.displayUrl)).applicable;
+      const next = fits ? transportIntent(identity, read, name, acknowledgedSystem, directory) : null;
+      try {
+        if (next) {
+          const result = await configureTransportBinding(next);
+          if (result.status === 'configured') read = result.binding;
+        } else if (removeTransportBinding) {
+          const result = await removeTransportBinding({
+            directory,
+            expectedRepositoryId: read.repository.repositoryId,
+            expectedRevision: read.revision,
+            expectedConfigRevision: read.repository.configRevision,
+            expectedFetchFingerprint: current.fetch.fingerprint,
+            expectedPushFingerprint: current.push.fingerprint,
+            remote: name,
+          });
+          if (result.status === 'removed') read = result.binding;
+        }
+      } catch {
+        // One address that could not follow leaves the rest as they are; the
+        // repository configuration shows what is still unanswered.
+        outcome = { status: 'failed', reason: 'binding' };
+      }
     }
     repositoryBindingOwner.setMutationResult(mutation, read);
   } catch {

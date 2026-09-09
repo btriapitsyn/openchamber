@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import type {
   GitIdentityProfile,
   GitTransportBindingIntent,
+  GitTransportBindingRemovalIntent,
   SourceControlBindingRead,
   SourceControlProviderBindingMutation,
   SourceControlRepositoryBinding,
@@ -33,16 +34,22 @@ const identity = (overrides: Partial<GitIdentityProfile> = {}): GitIdentityProfi
 const harness = (initial = read()) => {
   const providerCalls: SourceControlProviderBindingMutation[] = [];
   const transportCalls: GitTransportBindingIntent[] = [];
+  const removalCalls: GitTransportBindingRemovalIntent[] = [];
   const authorCalls: string[] = [];
   return {
     providerCalls,
     transportCalls,
+    removalCalls,
     authorCalls,
     apis: {
       git: {
         configureTransportBinding: async (intent: GitTransportBindingIntent) => {
           transportCalls.push(intent);
           return { status: 'configured' as const, binding: initial };
+        },
+        removeTransportBinding: async (intent: GitTransportBindingRemovalIntent) => {
+          removalCalls.push(intent);
+          return { status: 'removed' as const, binding: initial };
         },
         setGitIdentity: async (directory: string, profileId: string) => {
           authorCalls.push(`${directory}:${profileId}`);
@@ -304,6 +311,112 @@ describe('applyIdentityToRepository', () => {
     expect(authorCalls).toEqual(['/repo:work']);
     expect(providerCalls).toEqual([]);
     expect(transportCalls).toEqual([]);
+  });
+});
+
+describe('the addresses an identity was already given', () => {
+  const fork = (url: string) => ({
+    name: 'fork',
+    fetch: { displayUrl: url, fingerprint: 'fork-fetch' },
+    push: { displayUrl: url, fingerprint: 'fork-push' },
+  });
+  const withFork = (url: string): SourceControlBindingRead => {
+    const state = read([{
+      provider: 'github' as const, instance: 'github.com', accountId: 'occred:v1:github:one:r1',
+      primaryRemote: 'origin', readiness: 'ready' as const, endpoint: endpoint('fetch-one'),
+    }]);
+    state.repository.remotes = [remote, fork(url)];
+    state.binding!.remotes = [
+      { ...remote, mode: 'managed', credentialId: 'grant-origin', readiness: 'ready' },
+      { ...fork(url), mode: 'managed', credentialId: 'grant-fork', readiness: 'ready' },
+    ];
+    return state;
+  };
+  const next = { provider: 'github', instance: 'github.com', accountId: 'occred:v1:github:two:r1' } as const;
+
+  test('follow the identity the repository is given', async () => {
+    const { apis, transportCalls, removalCalls } = harness(withFork('https://github.com/ada/repo.git'));
+
+    expect(await applyIdentityToRepository(
+      { directory: '/repo', remoteName: 'origin', identity: identity({ account: next, transport: 'account' }) },
+      apis,
+    )).toEqual({ status: 'applied' });
+
+    // Otherwise the repository would push to one address as the person it now
+    // acts as, and to the other as the person it used to be.
+    expect(transportCalls.map((call) => [call.remote, call.transport])).toEqual([['origin', 'https'], ['fork', 'https']]);
+    expect(transportCalls[1]).toEqual({
+      directory: '/repo',
+      expectedRepositoryId: 'repo_one',
+      expectedRevision: 2,
+      expectedConfigRevision: 'config_one',
+      expectedFetchFingerprint: 'fork-fetch',
+      expectedPushFingerprint: 'fork-push',
+      remote: 'fork',
+      transport: 'https',
+      credentialAccount: next,
+    });
+    expect(removalCalls).toEqual([]);
+  });
+
+  test('lose their grant when the identity cannot serve them', async () => {
+    const { apis, transportCalls, removalCalls } = harness(withFork('https://gitlab.com/ada/repo.git'));
+
+    expect(await applyIdentityToRepository(
+      { directory: '/repo', remoteName: 'origin', identity: identity({ account: next, transport: 'account' }) },
+      apis,
+    )).toEqual({ status: 'applied' });
+
+    expect(transportCalls.map((call) => call.remote)).toEqual(['origin']);
+    expect(removalCalls).toEqual([{
+      directory: '/repo',
+      expectedRepositoryId: 'repo_one',
+      expectedRevision: 2,
+      expectedConfigRevision: 'config_one',
+      expectedFetchFingerprint: 'fork-fetch',
+      expectedPushFingerprint: 'fork-push',
+      remote: 'fork',
+    }]);
+  });
+
+  test('are left alone by a runtime that cannot remove a grant', async () => {
+    const { apis, transportCalls } = harness(withFork('https://gitlab.com/ada/repo.git'));
+    expect(await applyIdentityToRepository(
+      { directory: '/repo', remoteName: 'origin', identity: identity({ account: next, transport: 'account' }) },
+      { ...apis, git: { configureTransportBinding: apis.git.configureTransportBinding, setGitIdentity: apis.git.setGitIdentity } },
+    )).toEqual({ status: 'applied' });
+    expect(transportCalls.map((call) => call.remote)).toEqual(['origin']);
+  });
+
+  test('leave a stale grant to the repository configuration', async () => {
+    // Its address moved under it, so the authority a rewrite would be written
+    // against is gone and the server would refuse either way.
+    const stale = withFork('https://gitlab.com/ada/repo.git');
+    stale.binding!.remotes[1] = { ...stale.binding!.remotes[1], readiness: 'config-changed' };
+    const { apis, transportCalls, removalCalls } = harness(stale);
+
+    expect(await applyIdentityToRepository(
+      { directory: '/repo', remoteName: 'origin', identity: identity({ account: next, transport: 'account' }) },
+      apis,
+    )).toEqual({ status: 'applied' });
+    expect(transportCalls.map((call) => call.remote)).toEqual(['origin']);
+    expect(removalCalls).toEqual([]);
+  });
+
+  test('one that cannot follow leaves the rest written', async () => {
+    const { apis, transportCalls } = harness(withFork('https://github.com/ada/repo.git'));
+    let call = 0;
+    apis.git.configureTransportBinding = async (intent: GitTransportBindingIntent) => {
+      transportCalls.push(intent);
+      call += 1;
+      if (call > 1) throw new Error('conflict');
+      return { status: 'configured' as const, binding: withFork('https://github.com/ada/repo.git') };
+    };
+    expect(await applyIdentityToRepository(
+      { directory: '/repo', remoteName: 'origin', identity: identity({ account: next, transport: 'account' }) },
+      apis,
+    )).toEqual({ status: 'failed', reason: 'binding' });
+    expect(transportCalls.map((call) => call.remote)).toEqual(['origin', 'fork']);
   });
 });
 

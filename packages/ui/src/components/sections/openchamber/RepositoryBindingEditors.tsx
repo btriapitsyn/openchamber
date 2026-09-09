@@ -128,8 +128,16 @@ export const AdditionalRemoteGrants: React.FC<SourceControlBindingSettingsProps>
   // whose reach these remotes are measured against.
   const identity = identities.find((profile) => profile.userName === repositoryAuthor?.userName
     && profile.userEmail === repositoryAuthor?.userEmail) ?? null;
-  const ungranted = (read?.repository.remotes ?? []).filter((remote) =>
-    !read?.binding?.remotes.some((grant) => grant.name === remote.name));
+  // A grant whose address moved under it, or whose account is in question, is
+  // as unusable as none at all, and applying the identity again cannot rewrite
+  // it — the authority it was written against is gone. So it is offered here
+  // beside the addresses that never had one.
+  // The address the identity was applied to is the repository's own, and the
+  // strip beside it already says when that one needs attention.
+  const primaryRemote = read?.binding?.providers[0]?.primaryRemote
+    ?? read?.binding?.remotes[0]?.name ?? 'origin';
+  const ungranted = (read?.repository.remotes ?? []).filter((remote) => remote.name !== primaryRemote
+    && read?.binding?.remotes.find((grant) => grant.name === remote.name)?.readiness !== 'ready');
 
   const grant = async (remoteName: string) => {
     if (!identity || pending) return;
