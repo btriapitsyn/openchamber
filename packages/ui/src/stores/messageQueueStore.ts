@@ -10,7 +10,7 @@ import { updateDesktopSettings } from '@/lib/persistence';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { runtimeFetch } from '@/lib/runtime-fetch';
-import { normalizePath } from '@/lib/pathNormalization';
+import { canonicalizePathIdentity, normalizePath } from '@/lib/pathNormalization';
 
 export type FollowUpBehavior = 'steer' | 'queue';
 
@@ -24,26 +24,36 @@ export const normalizeFollowUpBehavior = (
     value: unknown,
     legacyQueueModeEnabled?: boolean | null,
 ): FollowUpBehavior => {
-    // "immediate" was removed: on a busy session it was wire-identical to
-    // "steer" (OpenCode only supports delivery "steer" | "queue", defaulting
-    // to "steer"), so collapse any persisted/legacy "immediate" onto "steer".
-    if (value === 'immediate') {
-        return 'steer';
-    }
+    // Follow-up delivery is queue-only. Keep accepting the old persisted
+    // values at the boundary so legacy settings cannot re-enable steer.
+    void value;
+    void legacyQueueModeEnabled;
+    return DEFAULT_FOLLOW_UP_BEHAVIOR;
+};
 
-    if (isFollowUpBehavior(value)) {
-        return value;
-    }
+type MainSessionSendIntent = 'composer' | 'queued';
+type MainSessionSendDisposition = 'send' | 'queue' | 'preserve-queued';
 
-    if (legacyQueueModeEnabled === false) {
-        return 'steer';
-    }
+export type MessageQueueDispatchState = {
+    head: QueuedMessage | null;
+    sendingIds: string[];
+};
 
-    if (legacyQueueModeEnabled === true) {
+export const resolveMainSessionSendDisposition = (input: {
+    intent: MainSessionSendIntent;
+    hasMainSession: boolean;
+    isBtwActive: boolean;
+    isBusy: boolean;
+    canQueue: boolean;
+    hasQueuedMessageInFlight?: boolean;
+}): MainSessionSendDisposition => {
+    if (!input.hasMainSession || input.isBtwActive) return 'send';
+    if (input.hasQueuedMessageInFlight) {
+        if (input.intent === 'queued' || !input.canQueue) return 'preserve-queued';
         return 'queue';
     }
-
-    return DEFAULT_FOLLOW_UP_BEHAVIOR;
+    if (!input.isBusy || !input.canQueue) return 'send';
+    return input.intent === 'queued' ? 'preserve-queued' : 'queue';
 };
 
 /**
@@ -96,6 +106,10 @@ export interface QueuedMessage {
     /** Agent mentioned at the start of `content`, delivered as an agent part. */
     agentMention?: string;
     attachments?: AttachedFile[];
+    /** Legacy local-queue context shape retained for migration/compatibility. */
+    additionalParts?: QueuedMessagePart[];
+    capturedContext?: QueuedMessagePart[];
+    contextClaimed?: boolean;
     /** Absent on a server projection item; a take brings it back. */
     context?: QueuedContextPart[];
     createdAt: number;
@@ -103,12 +117,22 @@ export interface QueuedMessage {
     sendConfig?: QueuedMessageSendConfig;
 }
 
+export type QueuedMessagePart = {
+    text: string;
+    attachments?: AttachedFile[];
+    synthetic?: boolean;
+    metadata?: ContextPartMetadata;
+};
+
 interface QueuedMessageInput {
     content: string;
     /** Defaults to `content`. */
     text?: string;
     agentMention?: string;
     attachments?: AttachedFile[];
+    additionalParts?: QueuedMessagePart[];
+    capturedContext?: QueuedMessagePart[];
+    contextClaimed?: boolean;
     context?: QueuedContextPart[];
     sendConfig?: QueuedMessageSendConfig;
 }
@@ -132,12 +156,26 @@ export const createMessageQueueTarget = (
     return { runtimeKey, directory: normalizedDirectory, sessionId };
 };
 
+export const getMessageQueueDirectoryKey = (target: MessageQueueTarget): string =>
+    `${target.runtimeKey}\n${canonicalizePathIdentity(target.directory) ?? target.directory}`;
+
 export const getMessageQueueKey = (target: MessageQueueTarget): string =>
-    `${target.runtimeKey}\n${target.directory}\n${target.sessionId}`;
+    `${getMessageQueueDirectoryKey(target)}\n${target.sessionId}`;
+
+export const isQueueMessageDispatchable = (
+    queue: QueuedMessage[],
+    sendingIds: string[],
+    messageId: string,
+): boolean => sendingIds.length === 0 && queue[0]?.id === messageId;
+
+export const isQueueMessageInFlight = (sendingIds: string[], messageId: string): boolean =>
+    sendingIds.includes(messageId);
 
 export const parseMessageQueueKey = (key: string): MessageQueueTarget | null => {
-    const [runtimeKey, directory, ...sessionParts] = key.split('\n');
-    return createMessageQueueTarget(sessionParts.join('\n'), directory, runtimeKey);
+    const parts = key.split('\n');
+    if (parts.length !== 3) return null;
+    const [runtimeKey, directory, sessionId] = parts;
+    return createMessageQueueTarget(sessionId, directory, runtimeKey);
 };
 
 // ---------------------------------------------------------------------------
@@ -200,6 +238,10 @@ const serverSnapshotSchema = z.object({
 const serverSessionResponseSchema = z.object({
     revision: z.number(),
     session: serverSessionSchema,
+});
+
+const serverEnqueueResponseSchema = serverSessionResponseSchema.extend({
+    itemId: z.string().min(1).optional(),
 });
 
 const serverTakeResponseSchema = serverSessionResponseSchema.extend({ item: serverItemSchema });
@@ -322,6 +364,25 @@ const jsonInit = (method: string, body?: ServerQueueRequestBody): RequestInit =>
 
 const sessionPath = (sessionId: string) => `/api/message-queue/sessions/${encodeURIComponent(sessionId)}`;
 
+/** Older queue servers did not return the accepted id; only use an unambiguous response match as a fallback. */
+const findAcceptedQueueItemId = (
+    session: ServerQueueSession,
+    message: QueuedMessageInput,
+    sendConfig: QueuedMessageSendConfig,
+): string | undefined => {
+    const expectedText = message.text ?? message.content;
+    const matches = session.items.filter((item) => (
+        item.content === message.content
+        && item.text === expectedText
+        && item.agentMention === message.agentMention
+        && item.sendConfig.providerID === sendConfig.providerID
+        && item.sendConfig.modelID === sendConfig.modelID
+        && item.sendConfig.agent === sendConfig.agent
+        && item.sendConfig.variant === sendConfig.variant
+    ));
+    return matches.length === 1 ? matches[0]?.id : undefined;
+};
+
 /**
  * Runtime keys whose queue the server owns, established by a successful
  * hydration. Their entries are a projection and must not be persisted: a
@@ -333,10 +394,76 @@ const serverOwnedRuntimeKeys = new Set<string>();
 const appliedRevisions = new Map<string, number>();
 let hydrationGeneration = 0;
 
+type PendingServerEnqueue = {
+    target: MessageQueueTarget;
+    removed: boolean;
+};
+
+/**
+ * The server deliberately omits context from queue projections. Keep the
+ * context captured by this window beside the projection so explicit removal
+ * can still restore it without fetching a second, potentially stale item.
+ */
+const localQueueContexts = new Map<string, Map<string, QueuedContextPart[]>>();
+const pendingServerEnqueues = new Map<string, PendingServerEnqueue>();
+
+const queueItemEphemeralKey = (queueKey: string, messageId: string): string => JSON.stringify([queueKey, messageId]);
+
+const setLocalQueueContext = (queueKey: string, messageId: string, context: QueuedContextPart[]): void => {
+    const contexts = localQueueContexts.get(queueKey) ?? new Map<string, QueuedContextPart[]>();
+    contexts.set(messageId, context);
+    localQueueContexts.set(queueKey, contexts);
+};
+
+const getLocalQueueContext = (queueKey: string, messageId: string): QueuedContextPart[] | undefined =>
+    localQueueContexts.get(queueKey)?.get(messageId);
+
+const deleteLocalQueueContext = (queueKey: string, messageId: string): void => {
+    const contexts = localQueueContexts.get(queueKey);
+    if (!contexts) return;
+    contexts.delete(messageId);
+    if (contexts.size === 0) localQueueContexts.delete(queueKey);
+};
+
+const moveLocalQueueContext = (queueKey: string, fromId: string, toId: string): void => {
+    const context = getLocalQueueContext(queueKey, fromId);
+    deleteLocalQueueContext(queueKey, fromId);
+    if (context && toId !== fromId) setLocalQueueContext(queueKey, toId, context);
+};
+
+const reconcileLocalQueueContexts = (queueKey: string, items: readonly ServerQueueItem[]): void => {
+    const contexts = localQueueContexts.get(queueKey);
+    if (!contexts) return;
+    const serverIds = new Set(items.map((item) => item.id));
+    for (const messageId of contexts.keys()) {
+        if (!serverIds.has(messageId)) contexts.delete(messageId);
+    }
+    if (contexts.size === 0) localQueueContexts.delete(queueKey);
+};
+
+const clearLocalQueueContexts = (queueKey: string): void => {
+    localQueueContexts.delete(queueKey);
+};
+
+const markPendingServerEnqueueRemoved = (queueKey: string, messageId: string): boolean => {
+    const pending = pendingServerEnqueues.get(queueItemEphemeralKey(queueKey, messageId));
+    if (!pending) return false;
+    pending.removed = true;
+    return true;
+};
+
+const markPendingServerEnqueuesRemoved = (queueKey: string): void => {
+    for (const pending of pendingServerEnqueues.values()) {
+        if (getMessageQueueKey(pending.target) === queueKey) pending.removed = true;
+    }
+};
+
 interface MessageQueueState {
     queuedMessages: Record<string, QueuedMessage[]>; // runtime + directory + session → queue
     quarantinedLegacyMessages: Record<string, QueuedMessage[]>;
     followUpBehavior: FollowUpBehavior;
+    /** Invalidates rollback/context restoration after session deletion. */
+    queueDeletionGenerations: Record<string, number>;
     /**
      * Queued messages whose send is currently awaiting the server, per target.
      *
@@ -355,22 +482,28 @@ interface MessageQueueState {
 
 interface MessageQueueActions {
     addToQueue: (target: MessageQueueTarget, message: QueuedMessageInput) => Promise<void>;
-    removeFromQueue: (target: MessageQueueTarget, messageId: string) => void;
+    removeFromQueue: (target: MessageQueueTarget, messageId: string) => QueuedMessage | null;
     reorderQueue: (target: MessageQueueTarget, fromId: string, toId: string) => void;
     /** Removes the message and returns it in full, attachments included. */
-    popToInput: (target: MessageQueueTarget, messageId: string) => Promise<QueuedMessage | null>;
+    popToInput: (target: MessageQueueTarget, messageId: string) => QueuedMessage | null | Promise<QueuedMessage | null>;
     /**
      * Removes what the composer is about to send itself — one message or every
      * message not already being delivered — and returns it in full.
      */
     takeForSend: (target: MessageQueueTarget, messageId?: string) => Promise<QueuedMessage[]>;
-    clearQueue: (target: MessageQueueTarget) => void;
+    clearQueue: (target: MessageQueueTarget) => QueuedMessage[];
     /** Drops the local projection only (the session is gone); never a server call. */
     forgetQueue: (target: MessageQueueTarget) => void;
     clearAllQueues: () => void;
-    markSending: (target: MessageQueueTarget, messageId: string) => void;
+    markSending: (target: MessageQueueTarget, messageId: string) => boolean;
     clearSending: (target: MessageQueueTarget, messageId: string) => void;
+    completeSending: (target: MessageQueueTarget, messageId: string) => void;
     getSendableQueue: (target: MessageQueueTarget) => QueuedMessage[];
+    getQueueDispatchState: (target: MessageQueueTarget) => MessageQueueDispatchState;
+    getQueueRestorationGuard: (target: MessageQueueTarget) => MessageQueueRestorationGuard;
+    isQueueRestorationGuardCurrent: (target: MessageQueueTarget, guard: MessageQueueRestorationGuard) => boolean;
+    restoreQueue: (target: MessageQueueTarget, messages: QueuedMessage[], guard: MessageQueueRestorationGuard) => void;
+    clearQueueForSessionDeletion: (target: MessageQueueTarget) => void;
     setFollowUpBehavior: (behavior: FollowUpBehavior) => void;
     getQueueForTarget: (target: MessageQueueTarget) => QueuedMessage[];
     /** Server-owned queue: load the authoritative queue for the active runtime. */
@@ -384,32 +517,104 @@ interface MessageQueueActions {
 
 type MessageQueueStore = MessageQueueState & MessageQueueActions;
 
+export type MessageQueueRestorationGuard = {
+    target: MessageQueueTarget;
+    deletionGeneration: number;
+};
+
+export type RemovedQueueMessages = {
+    target: MessageQueueTarget;
+    messages: QueuedMessage[];
+};
+
 /** Messages persisted before version 3 carried only `content`. */
 type PersistedQueuedMessage = Omit<QueuedMessage, 'text'> & { text?: string };
 
 type PersistedMessageQueueState = {
-    queuedMessages?: Record<string, PersistedQueuedMessage[]>;
-    quarantinedLegacyMessages?: Record<string, PersistedQueuedMessage[]>;
+    queuedMessages?: unknown;
+    quarantinedLegacyMessages?: unknown;
     followUpBehavior?: FollowUpBehavior;
     queueModeEnabled?: boolean;
 };
 
-const withDeliveryText = (queues: Record<string, PersistedQueuedMessage[]>): Record<string, QueuedMessage[]> => (
-    Object.fromEntries(Object.entries(queues).map(([key, queue]) => [
-        key,
-        queue.map((message) => ({ ...message, text: message.text ?? message.content })),
-    ]))
+const isRecord = (value: unknown): value is Record<string, unknown> => (
+    typeof value === 'object' && value !== null && !Array.isArray(value)
 );
+
+const isPersistedQueuedMessage = (value: unknown): value is PersistedQueuedMessage => {
+    if (!isRecord(value)) return false;
+    return typeof value.id === 'string'
+        && value.id.length > 0
+        && typeof value.content === 'string'
+        && typeof value.createdAt === 'number'
+        && Number.isFinite(value.createdAt);
+};
+
+/** Keep the original object when normalizing so migration does not duplicate its payload. */
+const validPersistedMessages = (value: unknown): QueuedMessage[] => {
+    if (!Array.isArray(value)) return [];
+    return value.filter(isPersistedQueuedMessage).map((message) => {
+        if (message.text === undefined) message.text = message.content;
+        return message as QueuedMessage;
+    });
+};
+
+const trimQueue = (messages: QueuedMessage[], protectedIds: ReadonlySet<string> = new Set()): QueuedMessage[] => {
+    if (messages.length <= MAX_MESSAGES_PER_QUEUE) return messages;
+    let overflow = messages.length - MAX_MESSAGES_PER_QUEUE;
+    const dropped = new Set<string>();
+    for (const message of messages) {
+        if (overflow === 0) break;
+        if (protectedIds.has(message.id)) continue;
+        dropped.add(message.id);
+        overflow -= 1;
+    }
+    return messages.filter((message) => !dropped.has(message.id));
+};
 
 export const migrateMessageQueueState = (persistedState: unknown, version: number): Partial<MessageQueueStore> => {
     const state = (persistedState ?? {}) as PersistedMessageQueueState;
-    const legacyQueues = version < 2 ? (state.queuedMessages ?? {}) : {};
+    const queuedMessages: Record<string, QueuedMessage[]> = {};
+    const quarantinedLegacyMessages: Record<string, QueuedMessage[]> = {};
+
+    const append = (record: Record<string, QueuedMessage[]>, key: string, messages: QueuedMessage[]) => {
+        if (messages.length === 0) return;
+        record[key] = [...(record[key] ?? []), ...messages];
+    };
+
+    const quarantine = (key: string, messages: QueuedMessage[]) => {
+        const target = parseMessageQueueKey(key);
+        append(quarantinedLegacyMessages, target ? getMessageQueueKey(target) : key, messages);
+    };
+
+    if (isRecord(state.quarantinedLegacyMessages)) {
+        for (const [key, value] of Object.entries(state.quarantinedLegacyMessages)) {
+            const messages = validPersistedMessages(value);
+            if (messages.length === 0) continue;
+            const target = parseMessageQueueKey(key);
+            append(quarantinedLegacyMessages, target ? getMessageQueueKey(target) : key, messages);
+        }
+    }
+
+    if (isRecord(state.queuedMessages)) {
+        for (const [key, value] of Object.entries(state.queuedMessages)) {
+            const messages = validPersistedMessages(value);
+            if (messages.length === 0) continue;
+            const target = version >= 2 ? parseMessageQueueKey(key) : null;
+            if (!target) {
+                quarantine(key, messages);
+                continue;
+            }
+            append(queuedMessages, getMessageQueueKey(target), messages);
+        }
+    }
+
+    for (const [key, messages] of Object.entries(queuedMessages)) {
+        queuedMessages[key] = trimQueue(messages);
+    }
     return {
-        queuedMessages: version < 2 ? {} : withDeliveryText(state.queuedMessages ?? {}),
-        quarantinedLegacyMessages: withDeliveryText({
-            ...(state.quarantinedLegacyMessages ?? {}),
-            ...legacyQueues,
-        }),
+        queuedMessages,
+        quarantinedLegacyMessages,
         followUpBehavior: normalizeFollowUpBehavior(state.followUpBehavior, state.queueModeEnabled ?? null),
     };
 };
@@ -444,6 +649,7 @@ const clearSessionProjection = (
         if (parsed?.runtimeKey !== runtimeKey || parsed.sessionId !== sessionId) continue;
         if ((appliedRevisions.get(key) ?? -1) > revision) continue;
         appliedRevisions.set(key, revision);
+        clearLocalQueueContexts(key);
         queuedMessages = withoutKey(queuedMessages, key);
         sendingIds = withoutKey(sendingIds, key);
     }
@@ -468,6 +674,7 @@ export const useMessageQueueStore = create<MessageQueueStore>()(
                     const key = getMessageQueueKey(target);
                     if ((appliedRevisions.get(key) ?? -1) > revision) return;
                     appliedRevisions.set(key, revision);
+                    reconcileLocalQueueContexts(key, session.items);
                     set((state) => {
                         const queue = session.items.map(toQueuedMessage);
                         const queuedMessages = queue.length > 0
@@ -510,6 +717,7 @@ export const useMessageQueueStore = create<MessageQueueStore>()(
                     queuedMessages: {},
                     quarantinedLegacyMessages: {},
                     followUpBehavior: DEFAULT_FOLLOW_UP_BEHAVIOR,
+                    queueDeletionGenerations: {},
                     sendingIds: {},
 
                     addToQueue: async (target, message) => {
@@ -524,13 +732,17 @@ export const useMessageQueueStore = create<MessageQueueStore>()(
                         };
                         if (message.agentMention) queuedMessage.agentMention = message.agentMention;
                         if (message.attachments && message.attachments.length > 0) queuedMessage.attachments = message.attachments;
+                        if (message.additionalParts && message.additionalParts.length > 0) queuedMessage.additionalParts = message.additionalParts;
+                        if (message.capturedContext && message.capturedContext.length > 0) queuedMessage.capturedContext = message.capturedContext;
+                        if (message.contextClaimed !== undefined) queuedMessage.contextClaimed = message.contextClaimed;
                         if (message.context && message.context.length > 0) queuedMessage.context = message.context;
 
                         set((state) => {
                             const currentQueue = state.queuedMessages[key] ?? [];
+                            const protectedIds = new Set(state.sendingIds[key] ?? []);
                             const queuedMessages = {
                                 ...state.queuedMessages,
-                                [key]: [...currentQueue, queuedMessage].slice(-MAX_MESSAGES_PER_QUEUE),
+                                [key]: trimQueue([...currentQueue, queuedMessage], protectedIds),
                             };
                             const keys = Object.keys(queuedMessages);
                             if (keys.length > MAX_QUEUE_TARGETS) {
@@ -539,23 +751,52 @@ export const useMessageQueueStore = create<MessageQueueStore>()(
                                 ));
                                 for (const staleKey of keys.slice(0, keys.length - MAX_QUEUE_TARGETS)) delete queuedMessages[staleKey];
                             }
-                            return {
-                                queuedMessages,
-                            };
+                            return { queuedMessages };
                         });
 
                         if (!isServerOwnedMessageQueue()) return;
+                        const enqueueKey = queueItemEphemeralKey(key, id);
+                        pendingServerEnqueues.set(enqueueKey, { target: { ...target }, removed: false });
+                        if (message.context && message.context.length > 0) {
+                            setLocalQueueContext(key, id, message.context);
+                        }
                         if (!message.sendConfig) {
+                            pendingServerEnqueues.delete(enqueueKey);
+                            deleteLocalQueueContext(key, id);
                             set((state) => removeMessageLocally(state, key, id));
                             throw new Error('A queued message needs a provider and model to be delivered later.');
                         }
                         const historyIdentity = createInputHistoryIdentity(target.runtimeKey, target.directory, target.sessionId);
                         const historySubmission = createInputHistorySubmission(message.content, message.attachments ?? []);
                         try {
-                            const result = await requestJson(serverSessionResponseSchema, `${sessionPath(target.sessionId)}/items`, jsonInit('POST', {
+                            const result = await requestJson(serverEnqueueResponseSchema, `${sessionPath(target.sessionId)}/items`, jsonInit('POST', {
                                 directory: target.directory,
                                 item: toServerItemInput(message, message.sendConfig),
                             }));
+                            const pending = pendingServerEnqueues.get(enqueueKey);
+                            pendingServerEnqueues.delete(enqueueKey);
+                            const acceptedItemId = result.itemId ?? findAcceptedQueueItemId(result.session, message, message.sendConfig);
+                            if (pending?.removed) {
+                                // The remove happened before the server had an
+                                // id for this item. Do not apply the POST's
+                                // projection; remove the accepted server item
+                                // instead, then let that response reconcile the
+                                // remaining queue authoritatively.
+                                if (acceptedItemId) moveLocalQueueContext(key, id, acceptedItemId);
+                                set((state) => removeMessageLocally(state, key, id));
+                                if (acceptedItemId) {
+                                    await serverMutation(
+                                        target,
+                                        `${sessionPath(target.sessionId)}/items/${encodeURIComponent(acceptedItemId)}`,
+                                        jsonInit('DELETE'),
+                                    );
+                                } else {
+                                    await refreshSession(target);
+                                }
+                                return;
+                            }
+                            if (acceptedItemId) moveLocalQueueContext(key, id, acceptedItemId);
+                            else deleteLocalQueueContext(key, id);
                             // The optimistic entry is replaced by the server's copy of the queue.
                             set((state) => removeMessageLocally(state, key, id));
                             applyServerSession(result.session, result.revision, target.runtimeKey);
@@ -563,6 +804,8 @@ export const useMessageQueueStore = create<MessageQueueStore>()(
                                 useInputHistoryStore.getState().appendSubmissions(historyIdentity, [historySubmission]);
                             }
                         } catch (error) {
+                            pendingServerEnqueues.delete(enqueueKey);
+                            deleteLocalQueueContext(key, id);
                             set((state) => removeMessageLocally(state, key, id));
                             throw error;
                         }
@@ -570,10 +813,22 @@ export const useMessageQueueStore = create<MessageQueueStore>()(
 
                     removeFromQueue: (target, messageId) => {
                         const key = getMessageQueueKey(target);
-                        set((state) => removeMessageLocally(state, key, messageId));
-                        if (isServerOwnedMessageQueue()) {
+                        const state = get();
+                        if (isQueueMessageInFlight(state.sendingIds[key] ?? [], messageId)) return null;
+                        const removed = (state.queuedMessages[key] ?? []).find((message) => message.id === messageId) ?? null;
+                        if (!removed) return null;
+                        set((currentState) => removeMessageLocally(currentState, key, messageId));
+                        const pendingServerEnqueue = isServerOwnedMessageQueue()
+                            && markPendingServerEnqueueRemoved(key, messageId);
+                        const localContext = getLocalQueueContext(key, messageId);
+                        const removedWithContext = !removed.context && localContext
+                            ? { ...removed, context: localContext }
+                            : removed;
+                        if (!isServerOwnedMessageQueue()) deleteLocalQueueContext(key, messageId);
+                        if (isServerOwnedMessageQueue() && !pendingServerEnqueue) {
                             void serverMutation(target, `${sessionPath(target.sessionId)}/items/${encodeURIComponent(messageId)}`, jsonInit('DELETE'));
                         }
+                        return removedWithContext;
                     },
 
                     reorderQueue: (target, fromId, toId) => {
@@ -583,7 +838,7 @@ export const useMessageQueueStore = create<MessageQueueStore>()(
                         if (!currentQueue) return;
                         const fromIndex = currentQueue.findIndex((m) => m.id === fromId);
                         const toIndex = currentQueue.findIndex((m) => m.id === toId);
-                        if (fromIndex === -1 || toIndex === -1) return;
+                         if ((get().sendingIds[key] ?? []).length > 0 || fromIndex === -1 || toIndex === -1) return;
 
                         const newQueue = currentQueue.slice();
                         const [moved] = newQueue.splice(fromIndex, 1);
@@ -601,9 +856,17 @@ export const useMessageQueueStore = create<MessageQueueStore>()(
                         }
                     },
 
-                    popToInput: async (target, messageId) => {
-                        const [message] = await get().takeForSend(target, messageId);
-                        return message ?? null;
+                    popToInput: (target, messageId) => {
+                        if (isServerOwnedMessageQueue()) {
+                            return get().takeForSend(target, messageId).then(([message]) => message ?? null);
+                        }
+                        const key = getMessageQueueKey(target);
+                        const state = get();
+                        const sending = state.sendingIds[key] ?? [];
+                        const message = (state.queuedMessages[key] ?? []).find((item) => item.id === messageId);
+                        if (!message || sending.includes(message.id)) return null;
+                        set((currentState) => removeMessageLocally(currentState, key, messageId));
+                        return message;
                     },
 
                     takeForSend: async (target, messageId) => {
@@ -640,42 +903,74 @@ export const useMessageQueueStore = create<MessageQueueStore>()(
 
                     clearQueue: (target) => {
                         const key = getMessageQueueKey(target);
+                        let removed: QueuedMessage[] = [];
                         set((state) => {
                             // Clearing drops what is still queued, never a message
                             // already handed to the server: that send will resolve
                             // and must find its entry to remove or restore.
                             const sending = state.sendingIds[key] ?? [];
-                            const retained = (state.queuedMessages[key] ?? []).filter((m) => sending.includes(m.id));
+                            const currentQueue = state.queuedMessages[key] ?? [];
+                            removed = currentQueue.filter((message) => !sending.includes(message.id));
+                            const retained = currentQueue.filter((m) => sending.includes(m.id));
                             if (retained.length > 0) {
                                 return { queuedMessages: { ...state.queuedMessages, [key]: retained } };
                             }
                             return { queuedMessages: withoutKey(state.queuedMessages, key) };
                         });
                         if (isServerOwnedMessageQueue()) {
+                            for (const message of removed) markPendingServerEnqueueRemoved(key, message.id);
+                        }
+                        if (isServerOwnedMessageQueue()) {
                             void serverMutation(target, sessionPath(target.sessionId), jsonInit('DELETE'));
                         }
+                        return removed;
                     },
 
                     forgetQueue: (target) => {
                         const key = getMessageQueueKey(target);
+                        if (isServerOwnedMessageQueue()) markPendingServerEnqueuesRemoved(key);
                         appliedRevisions.delete(key);
+                        clearLocalQueueContexts(key);
                         set((state) => ({
                             queuedMessages: withoutKey(state.queuedMessages, key),
                             sendingIds: withoutKey(state.sendingIds, key),
+                            queueDeletionGenerations: withoutKey(state.queueDeletionGenerations, key),
                         }));
                     },
 
                     clearAllQueues: () => {
-                        set({ queuedMessages: {}, sendingIds: {} });
+                        if (isServerOwnedMessageQueue()) {
+                            for (const [key, queue] of Object.entries(get().queuedMessages)) {
+                                const sending = new Set(get().sendingIds[key] ?? []);
+                                for (const message of queue) {
+                                    if (!sending.has(message.id)) markPendingServerEnqueueRemoved(key, message.id);
+                                }
+                            }
+                        }
+                        set((state) => {
+                            const queuedMessages: Record<string, QueuedMessage[]> = {};
+                            for (const [key, queue] of Object.entries(state.queuedMessages)) {
+                                const sending = new Set(state.sendingIds[key] ?? []);
+                                const retained = queue.filter((message) => sending.has(message.id));
+                                if (retained.length > 0) queuedMessages[key] = retained;
+                            }
+                            return { queuedMessages };
+                        });
                     },
 
                     markSending: (target, messageId) => {
                         const key = getMessageQueueKey(target);
+                        let claimed = false;
                         set((state) => {
                             const current = state.sendingIds[key] ?? [];
-                            if (current.includes(messageId)) return state;
+                            const queue = state.queuedMessages[key] ?? [];
+                            if (current.length > 0 || (!isServerOwnedMessageQueue() && !isQueueMessageDispatchable(queue, current, messageId))) {
+                                return state;
+                            }
+                            claimed = true;
                             return { sendingIds: { ...state.sendingIds, [key]: [...current, messageId] } };
                         });
+                        return claimed;
                     },
 
                     clearSending: (target, messageId) => {
@@ -689,18 +984,104 @@ export const useMessageQueueStore = create<MessageQueueStore>()(
                         });
                     },
 
+                    completeSending: (target, messageId) => {
+                        const key = getMessageQueueKey(target);
+                        set((state) => {
+                            const currentSending = state.sendingIds[key] ?? [];
+                            if (!isQueueMessageInFlight(currentSending, messageId)) return state;
+                            const queuedMessages = (state.queuedMessages[key] ?? []).filter((message) => message.id !== messageId);
+                            const sendingIds = currentSending.filter((id) => id !== messageId);
+                            return {
+                                queuedMessages: queuedMessages.length > 0
+                                    ? { ...state.queuedMessages, [key]: queuedMessages }
+                                    : withoutKey(state.queuedMessages, key),
+                                sendingIds: sendingIds.length > 0
+                                    ? { ...state.sendingIds, [key]: sendingIds }
+                                    : withoutKey(state.sendingIds, key),
+                            };
+                        });
+                    },
+
                     getSendableQueue: (target) => {
                         const key = getMessageQueueKey(target);
                         const state = get();
                         const queue = state.queuedMessages[key] ?? [];
                         const sending = state.sendingIds[key];
                         if (!sending || sending.length === 0) return queue;
-                        return queue.filter((message) => !sending.includes(message.id));
+                        return [];
+                    },
+
+                    getQueueDispatchState: (target) => {
+                        const key = getMessageQueueKey(target);
+                        const state = get();
+                        return {
+                            head: (state.queuedMessages[key] ?? [])[0] ?? null,
+                            sendingIds: state.sendingIds[key] ?? [],
+                        };
+                    },
+
+                    getQueueRestorationGuard: (target) => {
+                        const key = getMessageQueueKey(target);
+                        return { target: { ...target }, deletionGeneration: get().queueDeletionGenerations[key] ?? 0 };
+                    },
+
+                    isQueueRestorationGuardCurrent: (target, guard) => {
+                        const key = getMessageQueueKey(target);
+                        return target.runtimeKey === getRuntimeKey()
+                            && guard.target.runtimeKey === target.runtimeKey
+                            && guard.target.sessionId === target.sessionId
+                            && getMessageQueueKey(guard.target) === key
+                            && (get().queueDeletionGenerations[key] ?? 0) === guard.deletionGeneration;
+                    },
+
+                    restoreQueue: (target, messages, guard) => {
+                        if (messages.length === 0) return;
+                        const key = getMessageQueueKey(target);
+                        set((state) => {
+                            if (
+                                !get().isQueueRestorationGuardCurrent(target, guard)
+                                || target.runtimeKey !== getRuntimeKey()
+                            ) return state;
+                            const currentQueue = state.queuedMessages[key] ?? [];
+                            const existingIds = new Set(currentQueue.map((message) => message.id));
+                            const restored = messages.filter((message) => !existingIds.has(message.id));
+                            if (restored.length === 0) return state;
+                            const sending = new Set(state.sendingIds[key] ?? []);
+                            const inFlight = currentQueue.filter((message) => sending.has(message.id));
+                            const later = currentQueue.filter((message) => !sending.has(message.id));
+                            const combined = [...inFlight, ...restored, ...later];
+                            const overflow = Math.max(0, combined.length - MAX_MESSAGES_PER_QUEUE);
+                            const dropped = new Set(
+                                combined.filter((message) => !sending.has(message.id)).slice(0, overflow).map((message) => message.id),
+                            );
+                            return { queuedMessages: { ...state.queuedMessages, [key]: combined.filter((message) => !dropped.has(message.id)) } };
+                        });
+                    },
+
+                    clearQueueForSessionDeletion: (target) => {
+                        const key = getMessageQueueKey(target);
+                        if (isServerOwnedMessageQueue()) markPendingServerEnqueuesRemoved(key);
+                        clearLocalQueueContexts(key);
+                        set((state) => {
+                            const queueDeletionGenerations = {
+                                ...state.queueDeletionGenerations,
+                                [key]: (state.queueDeletionGenerations[key] ?? 0) + 1,
+                            };
+                            const sending = state.sendingIds[key] ?? [];
+                            const retained = (state.queuedMessages[key] ?? []).filter((message) => sending.includes(message.id));
+                            return {
+                                queuedMessages: retained.length > 0
+                                    ? { ...state.queuedMessages, [key]: retained }
+                                    : withoutKey(state.queuedMessages, key),
+                                queueDeletionGenerations,
+                            };
+                        });
                     },
 
                     setFollowUpBehavior: (behavior) => {
-                        set({ followUpBehavior: behavior });
-                        void updateDesktopSettings({ followUpBehavior: behavior });
+                        const normalized = normalizeFollowUpBehavior(behavior);
+                        set({ followUpBehavior: normalized });
+                        void updateDesktopSettings({ followUpBehavior: normalized });
                     },
 
                     getQueueForTarget: (target) => {
@@ -796,7 +1177,7 @@ export const useMessageQueueStore = create<MessageQueueStore>()(
             },
             {
                 name: 'message-queue-store',
-                version: 3,
+                version: 5,
                 storage: createDeferredSafeJSONStorage(),
                 partialize: (state) => ({
                     queuedMessages: Object.fromEntries(
@@ -809,12 +1190,12 @@ export const useMessageQueueStore = create<MessageQueueStore>()(
                     followUpBehavior: state.followUpBehavior,
                 }),
                 migrate: migrateMessageQueueState,
-            }
+            },
         ),
         {
             name: 'message-queue-store',
-        }
-    )
+        },
+    ),
 );
 
 const serverUpdatedEventSchema = z.object({

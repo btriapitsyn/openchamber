@@ -2294,7 +2294,7 @@ export function SyncProvider(props: {
   )
 
   const triggerDirectoryResync = useCallback((directory: string, reason: SessionMaterializationReason) => {
-    const store = childStores.children.get(directory)
+    const store = childStores.getChild(directory)
     if (!store) return
     const resyncing = resyncingDirectoriesRef.current
     if (resyncing.has(directory)) return
@@ -2407,7 +2407,10 @@ export function SyncProvider(props: {
               store.setState({
                 session: sessions,
                 sessionTotal: rootCount,
-                sessionListSource: "authoritative",
+                // Roots and child sessions have independent completeness. A
+                // roots-only fallback can still paint the known hierarchy, but
+                // it must not look authoritative to target-aware dispatchers.
+                sessionListSource: allSessions === null ? "partial" : "authoritative",
                 limit: Math.max(sessions.length, 50),
               })
               ingestDirectoryStateIntoRoutingIndex(routingIndex, directory, store.getState())

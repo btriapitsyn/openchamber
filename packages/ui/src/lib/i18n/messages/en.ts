@@ -2230,6 +2230,7 @@ export const dict = {
   'chat.queuedMessage.send': 'send',
   'chat.queuedMessage.removeAria': 'Remove from queue',
   'chat.queuedMessage.reorderAria': 'Drag to reorder',
+  'chat.queuedMessage.waiting': 'Will send when the session finishes',
   'chat.queuedMessage.toast.queueFailed': 'Couldn\'t queue the message. It\'s back in the composer.',
   'chat.queuedMessage.toast.takeFailed': 'Couldn\'t load the queued message. Please try again.',
   'chat.container.returnToParent.aria': 'Return to parent session',

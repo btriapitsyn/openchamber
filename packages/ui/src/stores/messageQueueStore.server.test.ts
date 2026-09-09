@@ -6,7 +6,7 @@ import type { MessageQueueUpdatedEvent } from "./messageQueueStore"
 type FetchCall = { path: string; method: string; body: ReturnType<typeof JSON.parse> }
 let calls: FetchCall[] = []
 let activeRuntimeKey = "runtime-a"
-let respond: (call: FetchCall) => Response = () => new Response("{}", { status: 200 })
+let respond: (call: FetchCall) => Response | Promise<Response> = () => new Response("{}", { status: 200 })
 
 mock.module("@/lib/runtime-fetch", () => ({
   runtimeFetch: async (path: string, init?: RequestInit) => {
@@ -38,6 +38,7 @@ type ServerReply = {
   revision: number
   session?: ServerSession
   sessions?: ServerSession[]
+  itemId?: string
   item?: ServerItem
   items?: ServerItem[]
 }
@@ -151,6 +152,62 @@ describe("server-owned message queue", () => {
       },
     })
     expect(useMessageQueueStore.getState().queuedMessages[key]?.map((m) => m.id)).toEqual(["srv-1"])
+  })
+
+  test("keeps accepted context available when an explicit remove uses a projection without context", async () => {
+    const context = [{ kind: "synthetic" as const, text: "conflict payload" }]
+    respond = (call) => call.method === "POST"
+      ? json({ revision: 6, session: session([serverItem("srv-context", "with context")]) })
+      : json({ revision: 7, session: session([]) })
+
+    await useMessageQueueStore.getState().addToQueue(target, {
+      content: "with context",
+      context,
+      sendConfig: { providerID: "p", modelID: "m" },
+    })
+    expect(useMessageQueueStore.getState().queuedMessages[key]?.[0]?.context).toBe(undefined)
+
+    const removed = useMessageQueueStore.getState().removeFromQueue(target, "srv-context")
+    expect(removed?.context).toEqual(context)
+    expect(useMessageQueueStore.getState().queuedMessages[key]).toBe(undefined)
+  })
+
+  test("suppresses a stale POST response when removal wins before server acceptance", async () => {
+    let resolvePost: ((response: Response) => void) | undefined
+    respond = (call) => {
+      if (call.method === "POST") {
+        return new Promise<Response>((resolve) => {
+          resolvePost = resolve
+        })
+      }
+      return json({ revision: 12, session: session([serverItem("keep", "unrelated")]) })
+    }
+
+    const adding = useMessageQueueStore.getState().addToQueue(target, {
+      content: "remove before acceptance",
+      sendConfig: { providerID: "p", modelID: "m" },
+    })
+    const [optimistic] = useMessageQueueStore.getState().getQueueForTarget(target)
+    if (!optimistic) throw new Error("optimistic queue item was not created")
+
+    const removed = useMessageQueueStore.getState().removeFromQueue(target, optimistic.id)
+    expect(removed?.id).toBe(optimistic.id)
+    expect(calls).toHaveLength(1)
+
+    resolvePost?.(json({
+      revision: 11,
+      session: session([
+        serverItem("accepted-after-remove", "remove before acceptance"),
+        serverItem("keep", "unrelated"),
+      ]),
+    }))
+    await adding
+
+    expect(calls.map((call) => `${call.method} ${call.path}`)).toEqual([
+      "POST /api/message-queue/sessions/session-1/items",
+      "DELETE /api/message-queue/sessions/session-1/items/accepted-after-remove",
+    ])
+    expect(useMessageQueueStore.getState().queuedMessages[key]?.map((message) => message.id)).toEqual(["keep"])
   })
 
   test("accepted queue history survives automatic delivery and manual take without recapture", async () => {
