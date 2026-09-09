@@ -12,7 +12,7 @@ import {
   SettingsCheckboxRow,
   SettingsControlGroup,
 } from '../shared/SettingsSection';
-import { AuxiliaryBindingSettings } from './RepositoryBindingEditors';
+import { AdditionalRemoteGrants, AuxiliaryBindingSettings } from './RepositoryBindingEditors';
 
 type RepositoryConfigurationDialogProps = {
   open: boolean;
@@ -95,8 +95,9 @@ const AgentAuthorityEditor = ({ directory, className }: { directory: string; cla
  * The identity carries the account, the transport and the signature, and the
  * panel names it on its own button, so this holds only what an identity does
  * not say: whether the repository's identity is applied in agent shells here,
- * and the separate grants submodules and Git LFS need. Starting over is
- * choosing the System identity.
+ * which of the repository's other addresses that identity may answer for, and
+ * the separate grants submodules and Git LFS need. Starting over is choosing
+ * the System identity.
  */
 export const RepositoryConfigurationDialog: React.FC<RepositoryConfigurationDialogProps> = ({ open, onOpenChange, directory }) => {
   const { t } = useI18n();
@@ -112,6 +113,7 @@ export const RepositoryConfigurationDialog: React.FC<RepositoryConfigurationDial
             <DialogDescription>{t('gitView.context.description')}</DialogDescription>
           </DialogHeader>
           <AgentAuthorityEditor directory={directory} />
+          <AdditionalRemoteGrants directory={directory} className={DIALOG_DIVIDER_CLASS} />
           <AuxiliaryBindingSettings directory={directory} className={DIALOG_DIVIDER_CLASS} />
           <DialogFooter className={DIALOG_DIVIDER_CLASS}>
             <Button size="sm" variant="ghost" onClick={() => {

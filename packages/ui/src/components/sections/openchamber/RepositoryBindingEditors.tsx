@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   identityAccountConnected,
+  identityDisplayName,
   instanceHost,
   remoteTraits,
   selectableIdentities,
@@ -24,7 +25,13 @@ import type {
   GitNetworkOperation,
 } from '@/lib/api/types';
 import { identityTransport, isCompleteIdentity } from '@/lib/api/git-identity';
-import { identityApplicability, type IdentityApplicability } from '@/lib/source-control/applyIdentity';
+import {
+  describeIdentityApplicability,
+  grantIdentityToRemote,
+  identityApplicability,
+  needsSystemAcknowledgement,
+  type IdentityApplicability,
+} from '@/lib/source-control/applyIdentity';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { GitOperationResultError, runCheckoutHydration } from '@/lib/boundGitNetworkOperation';
 import { repositoryBindingOwner, useRepositoryBinding } from '@/lib/source-control/repository-binding';
@@ -78,6 +85,106 @@ const hydrationRequirements = (operation: GitNetworkOperation | undefined): GitC
     }
   }
   return entries;
+};
+
+/**
+ * The remotes the repository's identity has not been given yet.
+ *
+ * An identity is written for the remote it was applied to, and a grant names
+ * one exact endpoint. A repository that carries a second address — a fork
+ * beside its upstream — therefore has one address OpenChamber will not use,
+ * and no way to say otherwise. This is that way: the remotes are listed with
+ * what stands in their way, and the one the identity can serve gets a button.
+ */
+export const AdditionalRemoteGrants: React.FC<SourceControlBindingSettingsProps> = ({ directory, className }) => {
+  const { t } = useI18n();
+  const { git, sourceControl } = useRuntimeAPIs();
+  const binding = useRepositoryBinding(directory, sourceControl);
+  const gitIdentityProfiles = useGitIdentitiesStore((state) => state.profiles);
+  const globalGitIdentity = useGitIdentitiesStore((state) => state.globalIdentity);
+  const connectedAccountIds = useConnectedAccountIds();
+  const repositoryAuthor = useGitIdentity(directory);
+  const [pending, setPending] = React.useState('');
+  const [unverifiedConfirmed, setUnverifiedConfirmed] = React.useState(false);
+  const [error, setError] = React.useState(false);
+  const requestRef = React.useRef(0);
+
+  React.useLayoutEffect(() => {
+    requestRef.current += 1;
+    setPending('');
+    setUnverifiedConfirmed(false);
+    setError(false);
+    return () => { requestRef.current += 1; };
+  }, [binding.scope, git, sourceControl]);
+
+  const read = binding.read;
+  const identities = React.useMemo(
+    () => selectableIdentities(gitIdentityProfiles, globalGitIdentity,
+      (profile) => isCompleteIdentity(profile) && identityAccountConnected(profile, connectedAccountIds)),
+    [connectedAccountIds, gitIdentityProfiles, globalGitIdentity],
+  );
+  // The repository acts as the identity its author names; that is the one
+  // whose reach these remotes are measured against.
+  const identity = identities.find((profile) => profile.userName === repositoryAuthor?.userName
+    && profile.userEmail === repositoryAuthor?.userEmail) ?? null;
+  const ungranted = (read?.repository.remotes ?? []).filter((remote) =>
+    !read?.binding?.remotes.some((grant) => grant.name === remote.name));
+
+  const grant = async (remoteName: string) => {
+    if (!identity || pending) return;
+    const request = requestRef.current;
+    const runtimeKey = getRuntimeKey();
+    const isCurrent = () => requestRef.current === request && runtimeKey === getRuntimeKey();
+    setPending(remoteName);
+    setError(false);
+    const outcome = await grantIdentityToRemote(
+      { directory, identity, remoteName, acknowledgedSystem: unverifiedConfirmed },
+      { git, sourceControl },
+    );
+    if (!isCurrent()) return;
+    if (outcome.status !== 'applied') setError(true);
+    setPending('');
+  };
+
+  // Nothing to say when the repository has no other remote, or when its
+  // identity carries no credentials to give one.
+  if (!identity || !ungranted.length || !git.configureTransportBinding) return null;
+  const needsConfirmation = needsSystemAcknowledgement(identity, true);
+
+  return (
+    <SettingsControlGroup
+      title={t('gitView.remotes.title')}
+      description={t('gitView.remotes.description')}
+      className={cn('min-w-0', className)}
+      contentClassName={SETTINGS_FIELDS_STACK_CLASS}
+    >
+      {ungranted.map((remote) => {
+        const fit = identityApplicability(identity, remoteTraits(remote.fetch.displayUrl));
+        return (
+          <div key={remote.name} className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="typography-ui-label text-foreground">{remote.name}</p>
+              <p className={cn(SETTINGS_HELPER_CLASS, 'break-all')}>
+                {fit.applicable
+                  ? remote.fetch.displayUrl
+                  : describeIdentityApplicability(fit, t)}
+              </p>
+            </div>
+            {fit.applicable ? (
+              <Button size="sm" variant="outline"
+                disabled={Boolean(pending) || (needsConfirmation && !unverifiedConfirmed)}
+                onClick={() => void grant(remote.name)}>
+                {t('gitView.remotes.grant', { identity: identityDisplayName(identity, t) })}
+              </Button>
+            ) : null}
+          </div>
+        );
+      })}
+      {needsConfirmation ? <SettingsCheckboxRow checked={unverifiedConfirmed} onChange={setUnverifiedConfirmed}
+        disabled={Boolean(pending)} label={t('settings.sourceControl.transport.unverifiedConfirmation')} /> : null}
+      {error ? <EditorStatus error>{t('settings.gitlab.status.operationFailed')}</EditorStatus> : null}
+    </SettingsControlGroup>
+  );
 };
 
 export const AuxiliaryBindingSettings: React.FC<SourceControlBindingSettingsProps> = ({ directory, className }) => {

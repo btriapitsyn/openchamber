@@ -174,6 +174,63 @@ export const applyIdentityToRepository = async (
   return outcome;
 };
 
+/**
+ * Lets the repository's identity answer for one more of its remotes.
+ *
+ * A repository can carry a second address — a fork beside the upstream it was
+ * cloned from — and the identity was written for the one it was applied to.
+ * The other stays unreachable until someone says so here, because a grant is
+ * given to an exact endpoint, never to a whole host: `github.com` is where a
+ * person's own fork lives and where a stranger's does.
+ *
+ * Only the transfer half is written. Which account the repository answers to,
+ * and who commits, were decided when the identity was applied and are not
+ * revisited by naming one more address.
+ */
+export const grantIdentityToRemote = async (
+  { directory, identity, remoteName, acknowledgedSystem = false }: {
+    directory: string; identity: GitIdentityProfile; remoteName: string; acknowledgedSystem?: boolean;
+  },
+  { git, sourceControl }: ApplyIdentityAPIs,
+): Promise<ApplyIdentityOutcome> => {
+  if (!git.configureTransportBinding || isSignatureOnlyIdentity(identity)) {
+    return { status: 'failed', reason: 'binding' };
+  }
+  const scope = repositoryBindingOwner.scope(directory);
+  let read: SourceControlBindingRead;
+  try {
+    read = await sourceControl.repositoryBinding(directory);
+  } catch {
+    return { status: 'failed', reason: 'binding' };
+  }
+  const intent = transportIntent(identity, read, remoteName, acknowledgedSystem, directory);
+  if (!intent) {
+    return identityTransport(identity) === 'system' ? { status: 'acknowledgement-required' } : { status: 'failed', reason: 'binding' };
+  }
+  const mutation = repositoryBindingOwner.captureMutation(scope, read);
+  let outcome: ApplyIdentityOutcome = { status: 'applied' };
+  try {
+    const result = await git.configureTransportBinding(intent);
+    if (result.status === 'configured') {
+      repositoryBindingOwner.setMutationResult(mutation, result.binding);
+      // Git in the agent's shell learns an HTTPS host only from the environment
+      // the managed OpenCode child starts with, so a newly granted one asks for
+      // a restart the way the first grant does.
+      if (intent.transport === 'https' || intent.transport === 'system') {
+        recordDeferredOpenCodeRestart('cli', { id: `agent-git:${directory}` });
+      }
+    } else {
+      await repositoryBindingOwner.reconcile(mutation, sourceControl);
+    }
+  } catch {
+    outcome = { status: 'failed', reason: 'binding' };
+    await repositoryBindingOwner.reconcile(mutation, sourceControl);
+  } finally {
+    mutation.release();
+  }
+  return outcome;
+};
+
 /** The account and transport half of an identity, written through the binding owner. */
 const applyBinding = async (
   { directory, identity, remoteName, acknowledgedSystem }: {
