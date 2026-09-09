@@ -36,6 +36,11 @@ const readNestedUserModel = (model: UserMessageModelSource['model']): NestedUser
  * messages set the same fields at the top level and set `model` to a
  * "provider/model" string. Non-object `model` values are ignored so the
  * top-level fallback wins.
+ *
+ * `extractUserModelChoice` in `lib/messages/userModelChoice.ts` reads the same
+ * message shape for composer restore; keep both in step if that shape changes.
+ * This one stays separate because it also falls back to the top level for an
+ * unconfirmed optimistic message, which composer restore does not want.
  */
 export const readUserMessageModelFields = (info: UserMessageModelSource): UserMessageModelFields => {
     const nested = readNestedUserModel(info.model);
