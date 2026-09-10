@@ -97,6 +97,26 @@ It does not replace a physical iOS/LTE check.
 
 ## Authentication model
 
+### Self-reported app diagnostics
+
+Host-control, host-data and client upgrades include optional `appId`,
+`appVersion` and `platform` query parameters. OpenChamber sends `openchamber`,
+the local package version and the local runtime. Client platforms use the
+existing presence values: `desktop` for Electron, `vscode`, `ios`, `android`
+and `web` for browsers, including hosted mobile. Hosts use
+`OPENCHAMBER_RUNTIME`, defaulting to `web`, so SSH hosts report `ssh-remote`.
+These labels describe the connecting process, not its remote target.
+
+These fields are diagnostics only, outside the signed auth payload. Older
+relays ignore them and older apps remain connectable. The hosted relay groups
+missing or invalid fields as `unknown`. Its analytics count host-control and
+client connections separately, including reconnects, and show labels as
+self-reported, never as verified app identity. Host-data sockets are excluded.
+App diagnostics are written on connection, without per-app traffic counters.
+No credentials, device names or application contents are added to diagnostics.
+
+### Access checks
+
 - The tunnel is **transport only**. The OpenChamber server still authenticates every tunneled request exactly as it authenticates a direct remote client. The relay path grants reachability, not authorization.
 - Clients carry their normal credential. HTTP and SSE requests authenticate with the client's bearer token (a header). **WebSocket upgrades cannot send headers**, so they authenticate with a short-lived URL-scoped token minted beforehand and passed as a query parameter. This asymmetry is important when adding new WebSocket features (see the skill).
 - The host authenticates itself to the relay with a signed handshake using its long-lived signing key.

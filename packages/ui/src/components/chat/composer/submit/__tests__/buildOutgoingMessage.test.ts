@@ -367,6 +367,7 @@ describe('capturing composer context for the queue', () => {
         linkedIssue: null,
         linkedPr: null,
         linkedLinearIssue: null,
+        linkedGuestIssue: null,
         ...overrides,
     });
 

@@ -185,6 +185,12 @@ Live activity/status indicators must not depend on this cache. They must use the
 
 ## Session message loading
 
+The event pipeline's reconnect callback carries `replayReset`. A global WS
+`ready` frame with that flag means the server's bounded replay suffix no longer
+covers the client cursor. The pipeline clears that cursor and the sync provider
+runs normal authoritative gap repair even during early boot. Ordinary reconnects
+retain their existing startup grace period.
+
 `SessionMessageLoader` is the shared authority for session message requests. Navigation, reactive chat loading, sidebar prefetch, pagination, reconnect/recovery, and optimistic reconciliation must delegate to it rather than issuing parallel initial requests.
 
 Rules:
@@ -279,6 +285,34 @@ Rules:
 3. Never persist or rank a guessed directory. `selectSession` may fall back to the active directory to keep routing usable, but that value is not written to runtime memory, not written to the last-active snapshot, and not passed as `selected` — a persisted guess outlives the race that produced it and survives reloads and restarts.
 4. Components must not read `currentSessionDirectory` to build request or queue keys; use `getDirectoryForSession()` so every consumer resolves identically.
 5. A disagreement between sources is logged once per session, and `__opencodeDebug.diagnoseSessionDirectory()` reports every source in precedence order.
+
+## AI session titles
+
+`use-session-ai-rename.ts` connects the shared menus to Small Model and the
+existing title action. `session-title-context.ts` uses `SessionMessageLoader`
+to page backward only until three completed user/final-answer pairs are covered.
+Opening a menu checks eligibility on demand; row mounts do not load history.
+The collector uses chronological records and assistant parent IDs, excludes
+unfinished, failed, summary, synthetic-only and reverted turns, and retains
+user-attached context even when its transport part is synthetic.
+
+`session-title-generation.ts` owns runtime/directory/session-scoped pending
+operations. Manual title saves cancel generation before sending their write.
+Runtime changes abort pending generation, including a switch away and back.
+After generation, a fresh session read rejects changed titles, directories,
+archive state and revert markers before the normal title action saves. Failure
+retains the old title and always releases pending state. The current OpenCode
+title endpoint has no compare-and-set operation, so another client's write
+after this final read cannot be guarded atomically.
+
+`lib/messages/messageMarkdown.ts` formats attached quotes and user comments for
+both title context and Markdown export. Export keeps full text; title input
+limits individual fields and each message while retaining head/tail excerpts.
+Web, Electron, hosted mobile and Capacitor use the existing Small Model route.
+Mobile session rows expose the same action beside manual rename when swiped
+open, with four 48px action slots and a session-scoped generation spinner.
+VS Code has no Small Model route and exposes a disabled action with an explicit
+explanation.
 
 ## Session action rules
 

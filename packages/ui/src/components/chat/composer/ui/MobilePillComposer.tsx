@@ -15,7 +15,6 @@ import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icon/Icon';
 import { StopIcon } from '@/components/icons/StopIcon';
 import { SessionGoalRow } from '@/components/chat/SessionGoalRow';
-import { SessionSuggestionChip } from '@/components/chat/SessionSuggestionChip';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import type { Theme } from '@/types/theme';
@@ -35,7 +34,6 @@ export interface MobilePillComposerProps {
     stopIconSizeClass: string;
     theme: Theme;
     onExpand: () => void;
-    onApplySuggestion: (text: string) => void;
     onPrimaryAction: () => void;
     /** While a turn runs, the trailing action queues, as the expanded composer does. */
     onQueueMessage: () => void;
@@ -66,7 +64,6 @@ export function MobilePillComposer(props: MobilePillComposerProps) {
         stopIconSizeClass,
         theme: currentTheme,
         onExpand,
-        onApplySuggestion,
         onPrimaryAction,
         onQueueMessage,
         onNewSession,
@@ -87,13 +84,6 @@ export function MobilePillComposer(props: MobilePillComposerProps) {
         <SessionGoalRow
             sessionId={currentSessionId}
             directory={directory}
-            className="mb-1.5"
-        />
-        <SessionSuggestionChip
-            sessionId={currentSessionId}
-            directory={directory}
-            hidden={hasContent || newSessionDraftOpen}
-            onApply={onApplySuggestion}
             className="mb-1.5"
         />
         <div className="flex items-center gap-2">

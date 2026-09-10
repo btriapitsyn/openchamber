@@ -4,7 +4,14 @@ import { linearPanelI18n } from './linear-panel.i18n';
 import { pluginPanelI18n } from './plugin-panel.i18n';
 
 export const dict = {
+  'sessions.aiRename.action': 'Rename with AI',
+  'sessions.aiRename.generating': 'Generating session title...',
+  'sessions.aiRename.checking': 'Checking completed turns...',
+  'sessions.aiRename.noCompletedTurns': 'Available after the first completed reply.',
+  'sessions.aiRename.failed': 'Could not rename the session. Check your Small Model settings and try again.',
+  'sessions.aiRename.unsupported': 'AI renaming is not available in VS Code.',
   'commitComparison.mode': 'Commit',
+  'pullRequestComparison.select': 'Select pull request',
   'commitComparison.select': 'Select commit',
   'commitComparison.search': 'Search commits...',
   'commitComparison.loadError': 'Failed to load commits',

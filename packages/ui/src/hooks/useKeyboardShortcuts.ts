@@ -26,6 +26,7 @@ import {
 } from '@/lib/shortcuts';
 import { ShortcutRegistry } from '@/lib/shortcuts/registry';
 import { guestSurfaceFromInstalled } from '@/lib/guests/surfaces';
+import { getRuntimeUrlResolver } from '@/lib/runtime-url';
 import { useGuestsStore } from '@/lib/guests/store';
 import { getVisibleContextRailSurfaces } from '@/lib/surfaces/registry';
 import { readEmbeddedThemeSearchParams } from '@/contexts/theme-embedded-bootstrap';
@@ -44,7 +45,7 @@ import {
   invokeActiveSelectionAddToChat,
 } from '@/lib/addSelectionToChat';
 import { isIMECompositionEvent } from '@/lib/ime';
-import { hasActiveBtwComposer, hasOpenDropdown, isEditableEventTarget, shouldStopDropdownImeEscape } from './keyboard-shortcut-dom';
+import { canUseDigitShortcut, hasActiveBtwComposer, hasOpenDropdown, isEditableEventTarget, shouldStopDropdownImeEscape } from './keyboard-shortcut-dom';
 
 const dropdownTargetSelector = [
   '[data-slot="dropdown-menu-content"]', '[data-slot="select-content"]', '[role="combobox"]',
@@ -504,7 +505,7 @@ export const useKeyboardShortcuts = () => {
         && !event.repeat
         && eventMatchesShortcutPrefix(event, switchSurfacePrefix, heldKeysRef.current)
       ) {
-        if (isEditableEventTarget(event.target)) return;
+        if (!canUseDigitShortcut(event)) return;
         const state = useUIStore.getState();
         if (!state.isMobile && effectiveDirectory) {
           const directory = normalizeContextPanelDirectoryKey(effectiveDirectory);
@@ -518,7 +519,9 @@ export const useKeyboardShortcuts = () => {
             tabs: panel?.tabs ?? [],
             linearConnected: useLinearAuthStore.getState().status?.connected === true,
             githubConnected: useGitHubAuthStore.getState().status?.connected === true,
-            extras: useGuestsStore.getState().guests.map((guest) => guestSurfaceFromInstalled(guest)),
+            extras: useGuestsStore.getState().guests
+              .filter((guest) => guest.enabled !== false)
+              .map((guest) => guestSurfaceFromInstalled(guest, getRuntimeUrlResolver().authenticatedAsset)),
           });
           const target = visibleSurfaces[switchSurfaceDigit - 1];
           if (target) {
@@ -534,10 +537,7 @@ export const useKeyboardShortcuts = () => {
         sessionTabDigit !== null
         && !event.repeat
         && !isVSCodeRuntime()
-        // Typing a digit in a textarea/input must stay text, never a tab
-        // switch: the default prefix here is a bare modifier, so this fires
-        // on plain ctrl/cmd+1 while the composer has focus (#2689).
-        && !isEditableEventTarget(event.target)
+        && canUseDigitShortcut(event)
         && useUIStore.getState().sessionTabsEnabled
         && eventMatchesShortcutPrefix(
           event,

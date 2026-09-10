@@ -15,7 +15,7 @@
   },
   "devDependencies": {
     "@electron/rebuild": "^4.2.0",
-    "electron": "^43.3.0",
+    "electron": "^43.7.0",
     "electron-builder": "^26.0.0",
     "node-abi": "^4.33.0"
   },

@@ -4,7 +4,14 @@ import { linearPanelI18n } from './linear-panel.i18n';
 import { pluginPanelI18n } from './plugin-panel.i18n';
 
 export const dict = {
+  'sessions.aiRename.action': 'Yapay zekâ ile yeniden adlandır',
+  'sessions.aiRename.generating': 'Oturum başlığı oluşturuluyor...',
+  'sessions.aiRename.checking': 'Tamamlanan konuşma turları kontrol ediliyor...',
+  'sessions.aiRename.noCompletedTurns': 'İlk yanıt tamamlandıktan sonra kullanılabilir.',
+  'sessions.aiRename.failed': 'Oturum yeniden adlandırılamadı. Küçük model ayarlarını kontrol edip tekrar deneyin.',
+  'sessions.aiRename.unsupported': 'Yapay zekâ ile yeniden adlandırma VS Code içinde kullanılamaz.',
   'commitComparison.mode': 'Commit',
+  'pullRequestComparison.select': 'Çekme isteği seçin',
   'commitComparison.select': 'Commit seç',
   'commitComparison.search': 'Commit ara...',
   'commitComparison.loadError': 'Commitler yüklenemedi',

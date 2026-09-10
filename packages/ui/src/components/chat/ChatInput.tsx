@@ -454,6 +454,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         ? `btw-pending:${currentSessionId}`
         : btwSessionId;
     const isBtwActive = Boolean(btwComposerSessionId) && !btwPanel.collapsed;
+    const isBtwPanelVisible = Boolean((btwPanel.btwSessionId && btwPanel.btwDirectory) || btwPanel.creating || btwPanel.pending);
     const immediateBtwSubmitRef = React.useRef<{ identity: ChatDraftIdentity; text: string } | null>(null);
     const draftCaretModeRef = React.useRef({ btw: isBtwActive, atEnd: isBtwActive });
     const inputMode = isBtwActive ? 'normal' : storedInputMode;
@@ -962,10 +963,12 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     } | null>(null);
 
     // Message queue
-    const messageQueueTarget = !isBtwActive && currentSessionId
+    const parentMessageQueueTarget = currentSessionId
         ? createMessageQueueTarget(currentSessionId, currentSessionDirectoryForSync ?? currentDirectory)
         : null;
-    const messageQueueKey = messageQueueTarget ? getMessageQueueKey(messageQueueTarget) : null;
+    const parentMessageQueueKey = parentMessageQueueTarget ? getMessageQueueKey(parentMessageQueueTarget) : null;
+    const messageQueueTarget = !isBtwActive ? parentMessageQueueTarget : null;
+    const messageQueueKey = !isBtwActive ? parentMessageQueueKey : null;
     const followUpBehavior = useMessageQueueStore((state) => state.followUpBehavior);
     const queuedMessages = useMessageQueueStore(
         React.useCallback(
@@ -1258,6 +1261,16 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             linkedLinearIssue: linked.linear
                 ? { identifier: linked.linear.identifier, title: linked.linear.title, url: linked.linear.url, contextText: linked.linear.contextText }
                 : null,
+            linkedGuestIssue: linkedGuestIssue
+                ? {
+                    providerId: linkedGuestIssue.providerId,
+                    id: linkedGuestIssue.id,
+                    title: linkedGuestIssue.title,
+                    url: linkedGuestIssue.url,
+                    contextText: linkedGuestIssue.contextText,
+                    thread: linkedGuestIssue.thread,
+                }
+                : null,
         }, skillInstruction);
         const attachmentsToQueue = [...composerAttachments, ...mentionAttachments];
 
@@ -1277,6 +1290,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         setLinkedIssue(null);
         setLinkedPr(null);
         setLinkedLinearIssue(null);
+        setLinkedGuestIssue(null);
         if (!isMobile) {
             composerRef.current?.focus();
         }
@@ -3345,10 +3359,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             ) : null}
             <div className={cn('chat-input-column relative overflow-visible', isComposerExpanded && 'flex flex-1 min-h-0 flex-col')}>
                 {!isBtwActive ? <AttachedFilesList onShowPopup={handleShowAttachmentPreview} /> : null}
-                {!isBtwActive ? <QueuedMessageChips
-                    onEditMessage={handleQueuedMessageEdit}
-                    onSendMessage={handleQueuedMessageSend}
-                /> : null}
                 <AutoReviewBanner />
                 {hasDrafts ? (
                     <ComposerContextChips
@@ -3474,7 +3484,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                         stopIconSizeClass={stopIconSizeClass}
                         theme={currentTheme}
                         onExpand={mobileShell.expand}
-                        onApplySuggestion={applyAssistSuggestion}
                         onPrimaryAction={handlePrimaryAction}
                         onQueueMessage={() => { void handleQueueMessage(); }}
                         onNewSession={handleMobileNewSession}
@@ -3492,13 +3501,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                 {!isBtwActive ? <SessionGoalRow
                     sessionId={currentSessionId}
                     directory={currentSessionDirectoryForSync ?? currentDirectory}
-                    className="mb-1.5"
-                /> : null}
-                {!isBtwActive ? <SessionSuggestionChip
-                    sessionId={currentSessionId}
-                    directory={currentSessionDirectoryForSync ?? currentDirectory}
-                    hidden={hasContent || newSessionDraftOpen}
-                    onApply={applyAssistSuggestion}
                     className="mb-1.5"
                 /> : null}
                 <div
@@ -3729,6 +3731,19 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                     className={cn('chat-input-column mt-4', draftPresentationClassName)}
                 />
             ) : null}
+            <SessionSuggestionChip
+                sessionId={currentSessionId}
+                directory={currentSessionDirectoryForSync ?? currentDirectory}
+                hidden={hasContent || newSessionDraftOpen || isBtwActive || isBtwPanelVisible || hasQueuedMessages}
+                onApply={applyAssistSuggestion}
+            />
+            <QueuedMessageChips
+                key={parentMessageQueueKey}
+                target={parentMessageQueueTarget}
+                hidden={newSessionDraftOpen || isBtwActive || isBtwPanelVisible}
+                onEditMessage={handleQueuedMessageEdit}
+                onSendMessage={handleQueuedMessageSend}
+            />
             {currentSessionId ? <BtwPanel parentSessionId={currentSessionId} panel={btwPanel} onExit={handleExitBtw} /> : null}
         </form>
 

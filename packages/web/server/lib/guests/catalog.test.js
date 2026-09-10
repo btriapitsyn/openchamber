@@ -79,6 +79,7 @@ describe('listInstalledGuests', () => {
       source: 'path',
       path: hello.path,
       attach: 'dialog',
+      enabled: true,
     });
     expect(toPublicGuest({
       ...hello,
@@ -100,6 +101,7 @@ describe('listInstalledGuests', () => {
       source: 'path',
       path: hello.path,
       attach: 'dialog',
+      enabled: true,
       integration: {
         name: 'ClickUp',
         description: 'Tasks',

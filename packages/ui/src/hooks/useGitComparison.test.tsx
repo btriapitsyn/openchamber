@@ -10,6 +10,7 @@ test('comparison reads preserve scope, report failures, retry, and stop while hi
     window: dom, document: dom.document, navigator: dom.navigator, location: dom.location,
     localStorage: dom.localStorage,
     Element: dom.Element, HTMLElement: dom.HTMLElement, Node: dom.Node,
+    customElements: dom.customElements, CSSStyleSheet: dom.CSSStyleSheet,
     Event: dom.Event, CustomEvent: dom.CustomEvent,
     requestAnimationFrame: dom.requestAnimationFrame.bind(dom),
     cancelAnimationFrame: dom.cancelAnimationFrame.bind(dom), IS_REACT_ACT_ENVIRONMENT: true,
@@ -32,6 +33,8 @@ test('comparison reads preserve scope, report failures, retry, and stop while hi
   const { createRoot } = await import('react-dom/client');
   const { I18nProvider } = await import('@/lib/i18n');
   const { useGitComparison } = await import('./useGitComparison');
+  const { notifyGitPush } = await import('@/lib/gitPushEvents');
+  const { getRuntimeKey } = await import('@/lib/runtime-switch');
   type Capture = { current: ReturnType<typeof useGitComparison> | null };
   const captured: Capture = { current: null };
   let directory = '/repo-a';
@@ -123,6 +126,84 @@ test('comparison reads preserve scope, report failures, retry, and stop while hi
     await render();
     expect(requests).toHaveLength(9);
     await finish(8, Response.json({ files: [{ path: 'b.ts', status: 'A' }] }));
+
+    source = { kind: 'pr', number: 42, sourceRepo: { owner: 'upstream', repo: 'project' } };
+    await render();
+    expect(requests[9].url.pathname).toBe('/api/walkthrough/pr-diff');
+    expect(JSON.parse(requests[9].url.searchParams.get('source') ?? '')).toEqual(source);
+    const publishedPatch = 'diff --git a/pr.ts b/pr.ts\n--- a/pr.ts\n+++ b/pr.ts\n@@ -1 +1 @@\n-old\n+published\n';
+    await finish(9, new Response(publishedPatch, { headers: { 'content-type': 'text/plain' } }));
+    expect(current().files?.map((file) => file.path)).toEqual(['pr.ts']);
+    expect(await current().fetchDiff('pr.ts')).toEqual({ diff: publishedPatch });
+    // Opening files uses this snapshot, never local files or another HTTP read.
+    expect(requests).toHaveLength(10);
+    const snapshotRevision = current().revision;
+    enabled = false;
+    await render();
+    enabled = true;
+    await render();
+    expect(requests).toHaveLength(10);
+    expect(current().revision).toBe(snapshotRevision);
+    await act(async () => { retry = current().refresh(); });
+    await finish(10, new Response(publishedPatch.replace('+published', '+updated'), { headers: { 'content-type': 'text/plain' } }));
+    await retry;
+    expect(current().revision).toBeGreaterThan(snapshotRevision);
+    expect((await current().fetchDiff('pr.ts')).diff).toContain('+updated');
+
+    await act(async () => { retry = current().refresh(); });
+    await finish(11, Response.json({ error: 'GitHub unavailable' }, { status: 503 }));
+    await retry;
+    expect(current().files).toBeNull();
+    expect(current().error).toBe('GitHub unavailable');
+    await act(async () => { retry = current().refresh(); });
+    await finish(12, new Response('', { headers: { 'content-type': 'text/plain' } }));
+    await retry;
+    expect(current().files).toEqual([]);
+    const refreshOldPr = current().refresh;
+    const readOldPr = current().fetchDiff;
+    source = { kind: 'pr', number: 42, sourceRepo: { owner: 'fork', repo: 'project' } };
+    await render();
+    source = { kind: 'pr', number: 43, sourceRepo: { owner: 'upstream', repo: 'project' } };
+    await render();
+    await finish(14, new Response(publishedPatch.replace('+published', '+new PR'), { headers: { 'content-type': 'text/plain' } }));
+    await finish(13, new Response(publishedPatch, { headers: { 'content-type': 'text/plain' } }));
+    expect((await current().fetchDiff('pr.ts')).diff).toContain('+new PR');
+    await refreshOldPr();
+    await expect(readOldPr('pr.ts')).rejects.toThrow();
+    expect(requests).toHaveLength(15);
+
+    await act(async () => { retry = current().refresh(); });
+    await finish(15, new Response('<html>OpenCode</html>', { headers: { 'content-type': 'text/html' } }));
+    await retry;
+    expect(current().files).toBeNull();
+    expect(current().error).toContain('unavailable on this server');
+
+    await act(async () => { retry = current().refresh(); });
+    await finish(16, new Response(publishedPatch, { headers: { 'content-type': 'text/plain' } }));
+    await retry;
+    enabled = false;
+    await render();
+    await act(async () => {
+      notifyGitPush('/repo-b', getRuntimeKey());
+      notifyGitPush('/repo-b', getRuntimeKey());
+    });
+    expect(requests).toHaveLength(17);
+    enabled = true;
+    await render();
+    expect(requests).toHaveLength(18);
+    await finish(17, new Response(publishedPatch.replace('+published', '+after push'), { headers: { 'content-type': 'text/plain' } }));
+    expect((await current().fetchDiff('pr.ts')).diff).toContain('+after push');
+    await act(async () => { notifyGitPush('/other-repo', getRuntimeKey()); });
+    expect(requests).toHaveLength(18);
+    await act(async () => { notifyGitPush('/repo-b', 'another-runtime'); });
+    expect(requests).toHaveLength(18);
+    await act(async () => { notifyGitPush('/repo-b', getRuntimeKey()); });
+    expect(requests).toHaveLength(19);
+    await act(async () => { notifyGitPush('/repo-b', getRuntimeKey()); });
+    expect(requests).toHaveLength(20);
+    await finish(19, new Response(publishedPatch.replace('+published', '+latest push'), { headers: { 'content-type': 'text/plain' } }));
+    await finish(18, new Response(publishedPatch.replace('+published', '+older push'), { headers: { 'content-type': 'text/plain' } }));
+    expect((await current().fetchDiff('pr.ts')).diff).toContain('+latest push');
   } finally {
     await act(async () => root.unmount());
     globalThis.fetch = originalFetch;

@@ -277,7 +277,7 @@ const EDITOR_TREE_MAX_WIDTH = 480;
 
 // The editor surface's file-tree column: docked on the right, resizable from
 // its left edge, and animated open/closed like the app sidebars.
-const EditorTreeColumn: React.FC<{ visible: boolean }> = ({ visible }) => {
+const EditorTreeColumn: React.FC<{ visible: boolean; active: boolean }> = ({ visible, active }) => {
   const { t } = useI18n();
   const width = useUIStore((state) => state.contextEditorTreeWidth);
   const setWidth = useUIStore((state) => state.setContextEditorTreeWidth);
@@ -390,7 +390,7 @@ const EditorTreeColumn: React.FC<{ visible: boolean }> = ({ visible }) => {
         style={{ width: 'var(--oc-editor-tree-width)' }}
         aria-hidden={!visible}
       >
-        <SidebarFilesTree />
+        <SidebarFilesTree visible={visible && active} />
       </div>
     </div>
   );
@@ -1244,7 +1244,7 @@ export const ContextPanel: React.FC = () => {
           <div className={cn('absolute inset-0 flex', isFileTabActive ? 'flex' : 'hidden')}>
             <div className="h-full min-w-0 flex-1">
               {hasOpenEditorFile ? (
-                <React.Suspense fallback={null}><FilesView mode="editor-only" /></React.Suspense>
+                <React.Suspense fallback={null}><FilesView mode="editor-only" visible={isOpen && isFileTabActive} /></React.Suspense>
               ) : (
                 <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
                   <Icon name="file-code" className="h-12 w-12 text-muted-foreground/50" />
@@ -1253,7 +1253,7 @@ export const ContextPanel: React.FC = () => {
                 </div>
               )}
             </div>
-            <EditorTreeColumn visible={contextEditorTreeVisible} />
+            <EditorTreeColumn visible={contextEditorTreeVisible} active={isOpen && isFileTabActive} />
           </div>
         ) : null}
         {activeChatTab && activeChatSessionID && activeChatSrc ? (
@@ -1297,6 +1297,7 @@ export const ContextPanel: React.FC = () => {
           >
             <React.Suspense fallback={null}>
               <DiffView
+                visible={isOpen && activeTab?.id === tab.id}
                 hideStackedFileSidebar
                 stackedDefaultCollapsedAll
                 pinSelectedFileHeaderToTopOnNavigate
@@ -1317,7 +1318,7 @@ export const ContextPanel: React.FC = () => {
         {hasWalkthroughTab ? (
           <div className={cn('absolute inset-0', activeTab?.mode === 'walkthrough' ? 'block' : 'hidden')}>
             <React.Suspense fallback={null}>
-              <WalkthroughView directory={effectiveDirectory} visible={activeTab?.mode === 'walkthrough'} />
+              <WalkthroughView directory={effectiveDirectory} visible={isOpen && activeTab?.mode === 'walkthrough'} />
             </React.Suspense>
           </div>
         ) : null}

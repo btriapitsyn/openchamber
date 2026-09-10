@@ -2,6 +2,66 @@ import { EventEmitter } from 'node:events';
 import { describe, expect, it } from 'vitest';
 
 import { createGlobalUiEventBroadcaster, createMessageStreamWsRuntime } from './runtime.js';
+import { createGlobalMessageStreamHub } from './global-hub.js';
+import { createNotificationEmitterRuntime } from '../notifications/emitter-runtime.js';
+
+it('serializes a UI broadcast once per wire format and isolates failed clients', () => {
+  let serializations = 0;
+  const payload = { toJSON() { serializations++; return { type: 'openchamber:test', properties: { value: 'same' } }; } };
+  const writes = [];
+  const sseClients = new Set(Array.from({ length: 4 }, () => ({ write: text => writes.push(text) })));
+  const sockets = Array.from({ length: 4 }, () => ({ readyState: 1, bufferedAmount: 0, send: text => writes.push(text) }));
+  const failed = { readyState: 1, bufferedAmount: 0, send() { throw new Error('closed'); } };
+  const wsClients = new Set([...sockets, failed]);
+  const { writeSseEvent } = createNotificationEmitterRuntime({});
+  const broadcast = createGlobalUiEventBroadcaster({ sseClients, wsClients, writeSseEvent });
+  broadcast(payload);
+  expect(serializations).toBe(2);
+  expect(writes).toHaveLength(8);
+  expect(wsClients.has(failed)).toBe(false);
+  expect(wsClients.size).toBe(4);
+  expect(writes[0]).toBe(writes[3]);
+  expect(writes[4]).toBe(writes[7]);
+  sseClients.clear(); wsClients.clear();
+  broadcast(payload);
+  expect(serializations).toBe(2);
+});
+
+it('delivers oversized events live, but reports a replay gap instead of replaying across it', async () => {
+  const hub = createGlobalMessageStreamHub({
+    buildOpenCodeUrl: path => `http://127.0.0.1:4096${path}`,
+    getOpenCodeAuthHeaders: () => ({}),
+    replayByteLimit: 512,
+    fetchImpl: async (_url, options) => createSseResponse({
+      signal: options.signal, holdOpen: true,
+      blocks: [
+        'id: first\ndata: {"type":"first","properties":{}}\n\n',
+        `id: large\ndata: ${JSON.stringify({ type: 'large', properties: { text: '界'.repeat(1024) } })}\n\n`,
+        'id: last\ndata: {"type":"last","properties":{}}\n\n',
+      ],
+    }),
+  });
+  const runtime = createMessageStreamWsRuntime({
+    server: new EventEmitter(), globalEventHub: hub, wsClients: new Set(),
+    uiAuthController: null, isRequestOriginAllowed: async () => true,
+    rejectWebSocketUpgrade() {}, buildOpenCodeUrl: path => `http://127.0.0.1:4096${path}`,
+    getOpenCodeAuthHeaders: () => ({}), processForwardedEventPayload() {},
+  });
+  const first = new FakeSocket();
+  const reconnect = new FakeSocket();
+  try {
+    runtime.wsServer.emit('connection', first, { url: '/api/global/event/ws' });
+    await expect.poll(() => first.sent.filter(frame => frame.type === 'event').length).toBe(3);
+    expect(first.sent.find(frame => frame.eventId === 'large').payload.properties.text).toHaveLength(1024);
+    expect(hub.replayAfter('first')).toBeNull();
+    expect(hub.replayAfter('last')).toEqual([]);
+    runtime.wsServer.emit('connection', reconnect, { url: '/api/global/event/ws?lastEventId=first' });
+    await expect.poll(() => reconnect.sent.length).toBeGreaterThan(0);
+    expect(reconnect.sent).toEqual([{ type: 'ready', scope: 'global', replayReset: true }]);
+  } finally {
+    first.close(); reconnect.close(); hub.stop(); await runtime.close();
+  }
+});
 
 class FakeSocket extends EventEmitter {
   constructor() {

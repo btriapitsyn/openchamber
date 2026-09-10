@@ -43,6 +43,7 @@ import { runtimeFetch } from './runtime-fetch';
 import { getRuntimeUrlResolver } from './runtime-url';
 import { getRuntimeKey } from './runtime-switch';
 import { notifyGitStatusInvalidated, subscribeGitStatusInvalidations } from './gitStatusInvalidation';
+import { notifyGitPush } from './gitPushEvents';
 
 const API_BASE = '/api/git';
 const gitRangeDiffSchema = z.object({ diff: z.string() });
@@ -810,6 +811,7 @@ export async function gitPush(
   directory: string,
   options: { remote?: string; branch?: string; options?: string[] | Record<string, unknown> } = {}
 ): Promise<GitPushResult> {
+  const runtimeKey = getRuntimeKey();
   const response = await runtimeFetch(buildUrl(`${API_BASE}/push`, directory), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -819,7 +821,9 @@ export async function gitPush(
     const error = await response.json().catch(() => ({ error: response.statusText }));
     throw new Error(error.error || 'Failed to push');
   }
-  return completeStatusMutation(directory, response);
+  const result = await completeStatusMutation<GitPushResult>(directory, response);
+  if (result.success) notifyGitPush(directory, runtimeKey);
+  return result;
 }
 
 export async function gitPull(

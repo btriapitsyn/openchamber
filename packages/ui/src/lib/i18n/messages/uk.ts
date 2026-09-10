@@ -5,7 +5,14 @@ import { linearPanelI18n } from './linear-panel.i18n';
 import { pluginPanelI18n } from './plugin-panel.i18n';
 
 export const dict: Record<I18nKey, string> = {
+  'sessions.aiRename.action': 'Перейменувати за допомогою ШІ',
+  'sessions.aiRename.generating': 'Генеруємо назву сесії...',
+  'sessions.aiRename.checking': 'Перевіряємо завершені ходи...',
+  'sessions.aiRename.noCompletedTurns': 'Доступно після першої завершеної відповіді.',
+  'sessions.aiRename.failed': 'Не вдалося перейменувати сесію. Перевірте налаштування малої моделі та спробуйте ще раз.',
+  'sessions.aiRename.unsupported': 'Перейменування за допомогою ШІ недоступне у VS Code.',
   'commitComparison.mode': 'Коміт',
+  'pullRequestComparison.select': 'Виберіть пул-реквест',
   'commitComparison.select': 'Вибрати коміт',
   'commitComparison.search': 'Пошук комітів...',
   'commitComparison.loadError': 'Не вдалося завантажити коміти',

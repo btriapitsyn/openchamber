@@ -86,11 +86,21 @@ its current hunk index while visible; regeneration remains user-initiated. The
 content-addressed cache continues to reuse an old review only when its hunks
 match, and otherwise reports stale anchors and uncovered current hunks.
 
-The panel offers the current branch's pull request on its own: it registers with
-the shared GitHub PR status store (`useGitHubPrStatusStore`) rather than waiting
-for the pull request panel to have been visited. That store already dedupes
-concurrent requests by signature and throttles by TTL, so several panels asking
-the same question produce one call to GitHub.
+PR mode uses the same searchable, paginated selector as Changes. Its list loads
+only while PR mode is visible. Selection ownership and handoff rules are in
+`packages/ui/src/stores/DOCUMENTATION.md`.
+
+PR sources may include `sourceRepo: { owner, repo }`. This qualifies both the
+GitHub request and the cache/job key as `pr:<owner>/<repo>:<number>`. Existing
+number-only sources retain `pr:<number>` and resolve the directory's repository.
+The PR panel forwards its resolved repository when opening walkthrough.
+
+`GET /api/walkthrough/pr-diff` accepts `directory` and a JSON `source` restricted
+to PRs. It returns GitHub's complete published diff as text, with no model
+readiness checks or generation. Successful empty patches return 200; auth,
+GitHub and malformed-response failures remain errors. Walkthrough generation
+keeps its existing empty-diff refusal. UI comparison behavior is documented in
+`packages/ui/src/components/views/DOCUMENTATION.md`.
 
 ## No truncation
 

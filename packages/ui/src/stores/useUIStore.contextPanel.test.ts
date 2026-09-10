@@ -25,6 +25,16 @@ describe('useUIStore context panel tabs', () => {
     expect(tabs[0]?.label).toBe('Hello');
   });
 
+  test('opening Changes from a PR walkthrough retains PR scope through normalization', () => {
+    useUIStore.getState().openContextPanelTab('/repo', { mode: 'diff', diffScope: 'working' });
+    useUIStore.getState().openContextPanelTab('/repo', { mode: 'walkthrough' });
+    useUIStore.getState().openContextPanelTab('/repo', { mode: 'diff', diffScope: 'pr' });
+    const diffTabs = getContextPanelTabs('/repo').filter((tab) => tab.mode === 'diff');
+    expect(diffTabs).toHaveLength(1);
+    expect(diffTabs[0].diffScope).toBe('pr');
+    expect(useUIStore.getState().contextPanelByDirectory['/repo'].activeTabId).toBe(diffTabs[0].id);
+  });
+
   test('preserves Commit mode when context tabs are normalized', () => {
     useUIStore.getState().openContextPanelTab('/repo', { mode: 'diff', diffScope: 'commit' });
     useUIStore.getState().openContextPanelTab('/repo', { mode: 'file', targetPath: '/repo/README.md' });

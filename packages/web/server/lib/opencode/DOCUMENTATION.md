@@ -156,6 +156,7 @@ Managed health failures are classified as `timeout`, `connection_refused`, `conn
 ## Public exports (env-runtime.js)
 - `createOpenCodeEnvRuntime(dependencies)`: creates runtime that owns OpenCode CLI environment and binary discovery state.
 - OpenCode CLI resolution order is persisted settings, environment overrides, bundled Desktop CLI when available, PATH, known install locations, then platform shell discovery.
+- Automatic bundled resolution under `OPENCHAMBER_RUNTIME=desktop` stays in runtime state and is returned to the managed launch function, including on OpenCode restart. It does not populate `process.env.OPENCODE_BINARY`: AppImage updater relaunch inherits that environment and would mistake the previous bundle path for an explicit override. Explicit settings/env selections and non-desktop or non-bundled resolution retain their existing environment behavior. This prevents future inheritance; it does not reinterpret overrides already inherited from older releases.
 - Returned API:
   - `applyLoginShellEnvSnapshot()`
   - `getLoginShellEnvSnapshot()`
@@ -422,6 +423,16 @@ within a ten-minute overall deadline.
   - Generic `/api/*` forwarding with hop-by-hop header filtering
   - Windows `/session` merge fallback path behavior
   - OpenCode readiness gate for proxied `/api` requests
+  - Worktree checkout gate before directory-scoped upstream reads and writes
+
+Git bootstrap must reach `git-ready` before OpenCode can cache a new worktree's
+project identity or config. Setup scripts may still be running; the optional UI
+setup wait remains separate. Failed or timed-out checkout returns 503 without
+forwarding. The shared draft creator keeps the project directory selected until
+creation returns, because preview paths have no bootstrap state.
+
+This server gate covers web, Electron, hosted mobile, and Capacitor connections.
+The VS Code extension owns its separate Git and proxy implementation.
 
 ## Public exports (watcher.js)
 - `createOpenCodeWatcherRuntime(dependencies)`: creates global event watcher runtime backed by the shared upstream SSE reader.

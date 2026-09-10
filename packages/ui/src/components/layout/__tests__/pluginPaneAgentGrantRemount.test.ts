@@ -1,9 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const pluginPaneSource = fs.readFileSync(
-  path.join(import.meta.dir, '../PluginPane.tsx'),
+  path.join(path.dirname(fileURLToPath(import.meta.url)), '../PluginPane.tsx'),
   'utf8',
 );
 
