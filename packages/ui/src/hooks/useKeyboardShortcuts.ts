@@ -25,7 +25,7 @@ import {
   type ShortcutActionId,
 } from '@/lib/shortcuts';
 import { ShortcutRegistry } from '@/lib/shortcuts/registry';
-import { guestSurfaceFromInstalled } from '@/lib/guests/surfaces';
+import { enabledGuestSurfaces } from '@/lib/guests/surfaces';
 import { getRuntimeUrlResolver } from '@/lib/runtime-url';
 import { useGuestsStore } from '@/lib/guests/store';
 import { getVisibleContextRailSurfaces } from '@/lib/surfaces/registry';
@@ -519,9 +519,7 @@ export const useKeyboardShortcuts = () => {
             tabs: panel?.tabs ?? [],
             linearConnected: useLinearAuthStore.getState().status?.connected === true,
             githubConnected: useGitHubAuthStore.getState().status?.connected === true,
-            extras: useGuestsStore.getState().guests
-              .filter((guest) => guest.enabled !== false)
-              .map((guest) => guestSurfaceFromInstalled(guest, getRuntimeUrlResolver().authenticatedAsset)),
+            extras: enabledGuestSurfaces(useGuestsStore.getState().guests, getRuntimeUrlResolver().authenticatedAsset),
           });
           const target = visibleSurfaces[switchSurfaceDigit - 1];
           if (target) {

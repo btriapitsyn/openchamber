@@ -4,8 +4,9 @@ import { resolveAttachMode, type AttachMode } from '@openchamber/sdk';
 import type { IconName } from '@/components/icon/icons';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { isMobileSurfaceRuntime } from '@/lib/runtimeSurface';
+import { isGuestActive } from '@/lib/guests/capabilities';
 import { guestPackageIconSrc, resolveGuestIconName } from '@/lib/guests/icon';
-import { guestSurfaceFromInstalled } from '@/lib/guests/surfaces';
+import { enabledGuestSurfaces } from '@/lib/guests/surfaces';
 import { loadGuestCatalog } from '@/lib/guests/load-catalog';
 import { useGuestsStore } from '@/lib/guests/store';
 import { getRuntimeUrlResolver } from '@/lib/runtime-url';
@@ -33,10 +34,7 @@ export const useGuestSurfaces = (): ContextSurfaceDescriptor[] => {
   }, []);
 
   return React.useMemo(() => {
-    const authenticatedAsset = getRuntimeUrlResolver().authenticatedAsset;
-    return guests
-      .filter((guest) => guest.enabled !== false)
-      .map((guest) => guestSurfaceFromInstalled(guest, authenticatedAsset));
+    return enabledGuestSurfaces(guests, getRuntimeUrlResolver().authenticatedAsset);
   }, [guests, runtimeKey]);
 };
 
@@ -57,7 +55,7 @@ export const useGuestAttachItems = (): GuestAttachItem[] => {
     const authenticatedAsset = getRuntimeUrlResolver().authenticatedAsset;
     const items: GuestAttachItem[] = [];
     for (const guest of guests) {
-      if (guest.enabled === false) continue;
+      if (!isGuestActive(guest)) continue;
       const mode = resolveAttachMode(guest.attach);
       if (!mode) continue;
       items.push({

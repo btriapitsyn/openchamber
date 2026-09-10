@@ -17,7 +17,9 @@ import {
 } from '@/sync/attachment-files';
 import type { AttachedFile } from '@/stores/types/sessionTypes';
 import * as sessionActions from '@/sync/session-actions';
-import { GuestAttachDialog } from '@/components/layout/GuestAttachDialog';
+// Guest surfaces load on demand: VS Code and mobile never mount them, and the
+// composer must not pay for the guest bridge before an extension is installed.
+const GuestAttachDialog = React.lazy(() => import('@/components/layout/GuestAttachDialog').then((module) => ({ default: module.GuestAttachDialog })));
 import { buildLinkedGuestIssue, buildLinkedIssue, buildLinkedLinearIssue } from '@/lib/linkedIssues';
 import type { AttachIssueRequest } from '@openchamber/sdk';
 import { getInlineCommentDraftKey, useInlineCommentDraftStore, type InlineCommentDraft, type InlineCommentDraftTarget } from '@/stores/useInlineCommentDraftStore';
@@ -1335,7 +1337,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             return;
         }
         recordLinkedReferences(queueSessionId, queueTarget.directory, linked);
-        }, [getCurrentInputSnapshot, currentSessionId, messageQueueTarget, inputMode, hasDrafts, attachedFiles, sanitizeAttachmentsForSend, prepareDocumentMentions, extractInlineFileMentions, agents, currentDirectory, consumePendingSyntheticParts, inlineDraftTarget, consumeDrafts, linkedIssue, linkedPr, linkedLinearIssue, scrollToLatest, clearAttachedFiles, isMobile, addToQueue, currentProviderId, currentModelId, currentAgentName, currentVariant, t]);
+        }, [getCurrentInputSnapshot, currentSessionId, messageQueueTarget, inputMode, hasDrafts, attachedFiles, sanitizeAttachmentsForSend, prepareDocumentMentions, extractInlineFileMentions, agents, currentDirectory, consumePendingSyntheticParts, inlineDraftTarget, consumeDrafts, linkedIssue, linkedPr, linkedLinearIssue, linkedGuestIssue, scrollToLatest, clearAttachedFiles, isMobile, addToQueue, currentProviderId, currentModelId, currentAgentName, currentVariant, t]);
 
     /** Put the context a queued message was captured with back on the composer chips. */
     const restoreQueuedContext = React.useCallback((context: readonly QueuedContextPart[]) => {
@@ -1352,6 +1354,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                 setLinkedIssue({ number: payload.number, title: payload.title, url: payload.url, contextText: part.text });
                 setLinkedPr(null);
                 setLinkedLinearIssue(null);
+                setLinkedGuestIssue(null);
             } else if (payload.kind === 'github-pr') {
                 // The captured context is final: whatever diff it includes is
                 // already in the text, and the branches were not captured.
@@ -1367,10 +1370,24 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                 });
                 setLinkedIssue(null);
                 setLinkedLinearIssue(null);
+                setLinkedGuestIssue(null);
             } else if (payload.kind === 'linear-issue') {
                 setLinkedLinearIssue({ identifier: payload.identifier, title: payload.title, url: payload.url, contextText: part.text });
                 setLinkedIssue(null);
                 setLinkedPr(null);
+                setLinkedGuestIssue(null);
+            } else if (payload.kind === 'guest-issue' || payload.kind === 'guest-pr') {
+                setLinkedGuestIssue({
+                    providerId: payload.providerId,
+                    id: payload.id,
+                    title: payload.title,
+                    url: payload.url,
+                    contextText: part.text,
+                    thread: payload.kind === 'guest-pr' ? 'pull' : 'issue',
+                });
+                setLinkedIssue(null);
+                setLinkedPr(null);
+                setLinkedLinearIssue(null);
             } else {
                 const draft = draftFromContextPayload(payload);
                 if (draft && inlineDraftTarget) {
@@ -3769,12 +3786,16 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                 setLinkedGuestIssue(null);
             }}
         />
-        <GuestAttachDialog
-            guestId={isMobile ? null : attachDialogGuestId}
-            onOpenChange={(open) => {
-                if (!open) setAttachDialogGuestId(null);
-            }}
-        />
+        {attachDialogGuestId && !isMobile ? (
+            <React.Suspense fallback={null}>
+                <GuestAttachDialog
+                    guestId={attachDialogGuestId}
+                    onOpenChange={(open) => {
+                        if (!open) setAttachDialogGuestId(null);
+                    }}
+                />
+            </React.Suspense>
+        ) : null}
         <LinearIssuePickerDialog
             open={linearPickerOpen}
             onOpenChange={setLinearPickerOpen}

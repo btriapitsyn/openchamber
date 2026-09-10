@@ -1,10 +1,11 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import { parseManifestJson, resolveAttachMode, toPublicAgent, toPublicIntegration, hostMeetsOpenChamberEngine, openChamberEngineMinimum } from '@openchamber/sdk';
+import { requestedGuestCapabilities, resolveAttachMode, toPublicService, toPublicIntegration, hostMeetsOpenChamberEngine, openChamberEngineMinimum } from '@openchamber/sdk';
+import { parseManifestJson } from '@openchamber/sdk/schemas';
 
 import { listRelativeGuestScriptHrefs, resolveGuestHtmlRelativePath } from './html-tokens.js';
-import { readExtensionStore } from './persist.js';
+import { onExtensionStoreWrite, readExtensionStore } from './persist.js';
 import { buildPublicSocketBindings } from './sockets.js';
 
 const PANEL_ID = /^[a-z][a-z0-9-]*$/;
@@ -173,15 +174,18 @@ export const inspectGuestPackage = async (packageRoot, { openchamberVersion, ski
   if (attach) {
     guest.attach = attach;
   }
+  if (parsed.manifest.contributes.capabilities?.length) {
+    guest.capabilities = [...parsed.manifest.contributes.capabilities];
+  }
   if (parsed.manifest.contributes.integration) {
     guest.integration = parsed.manifest.contributes.integration;
   }
-  if (parsed.manifest.contributes.agent) {
-    const agentEntry = await resolveGuestAssetPath(packageRoot, parsed.manifest.contributes.agent.entry);
-    if (!agentEntry) {
+  if (parsed.manifest.contributes.service) {
+    const serviceEntry = await resolveGuestAssetPath(packageRoot, parsed.manifest.contributes.service.entry);
+    if (!serviceEntry) {
       return { ok: false, code: 'missing-build' };
     }
-    guest.agent = parsed.manifest.contributes.agent;
+    guest.service = parsed.manifest.contributes.service;
   }
   return { ok: true, guest };
 };
@@ -218,18 +222,54 @@ export const toPublicGuest = (guest) => {
   if (guest.integration) {
     row.integration = toPublicIntegration(guest.integration);
   }
-  const agent = toPublicAgent(
-    guest.agent,
-    Boolean(guest.agentGranted),
+  const granted = Array.isArray(guest.capabilityGrants) ? guest.capabilityGrants : [];
+  row.capabilities = {
+    requested: requestedGuestCapabilities(guest),
+    granted,
+  };
+  const service = toPublicService(
+    guest.service,
+    granted.includes('service'),
     guest.socketBindings,
   );
-  if (agent) {
-    row.agent = agent;
+  if (service) {
+    row.service = service;
   }
   return row;
 };
 
+/**
+ * The rail asks for every panel file through `findInstalledGuest`, and each
+ * listing re-reads every package's manifest and HTML. A short-lived cache per
+ * store file absorbs that burst; any store write drops it, and the TTL bounds
+ * how long an on-disk edit to a folder-installed package goes unnoticed.
+ */
+const CATALOG_CACHE_TTL_MS = 5_000;
+/** @type {Map<string, { expiresAt: number, guests: Awaited<ReturnType<typeof listInstalledGuestsUncached>> }>} */
+const catalogCache = new Map();
+
+export const invalidateGuestCatalog = (persistPath) => {
+  if (persistPath) {
+    catalogCache.delete(persistPath);
+  } else {
+    catalogCache.clear();
+  }
+};
+onExtensionStoreWrite(invalidateGuestCatalog);
+
 export const listInstalledGuests = async ({ persistPath } = {}) => {
+  const cached = persistPath ? catalogCache.get(persistPath) : undefined;
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.guests;
+  }
+  const guests = await listInstalledGuestsUncached({ persistPath });
+  if (persistPath) {
+    catalogCache.set(persistPath, { guests, expiresAt: Date.now() + CATALOG_CACHE_TTL_MS });
+  }
+  return guests;
+};
+
+const listInstalledGuestsUncached = async ({ persistPath } = {}) => {
   const guests = [];
   const seen = new Set();
 
@@ -247,15 +287,15 @@ export const listInstalledGuests = async ({ persistPath } = {}) => {
     }
     seen.add(guest.id);
     const source = stored.sources[root] ?? stored.sources[storedPath] ?? 'path';
-    const socketBindings = guest.agent?.permissions?.sockets?.length
+    const socketBindings = guest.service?.permissions?.sockets?.length
       ? await buildPublicSocketBindings(
-        guest.agent.permissions.sockets,
-        stored.agentSocketOverrides?.[guest.id] ?? {},
+        guest.service.permissions.sockets,
+        stored.serviceSocketOverrides?.[guest.id] ?? {},
       )
       : undefined;
     guests.push({
       ...withSource(guest, source, root),
-      agentGranted: Boolean(stored.agentGrants?.[guest.id]),
+      capabilityGrants: stored.capabilityGrants?.[guest.id] ?? [],
       enabled: !stored.disabledGuests?.[guest.id],
       socketBindings,
     });

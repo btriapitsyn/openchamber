@@ -1,45 +1,46 @@
 # @openchamber/sdk
 
-Types and a thin iframe client for OpenChamber guests. OpenChamber is the control room around OpenCode. Guests are third-party: trackers, model providers, anything that used to be welded into a release.
+Build extensions for [OpenChamber](https://openchamber.dev). An extension is a small web page that OpenChamber shows on its right-hand rail. It can read the current project and session, show toasts, put text in the chat box, attach a task to a session, and, once the user approves it, start sessions and send prompts. This package is the contract between that page and the app.
 
-Author guide: [Build a guest panel](../docs/content/docs/sdk.mdx). Host methods: [Host API](../docs/content/docs/sdk/host.mdx). Drawing kit: [UI kit](../docs/content/docs/sdk/ui.mdx). Open `docs/index.html` in a browser for the same pages as one file.
+Full guide: [Build an extension](https://openchamber.dev/docs/sdk/). Reference: [Host API](https://openchamber.dev/docs/sdk/host/) and [UI kit](https://openchamber.dev/docs/sdk/ui/). Extensions with a local process: [GUEST_SERVICES.md](./GUEST_SERVICES.md).
 
-This package is the language. It does not mount React into the app. A panel still runs as HTML in an iframe and talks through `connectHost()`.
+Extensions load in OpenChamber web and desktop. VS Code and mobile do not load them yet.
 
-`apiVersion` is the iframe envelope. `@openchamber/sdk/ui` follows this package's semver. Changing a PR footer does not bump `apiVersion`.
-
-This package ships TypeScript source. **Bun is required** — it resolves and compiles `.ts` imports natively. Node.js without a bundler will not work.
-
-Local agent processes (`contributes.agent`, `agentRequest`, sockets / exec grant) are described in [GUEST_AGENTS.md](./GUEST_AGENTS.md). Optional `engines.openchamber` (`1.22.0` or `>=1.22.0`) is the minimum OpenChamber version for install. Package `version` is semver and required on install.
-
-## Where this runs
-
-Web and desktop load guests. VS Code and mobile do not. Those runtimes mark the catalog `unsupported`. They do not pretend you have zero extensions.
-
-`host.provider: "linear"` reuses the first-party Linear connection. That is a bootstrap, not a pattern. Do not add a second host provider on `apiVersion` 1.
-
-## Ship an IIFE
-
-The iframe cannot load ESM. Packaged OpenChamber and `openchamber serve` will not compile TypeScript. Build `panel/main.js` yourself:
+## Install
 
 ```bash
-bun run --filter @openchamber/sdk bundle -- panel/main.ts panel/main.js
+npm install @openchamber/sdk
 ```
 
-Same flags the host uses in `oc-dev`: `format: 'iife'`, `target: 'browser'`, `minify: true`. Point the HTML at that file.
+The package ships compiled JavaScript with type declarations, so any bundler works. Its version matches the OpenChamber release it shipped with, so `@openchamber/sdk@1.24.0` is the contract of OpenChamber 1.24.0.
 
-To ship a zip for Settings → Extensions, put `package.json`, `panel/index.html`, `panel/main.js`, and any declared `icon.svg` / `agent/main.js` at the archive root (or one wrapper folder). Skip `node_modules` and TypeScript sources. The host unpacks into `{dataDir}/extensions/{id}` and runs from that copy.
+## What you ship
 
-## First hole: a rail panel
+A folder with three files:
 
-In `package.json`:
+- `package.json` with an `openchamber` block (the manifest)
+- `panel/index.html`, the page OpenChamber shows
+- `panel/main.js`, your script built into one classic file (an IIFE; the page runs in a sandboxed iframe and cannot load ES modules)
+
+OpenChamber never compiles your code. Build `panel/main.js` yourself. The package includes a bundler command that runs on Bun; esbuild with `--format=iife --platform=browser` does the same job.
+
+```bash
+bunx openchamber-guest-bundle panel/main.ts panel/main.js
+```
+
+Then install the folder from Settings → Extensions → Add. Folder installs run from your folder, so edit, rebuild, and reload. A `.zip` or an https git or zip link is copied into OpenChamber's data folder instead; ship the built files only.
+
+A complete three-file example is on the [Build an extension](https://openchamber.dev/docs/sdk/) page. Four more are at [github.com/openchamber/openchamber/tree/main/packages/sdk/examples](https://github.com/openchamber/openchamber/tree/main/packages/sdk/examples).
+
+## Manifest
 
 ```json
 {
-  "name": "@acme/hello-panel",
+  "name": "@acme/hello",
   "version": "1.0.0",
   "openchamber": {
     "apiVersion": 1,
+    "engines": { "openchamber": ">=1.24.0" },
     "contributes": {
       "panel": {
         "id": "acme-hello",
@@ -48,13 +49,14 @@ In `package.json`:
         "entry": "panel/index.html"
       },
       "attach": "dialog",
+      "capabilities": ["prompt", "sessions"],
       "integration": {
         "name": "Acme",
         "description": "Tasks from Acme",
-        "oauth": {
-          "authorizeUrl": "https://acme.example/oauth/authorize",
-          "tokenUrl": "https://acme.example/oauth/token",
-          "apiOrigin": "https://api.acme.example"
+        "token": {
+          "apiOrigin": "https://api.acme.example",
+          "account": { "path": "/me", "name": "login" },
+          "scheme": "bearer"
         },
         "settings": [{ "id": "list-id", "label": "List ID" }]
       }
@@ -63,13 +65,16 @@ In `package.json`:
 }
 ```
 
-`version` is semver (`1.0.0`). Install requires it. Settings → Extensions shows `v1.0.0` on the card. `id` is kebab-case. `icon` is a Remixicon name (`RiWindowLine` → `window`) or a package SVG path like `icon.svg`. URLs and absolute paths fail parse. `entry` is a path inside the package. `../` and absolute paths fail parse.
+- `version` is required semver. Settings → Extensions shows it on the card.
+- `apiVersion` is `1`. Anything else is refused.
+- `engines.openchamber` is optional (`1.24.0` or `>=1.24.0`). Older OpenChamber builds refuse the install.
+- `panel.id` is kebab-case and unique. `icon` is a Remixicon name (`RiWindowLine` becomes `window`) or an SVG inside the folder. `entry` is the HTML file inside the folder.
+- `attach` is optional. `"dialog"` opens the page in a window from the + menu next to the chat box; `true` or `"panel"` opens the rail panel instead. `ctx.surface` tells the page which one it is in.
+- `capabilities` lists what needs the user's approval: `prompt` to send messages, `sessions` to create sessions and worktrees. An `integration` adds `network`, a `service` adds `service`. The user approves the whole list once at install. Calls outside it fail with `NOT_GRANTED`.
+- `integration` is optional. It adds a card at Settings → Integrations. `token` takes a pasted API token (`scheme: "bearer"` for `Authorization: Bearer`, `"basic"` for a username and token pair as Jira Cloud wants), `oauth` runs an authorize flow with a pasted client id, and `host: { "provider": "linear" }` reuses the Linear account already connected in OpenChamber. The page never sees the token; OpenChamber makes the calls through `host.request`.
+- `service` is optional. It declares a local process OpenChamber starts next to the extension. See [GUEST_SERVICES.md](./GUEST_SERVICES.md).
 
-`attach: true` or `"panel"` adds a + menu row that opens the rail. `"attach": "dialog"` opens a host window with the same iframe. `ready.surface` is `panel` or `dialog` so the guest can draw a rail form in one and an attach picker in the other. Omit attach and the panel stays off those menus. VS Code and mobile have no guest rail. That is the 1.0 contract, not a gap in the docs.
-
-`integration` is optional. The host draws the Settings → Integrations card. OAuth guests paste a client id there. Token guests paste an API token. `host: { "provider": "linear" }` reuses the OpenChamber Linear connection and never asks for a client id. The guest never sees the token. `host.request` is a GET or write on that `apiOrigin` only. Host Linear is `https://api.linear.app` only.
-
-In the panel:
+## In the page
 
 ```ts
 import { connectHost, HostRequestError } from '@openchamber/sdk';
@@ -78,24 +83,14 @@ const host = connectHost();
 
 host.onReady((ctx) => {
   document.body.dataset.theme = ctx.theme.mode;
-  document.body.dataset.surface = ctx.surface;
-});
-
-host.onDirectory((directory) => {
-  document.querySelector('#dir')!.textContent = directory ?? '';
 });
 
 host.onSession((session) => {
   document.querySelector('#session')!.textContent = session?.title ?? '';
 });
 
-host.onConnection((connection) => {
-  document.querySelector('#account')!.textContent = connection.account;
-});
-
-await host.oauthStart();
 try {
-  const user = await host.request({ method: 'GET', path: '/api/v2/user' });
+  const user = await host.request({ method: 'GET', path: '/me' });
 } catch (error) {
   if (error instanceof HostRequestError && error.code === 'DISCONNECTED') {
     await host.oauthStart();
@@ -103,7 +98,6 @@ try {
 }
 
 await host.toast({ kind: 'info', message: 'Hello' });
-await host.writeClipboard('/repo');
 await host.compose({ text: 'Ask about the latest diff' });
 await host.attach({
   providerId: 'acme-hello',
@@ -111,112 +105,42 @@ await host.attach({
   title: 'Login is broken',
   url: 'https://example.com/TICKET-1',
 });
-await host.attach({
-  providerId: 'acme-hello',
-  id: '!12',
-  title: 'Fix login',
-  url: 'https://example.com/merge_requests/12',
-  kind: 'pull',
-  author: 'ada',
-  branches: { head: 'feature', base: 'main' },
-  text: 'Optional diff or notes',
-});
 await host.startSession({
-  providerId: 'acme-hello',
-  id: '!12',
-  title: 'Fix login',
-  url: 'https://example.com/merge_requests/12',
-  kind: 'pull',
-  author: 'ada',
-  branches: { head: 'feature', base: 'main' },
-  worktree: true,
-  text: 'Optional diff or notes',
-});
-await host.sessionLink({
   providerId: 'acme-hello',
   id: 'TICKET-1',
   title: 'Login is broken',
   url: 'https://example.com/TICKET-1',
+  worktree: true,
+  text: 'Optional first message',
 });
 await host.prompt({ text: 'Fix the login', send: true });
-host.onSessionLifecycle((event) => {
-  document.body.dataset.phase = event.phase;
-});
-await host.close();
 ```
 
-The UI kit is DOM plus host tokens. Import `@openchamber/sdk/ui` and call `applyHostReady` from `onReady` first. `mountButton`, `mountTextField`, and `mountEmpty` are the connect chrome. They share the same tokens as the issue page.
+Every method, its limits, and the error codes are on the [Host API](https://openchamber.dev/docs/sdk/host/) page.
 
-`mountIssuePage` is the tracker list. Compact filters, search as an icon, identifier + title rows. Linear looks like this on the rail. Jira and ClickUp pass the same rows.
+## UI kit
+
+`@openchamber/sdk/ui` has buttons, fields, a searchable dropdown, checkboxes, tabs, badges, lists, empty states, spinners, banners, separators, progress bars, menus, and safe text, all drawn with the app's colours and fonts. Call `applyHostReady` from `onReady` first, then mount what you need. Every mount returns `{ update, dispose }`.
 
 ```ts
-import { applyHostReady, mountIssuePage } from '@openchamber/sdk/ui';
+import { applyHostReady, mountList } from '@openchamber/sdk/ui';
 
 host.onReady((ctx) => {
   applyHostReady(ctx, document.documentElement);
-  mountIssuePage(document.querySelector('#root')!, {
-    items: tasks,
-    filters,
-    onSelect: (item) => {
-      void host.attach({
-        providerId: 'acme-hello',
-        id: item.id,
-        title: item.title,
-        url: item.url ?? '',
-      });
+  mountList(document.querySelector('#root')!, {
+    items: tasks.map((task) => ({ id: task.id, leading: task.key, title: task.title })),
+    onSelect: (id) => {
+      const task = tasks.find((item) => item.id === id);
+      if (task) void host.attach({ providerId: 'acme-hello', id, title: task.title, url: task.url });
     },
   });
 });
 ```
 
-`mountIssueCard` is the issue after a row click. Back, status picker, metadata, description, comments, and a footer button. Description and comments stay plain text. The guest disposes the list and mounts the card.
+## Schemas
 
-`mountPullRequest` is the host Pull Request window. Pass `mode: 'view'` with a record, checks, and comments, or `mode: 'create'` with a submit handler. Tabs are Overview, Checks, and Comments. Footer callbacks are attach, new session, new worktree, ready, and merge. The kit paints. The guest talks to GitLab or whoever through `host.request`. Git stays on the host.
+`@openchamber/sdk/schemas` exports the zod schemas for the manifest and the messages, for tools that validate extensions. The main entry has no zod dependency, so a page bundle stays small.
 
-`mountAttachIssues` is the + menu picker. Search stays open. Skip `filters` unless the picker needs them. Pass `badge` and `subtitle` on a row when the GitHub picker would show a repo or `head → base`. `hasMore` / `onMore` loads the next remote page. `toggle` is one checkbox. The guest puts the meaning in `attach.text`. On select, call `host.attach` and `host.close`. `kind: 'pull'` is a PR chip, not an issue chip. `session` is a second checkbox, like Create in worktree. When it is checked, call `host.startSession({ worktree: true })` instead of `attach`. `action` is a page button.
+## Scope
 
-`value` on a filter is the starting choice. After that the component keeps the user's picks when you `update` with a new `items` list.
-
-`slot` places a filter. `start` grows on the left and keeps its label, like Linear status. `end` packs to the right and turns into an icon when the panel is under 520px. Skip `slot` and the first filter is `start`, the rest are `end`.
-
-`compose` puts text in the chat box. It does not send. Default mode is `append`, so a draft the user already typed stays. Pass `replace` when you mean to overwrite.
-
-`attach` puts a chip on the composer, the same place GitHub and Linear land. Exclusive with those. `id` is the guest's identifier, not a GitHub number. `close` dismisses the attach window.
-
-`startSession` creates a new session and writes that same snapshot on it. `worktree: true` asks the host to make a worktree first, the way New Worktree does for a GitHub issue. The guest never talks to git. A missing project, a failed worktree, or a failed session create is a host error. VS Code and mobile do not mount guests, so they do not run this.
-
-`sessionLink` writes that snapshot on the current session. It does not create one. No project or no session is a refusal.
-
-`prompt` writes or sends on the current session. Omit `send`, or pass `false`, and it replace-composes. `send: true` sends with the same model path as `startSession`. No session is `NO_SESSION`. A busy session on send is `SESSION_BUSY`. The result is `{ sent }`. The guest does not pick a model or agent.
-
-`onSessionLifecycle` is a host push. Live status `busy` and `retry` are `started`. `idle` is `completed`. An unknown status type is `failure`. That is not abort. A late listener gets the last phase.
-
-The host parses the same block with `parseManifest`. An unknown `apiVersion` is a refusal, not a guess.
-
-## Slot map
-
-What exists in code today:
-
-- `contributes.panel`
-- `contributes.attach` — `true` / `"panel"` opens the rail; `"dialog"` opens a host window around the same iframe
-- `contributes.integration` — host Integrations card, OAuth URLs, optional settings fields
-- `contributes.agent` — optional host-spawned local process. See [GUEST_AGENTS.md](./GUEST_AGENTS.md)
-- `engines.openchamber` — optional `1.22.0` or `>=1.22.0`. Install refuses older hosts with `host-too-old`
-- `connectHost`: theme, locale, directory, session `{ id, title, busy, model?, agent? }`, connection, settings, toast, `openUrl`, `openSurface`, `writeClipboard`, `compose`, `attach` (`kind` issue or pull), `startSession` (same fields plus `worktree`, returns `{ sessionId, sent }`), `prompt` (current session, returns `{ sent }`), `sessionLink` (current session), `onSessionLifecycle` (`started` / `completed` / `failure`), `close`, `oauthStart`, `oauthDisconnect`, `request`, `agentRequest`, `agentStatus`
-- Host hole on web and desktop: `GET /api/guests`, Settings → Extensions (folder, local ZIP, or https git / zip URL, stored per OpenChamber instance), Settings → Integrations, a rail iframe, the composer + menu, and the attach window. Zip and git copies live under `{dataDir}/extensions/{id}`. VS Code and mobile mark the catalog unsupported. Ship a classic IIFE with the bundle command above. The packaged app does not compile TypeScript.
-- `HostRequestError.code`: `HOST_UNAVAILABLE`, `HOST_TIMEOUT` (20s), `HOST_REJECTED`, `DISCONNECTED`, `DISABLED`, `BAD_PATH`, `NO_INTEGRATION`, `NO_SESSION`, `SESSION_BUSY`, `NO_AGENT`, `AGENT_FAILED`. An unknown wire code becomes `HOST_REJECTED`.
-- `@openchamber/sdk/ui`: `applyHostReady`, `mountIssuePage`, `mountIssueCard`, `mountAttachIssues`, `mountPullRequest`, `mountButton`, `mountTextField`, `mountEmpty`. The guest passes rows. A row may carry `badge` and `subtitle`. The picker can `hasMore`, show one `toggle`, a `session` checkbox, and an `action`. The host does not search.
-
-Frozen on `apiVersion` 1. No new RPC and no second `host.provider` until this set has lived with third-party guests. Named, not typed yet. No slot means no hole in the host. Do not go around it through `RuntimeAPIs`.
-
-- `issues` — `search` / `get` still named on the host. The chip is `attach`. The guest draws the list with the UI kit.
-- A public OAuth broker. Redirect is `{serverOrigin}/api/guests/{id}/oauth/callback`
-- commands, shortcuts
-- Git remote / PR (not the same as `issues`)
-- Magic prompts, skills catalog source, URL scheme
-
-GitHub pull requests stay off `issues`. A tracker that is not GitHub should not invent a `number`.
-
-## What this package will not grow into
-
-Files, the terminal, raw git, permissions, pairing. Linear and GitHub HTTP clients. The host's React tree.
+This package covers the page, the manifest, the messages, and the UI kit. It does not give an extension files, the terminal, git, or OpenChamber's React tree. `apiVersion` 1 is frozen; new methods arrive with the app's releases and this package's version.

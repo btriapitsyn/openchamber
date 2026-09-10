@@ -1,11 +1,11 @@
 ---
-title: API host
-description: Méthodes connectHost, règles de request, limites et codes d’erreur pour les panneaux invités.
+title: API hôte
+description: Chaque méthode connectHost qu'une extension peut appeler, ce qu'OpenChamber lui envoie, les limites et les codes d'erreur.
 ---
 
-# API host
+# API hôte
 
-Cette page donne les méthodes exactes de `connectHost`, les limites et les codes d’erreur. Dossier, bundle et manifeste sont dans [Créer un panneau invité](/fr/sdk/).
+Utilisez cette page quand vous avez besoin des méthodes exactes de `connectHost`, des limites et des codes d'erreur. Pour la structure du dossier, le manifeste et l'installation, commencez par [Créer une extension](/sdk/).
 
 ```ts
 import { connectHost, HostRequestError } from "@openchamber/sdk";
@@ -13,50 +13,50 @@ import { connectHost, HostRequestError } from "@openchamber/sdk";
 const host = connectHost();
 ```
 
-`connectHost` lève `HOST_UNAVAILABLE` s’il n’y a pas de `window`, ou si le script n’est pas dans un iframe. Appelle `dispose()` quand tu démontes le panneau. Les appels en vol sont alors rejetés en `HOST_UNAVAILABLE`.
+`connectHost` lève `HOST_UNAVAILABLE` quand il n'y a pas de `window`. En dehors d'OpenChamber, il renvoie un client dont chaque appel est rejeté avec `HOST_UNAVAILABLE`. Appelez `dispose()` quand vous démontez la page ; les appels encore en cours sont rejetés avec le même code.
 
-## Ready et poussées suivantes
+## Ce qu'OpenChamber vous envoie
 
-`onReady` part avec le premier snapshot du host, puis encore quand le host le rafraîchit.
+`onReady` se déclenche avec le premier instantané, puis à chaque fois qu'OpenChamber le rafraîchit.
 
-| Champ | Ce que c’est |
+| Champ | Ce que c'est |
 | --- | --- |
 | `theme.mode` | `light` ou `dark` |
-| `theme.tokens` | couleurs, polices et rayons du host. Passe-les à `applyHostReady` avant de monter l’UI. |
-| `locale` | tag de langue du host |
-| `directory` | dossier du projet courant, ou `null` |
-| `session` | `{ id, title }` ou `null`. Sans titre, on garde l’id de session. |
-| `surface` | `panel` sur la barre, `dialog` dans la fenêtre attach. Ce n’est pas `openSurface`. |
-| `connection` | `{ connected, account }` |
-| `settings` | uniquement les champs d’intégration déclarés |
+| `theme.tokens` | les couleurs de l'application (surfaces, texte, états d'interaction, primary, success/warning/error/info), `font`, `mono` et `radius`. Passez-le à `applyHostReady` avant de monter l'UI. |
+| `locale` | le tag de langue de l'application |
+| `directory` | le dossier du projet en cours, ou `null` |
+| `session` | `{ id, title, busy }` ou `null`. Le titre retombe sur l'id de session. `busy` est le statut en direct. `model` et `agent` (l'agent OpenCode) apparaissent quand la session les a. |
+| `surface` | `panel` dans la barre latérale, `dialog` dans la fenêtre d'attache |
+| `connection` | `{ connected, account }` pour votre intégration |
+| `settings` | les valeurs des champs déclarés dans `integration.settings` |
 
-Les jetons d’accès n’apparaissent jamais dans `ready` ni dans un résultat `request`.
+Les tokens d'accès n'apparaissent jamais ici ni dans un résultat de `request`.
 
-`onDirectory`, `onSession`, `onSessionLifecycle`, `onConnection` et `onSettings` rejouent le dernier ready si tu t’abonnes tard. Les poussées suivantes du host tiennent ces écouteurs à jour, comme `onReady`.
+`onDirectory`, `onSession`, `onSessionLifecycle`, `onConnection` et `onSettings` rejouent la dernière valeur quand vous vous abonnez tard, puis continuent à se déclencher à chaque changement.
 
 ## Méthodes
 
-| Appel | Ce qu’il fait |
+| Appel | Ce qu'il fait |
 | --- | --- |
-| `toast({ kind, message })` | toast du host. `kind` vaut `info`, `success` ou `error`. |
-| `openUrl(url)` | ouvrir une URL dans le host |
-| `openSurface(surfaceId)` | basculer le chrome du host sur cette surface |
-| `writeClipboard(text)` | copier dans le host. 1–32000 caractères. |
-| `compose({ text, mode? })` | écrire dans la zone de chat. N’envoie pas. `mode` par défaut : `append`. Passe `replace` pour écraser. Texte 1–16000 après trim. |
-| `attach({ ... })` | poser une puce sur le composeur, exclusive avec GitHub et Linear |
-| `startSession({ ... })` | créer une session et y écrire le même snapshot. Renvoie `{ sessionId, sent }`. |
-| `prompt({ text, send? })` | écrire ou envoyer sur la session courante. Sans `send`, ou `false`, remplace le brouillon. `send: true` envoie. Renvoie `{ sent }`. |
-| `sessionLink({ ... })` | écrire le snapshot attach sur la session courante. Ne crée pas de session. |
-| `close()` | fermer la fenêtre attach. No-op sur la barre. |
-| `oauthStart()` | ouvrir l’URL d’autorisation du fournisseur, ou l’URL Linear first-party pour un invité Linear host |
-| `oauthDisconnect()` | jeter les jetons de cet invité, ou la connexion Linear pour un invité Linear host |
-| `request({ method, path, query?, body? })` | GET ou écriture uniquement sur l’`apiOrigin` déclaré |
-| `agentRequest({ method, path, query?, body? })` | proxy to this guest's local agent on loopback. Same path rules as `request`, but the origin is the agent the host started. |
-| `agentStatus()` | `stopped`, `starting`, `ready`, or `failed` |
+| `toast({ kind, message })` | affiche un toast dans l'application. `kind` est `info`, `success` ou `error`. |
+| `openUrl(url)` | ouvre une URL dans le navigateur de l'utilisateur |
+| `openSurface(surfaceId)` | bascule l'application sur cet écran |
+| `writeClipboard(text)` | copie du texte. 1 à 32000 caractères. |
+| `compose({ text, mode? })` | insère du texte dans la zone de chat sans l'envoyer. `mode` est `append` (par défaut) ou `replace`. 1 à 16000 caractères après trim. |
+| `attach({ ... })` | pose une puce sur la zone de chat, au même endroit que les éléments GitHub et Linear. Une seule puce à la fois. |
+| `startSession({ ... })` | crée une session avec cet élément attaché. Renvoie `{ sessionId, sent }`. Nécessite la capacité `sessions`. |
+| `prompt({ text, send? })` | écrit dans la session en cours, ou y envoie un message. Renvoie `{ sent }`. L'envoi nécessite la capacité `prompt`. |
+| `sessionLink({ ... })` | attache un élément à la session en cours sans en créer une |
+| `close()` | ferme la fenêtre d'attache. Ne fait rien dans la barre latérale. |
+| `oauthStart()` | ouvre la page d'autorisation du fournisseur, ou celle de Linear pour une intégration `host: { provider: "linear" }` |
+| `oauthDisconnect()` | oublie le token stocké, ou la connexion Linear |
+| `request({ method, path, query?, body? })` | appelle l'`apiOrigin` de votre intégration avec le token de l'utilisateur attaché |
+| `serviceRequest({ method, path, query?, body? })` | appelle le service local de votre extension (voir `GUEST_SERVICES.md`) |
+| `serviceStatus()` | `stopped`, `starting`, `ready` ou `failed` |
 
-## Attach et startSession
+## attach, startSession et sessionLink
 
-Les deux prennent les mêmes champs d’identité :
+Les trois prennent les mêmes champs d'élément :
 
 ```ts
 await host.attach({
@@ -88,39 +88,15 @@ await host.startSession({
 });
 ```
 
-`id` est ton identifiant, pas un numéro GitHub. `kind` vaut `issue` ou `pull`, défaut `issue`. `text` est un contexte modèle optionnel, 1–16000 après trim.
+`providerId` est l'id de votre panneau ; OpenChamber l'écrase de toute façon avec votre id. `id` est votre propre identifiant pour l'élément. `kind` est `issue` (par défaut) ou `pull`. `text` est un contexte optionnel pour le modèle, 1 à 16000 caractères après trim.
 
-`startSession` crée une session dans le projet courant. `worktree: true` demande au host de faire d’abord un worktree. L’invité ne parle pas à git. Pas de projet, worktree raté ou session ratée : erreur host. `text` devient le premier message si un modèle est choisi.
+`startSession` crée une session dans le projet en cours. Avec `worktree: true`, OpenChamber crée d'abord un worktree git et y ouvre la session. Quand `text` est défini et qu'un modèle est sélectionné, il est envoyé comme premier message. Le résultat est `{ sessionId, sent }`, où `sent` vaut `sent`, `no-model`, `skipped` ou `failed`. La session existe même après `no-model` et `failed`. Pas de projet ouvert, un worktree en échec ou une création de session en échec donnent une erreur `HOST_REJECTED`.
 
-## prompt, sessionLink et sessionLifecycle
+`sessionLink` attache l'élément à la session ouverte en ce moment. Pas de projet ou pas de session donne une erreur `NO_SESSION`.
 
-```ts
-await host.sessionLink({
-  providerId: "acme-hello",
-  id: "TICKET-1",
-  title: "Login is broken",
-  url: "https://example.com/TICKET-1",
-});
+Limites que le client applique avant tout envoi :
 
-await host.prompt({ text: "Fix the login" });
-await host.prompt({ text: "Fix the login", send: true });
-
-host.onSessionLifecycle((event) => {
-  document.body.dataset.phase = event.phase;
-});
-```
-
-`sessionLink` prend les mêmes champs d’identifiant que `attach`. Il écrit ce snapshot sur la session courante. Il n’en crée pas. Pas de projet ou pas de session : refus.
-
-`prompt` écrit ou envoie sur la session courante. Sans `send`, ou `false`, il remplace le brouillon. `send: true` envoie par le même chemin modèle que `startSession`. Pas de session : `NO_SESSION`. Session occupée à l’envoi : `SESSION_BUSY`. Compose marche encore pendant busy. Le résultat est `{ sent }` : `sent`, `no-model`, `skipped` ou `failed`. L’invité ne choisit ni modèle ni agent.
-| `NO_AGENT` | no agent declared, not granted when required, or not running |
-| `AGENT_FAILED` | the agent crashed or never became ready |
-
-`onSessionLifecycle` est une poussée host. Le statut live `busy` et `retry` valent `started`. `idle` vaut `completed`. Un type de statut inconnu vaut `failure`. Ce n’est pas un abort. Un écouteur tardif reçoit la dernière phase, depuis `ready.session.busy` si aucune poussée dédiée n’est encore arrivée.
-
-Limites que le client coupe avant que le host voie le message :
-
-| Champ | Max |
+| Champ | Caractères max |
 | --- | --- |
 | `id` | 128 |
 | `title` | 200 |
@@ -129,17 +105,32 @@ Limites que le client coupe avant que le host voie le message :
 | `author` | 80 |
 | chaque nom de branche | 200 |
 
+## prompt et cycle de vie de la session
+
+```ts
+await host.prompt({ text: "Fix the login" });
+await host.prompt({ text: "Fix the login", send: true });
+
+host.onSessionLifecycle((event) => {
+  document.body.dataset.phase = event.phase;
+});
+```
+
+Sans `send`, `prompt` remplace le texte de la zone de chat. Avec `send: true`, il envoie le message avec le modèle et l'agent choisis par l'utilisateur. L'extension ne les choisit jamais. Pas de session ouverte donne `NO_SESSION`. Envoyer pendant que la session est occupée donne `SESSION_BUSY` ; écrire dans la zone fonctionne même quand elle est occupée. Le résultat est `{ sent }` avec les mêmes valeurs que `startSession`.
+
+`onSessionLifecycle` vous dit ce que fait la session. `phase` est `started` pendant que le modèle travaille, `completed` quand elle redevient inactive, et `failure` sur un statut inattendu. Un écouteur tardif reçoit tout de suite la phase courante.
+
 ## request
 
 ```ts
 const user = await host.request({ method: "GET", path: "/api/v2/user" });
 ```
 
-`path` doit commencer par `/`, rester sur l’`apiOrigin` déclaré, et ne jamais inclure de schéma. Le host ajoute `Authorization`. Les invités token envoient le jeton brut. OAuth et Linear host envoient Bearer. Le résultat est `{ status, body }`. L’invité parse le JSON.
+`path` commence par `/` et n'a ni schéma ni hôte ; OpenChamber le joint à l'`apiOrigin` de votre manifeste et ajoute l'en-tête `Authorization`. Les intégrations par token envoient le token collé tel quel, sous la forme `Bearer <token>` quand le manifeste définit `token.scheme: "bearer"`, ou sous la forme `Basic base64(username:token)` quand il définit `"basic"`. Les intégrations OAuth et Linear envoient toujours `Bearer`. Le résultat est `{ status, body }`. Le corps est du texte ; parsez le JSON vous-même.
 
-Un invité Linear host peut aussi faire `GET /api/linear/issues/get` via le même appel. Le host répond depuis la route Linear first-party.
+Une intégration Linear peut aussi appeler `GET /api/linear/issues/get`, auquel OpenChamber répond depuis sa propre route Linear.
 
-20 secondes de silence donnent `HOST_TIMEOUT`.
+Pas de réponse en 20 secondes donne `HOST_TIMEOUT`.
 
 ```ts
 try {
@@ -151,46 +142,37 @@ try {
 }
 ```
 
+## serviceRequest
 
-## agentRequest
-
-When the manifest declares `contributes.agent`, the panel talks to that process through the host. The iframe never opens the socket or receives the agent token.
+Quand le manifeste déclare `contributes.service`, OpenChamber démarre ce processus et votre page lui parle via le même type d'appel. La page n'ouvre jamais le socket elle-même.
 
 ```ts
-const status = await host.agentStatus();
-const result = await host.agentRequest({ method: "GET", path: "/containers" });
+const status = await host.serviceStatus();
+const result = await host.serviceRequest({ method: "GET", path: "/containers" });
 ```
 
-`path` must start with `/` and never include a scheme. The host proxies only to that guest's loopback port. Non-empty `sockets` / `exec` need an **Allow local agent** grant in Settings → Extensions before the first request. Full contract: package file `GUEST_AGENTS.md`.
+`path` suit les mêmes règles que `request`. Déclarer un service local ajoute `service` aux capacités que l'utilisateur approuve à l'installation ; tant que ce n'est pas fait, chaque `serviceRequest` donne `NO_SERVICE`. Contrat complet : le fichier `GUEST_SERVICES.md` du package.
 
-## Codes d’erreur
+## Codes d'erreur
 
-Les appels ratés lèvent `HostRequestError`. `code` est l’un de ceux-ci. Un code fil inconnu devient `HOST_REJECTED`. La chaîne `error` reste.
+Les appels en échec lèvent `HostRequestError`. `code` est l'un des suivants ; `message` en dit plus.
 
 | Code | Quand |
 | --- | --- |
-| `HOST_UNAVAILABLE` | pas de window, pas d’iframe, ou `dispose()` déjà appelé |
-| `HOST_TIMEOUT` | le host s’est tu pendant 20 secondes |
-| `HOST_REJECTED` | le host a refusé, ou le code manquait ou était inconnu |
-| `DISCONNECTED` | l’invité n’a ni jeton ni connexion Linear |
-| `BAD_PATH` | `path` a quitté `apiOrigin` ou était mal formé |
-| `NO_INTEGRATION` | le manifeste n’a pas d’`integration` |
+| `HOST_UNAVAILABLE` | pas de window, pas à l'intérieur d'OpenChamber, ou `dispose()` a été appelé |
+| `HOST_TIMEOUT` | pas de réponse pendant 20 secondes |
+| `HOST_REJECTED` | OpenChamber a refusé, ou a répondu avec un code que ce SDK ne connaît pas |
+| `DISCONNECTED` | pas de token ni de connexion Linear pour votre intégration |
+| `BAD_PATH` | `path` était mal formé ou tentait de sortir de l'origine autorisée |
+| `NO_INTEGRATION` | le manifeste n'a pas d'`integration` |
 | `NO_SESSION` | `prompt` ou `sessionLink` sans session ouverte |
 | `SESSION_BUSY` | `prompt({ send: true })` pendant que la session était occupée |
-
-## Linear comme fournisseur host
-
-`host.provider: "linear"` réutilise la connexion Linear first-party. `apiOrigin` est uniquement `https://api.linear.app`. C’est un bootstrap, pas un modèle. N’ajoute pas un second fournisseur host sur `apiVersion` 1.
-
-## Gelé sur apiVersion 1
-
-Ces noms sont réservés. Il n’y a pas encore de trou host pour eux.
-
-- `issues.search` / `issues.get` sur le host. La puce est `attach`. L’invité dessine la liste.
-- un courtier OAuth public
-- commandes, raccourcis, remotes git, magic prompts
+| `DISABLED` | l'utilisateur a mis l'extension en pause dans Paramètres → Extensions |
+| `NO_SERVICE` | pas de service local déclaré, non approuvé, ou pas en cours d'exécution |
+| `NOT_GRANTED` | l'utilisateur n'a pas approuvé la capacité dont cet appel a besoin |
+| `SERVICE_FAILED` | le service local a planté ou n'est jamais devenu prêt |
 
 ## Voir aussi
 
-- [Créer un panneau invité](/fr/sdk/) — dossier, ZIP, URL git, bundle et manifeste
-- [Kit UI](/fr/sdk/ui/) — liste, carte, sélecteur attach et fenêtre pull
+- [Créer une extension](/sdk/) pour le dossier, le manifeste, l'installation et les capacités
+- [Kit UI](/sdk/ui/) pour les boutons, champs, listes et les autres composants

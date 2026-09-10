@@ -1,3 +1,4 @@
+import type { GuestCapability } from '@openchamber/sdk';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { z } from 'zod';
 
@@ -154,6 +155,20 @@ export const setGuestEnabled = async (id: string, enabled: boolean): Promise<boo
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ enabled }),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+};
+
+/** Record the user's answer to the approval dialog. An empty list withdraws approval. */
+export const approveGuestCapabilities = async (id: string, granted: readonly GuestCapability[]): Promise<boolean> => {
+  try {
+    const response = await runtimeFetch(`/api/guests/${id}/capabilities`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ granted }),
     });
     return response.ok;
   } catch {

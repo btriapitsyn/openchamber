@@ -1,0 +1,95 @@
+import React from 'react';
+import type { GuestCapability } from '@openchamber/sdk';
+
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Icon } from '@/components/icon/Icon';
+import type { IconName } from '@/components/icon/icons';
+import { useI18n, type I18nKey } from '@/lib/i18n';
+import type { InstalledGuest } from '@/lib/guests/types';
+
+const CAPABILITY_ROWS = {
+  prompt: { icon: 'chat-1', titleKey: 'settings.extensions.capability.prompt', detailKey: 'settings.extensions.capability.prompt.detail' },
+  sessions: { icon: 'git-branch', titleKey: 'settings.extensions.capability.sessions', detailKey: 'settings.extensions.capability.sessions.detail' },
+  service: { icon: 'terminal', titleKey: 'settings.extensions.capability.service', detailKey: 'settings.extensions.capability.service.detail' },
+  network: { icon: 'plug', titleKey: 'settings.extensions.capability.network', detailKey: 'settings.extensions.capability.network.detail' },
+} satisfies Record<GuestCapability, { icon: IconName; titleKey: I18nKey; detailKey: I18nKey }>;
+
+type GuestApprovalDialogProps = {
+  guest: InstalledGuest | null;
+  busy: boolean;
+  onApprove: (guest: InstalledGuest) => void;
+  onDecline: (guest: InstalledGuest) => void;
+  onDismiss: () => void;
+};
+
+/**
+ * One-time approval of everything a package asks for. Shown right after an
+ * install that requests any capability, and again from the card whenever a
+ * newer package asks for more than the user approved.
+ */
+export const GuestApprovalDialog: React.FC<GuestApprovalDialogProps> = ({ guest, busy, onApprove, onDecline, onDismiss }) => {
+  const { t } = useI18n();
+  const requested = guest?.capabilities.requested ?? [];
+
+  return (
+    <Dialog
+      open={guest !== null}
+      onOpenChange={(open) => {
+        if (!open && !busy) onDismiss();
+      }}
+    >
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>{t('settings.extensions.dialog.approveTitle', { name: guest?.name ?? '' })}</DialogTitle>
+          <DialogDescription>
+            {t('settings.extensions.dialog.approveDescription', {
+              name: guest?.name ?? '',
+              version: guest?.version ? `v${guest.version}` : '',
+            })}
+          </DialogDescription>
+        </DialogHeader>
+        <ul className="space-y-3">
+          {requested.map((capability) => {
+            const row = CAPABILITY_ROWS[capability];
+            return (
+              <li key={capability} className="flex items-start gap-3">
+                <div className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md bg-[var(--surface-muted)]">
+                  <Icon name={row.icon} className="size-4 text-foreground" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-sm font-medium text-foreground">{t(row.titleKey)}</div>
+                  <p className="typography-meta text-muted-foreground">{t(row.detailKey)}</p>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+        <DialogFooter>
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={busy}
+            onClick={() => guest && onDecline(guest)}
+          >
+            {t('settings.extensions.dialog.decline')}
+          </Button>
+          <Button
+            size="sm"
+            disabled={busy}
+            onClick={() => guest && onApprove(guest)}
+          >
+            {t('settings.extensions.dialog.approve')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};

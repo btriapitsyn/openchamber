@@ -116,3 +116,14 @@ export const dropGuestTokens = async (guestId, persistPath) => {
     authorizedAt: undefined,
   }, persistPath);
 };
+
+/** Drop everything stored for a guest: tokens, client credentials, and settings. Used when the package is removed. */
+export const forgetGuestAuth = async (guestId, persistPath) => {
+  const store = await readGuestAuthStore(persistPath);
+  if (!(guestId in store.guests)) {
+    return;
+  }
+  const guests = { ...store.guests };
+  delete guests[guestId];
+  await writeGuestAuthStore({ ...store, guests }, persistPath);
+};

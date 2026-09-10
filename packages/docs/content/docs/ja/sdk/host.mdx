@@ -1,11 +1,11 @@
 ---
-title: ホスト API
-description: ゲストパネル向けの connectHost メソッド、request の規則、上限、エラーコード。
+title: Host API
+description: 拡張機能が呼べる connectHost の全メソッド、OpenChamber から届くもの、上限、エラーコード。
 ---
 
-# ホスト API
+# Host API
 
-このページは `connectHost` の正確な参照です。メソッド、上限、エラーコード。フォルダ、バンドル、マニフェストは [ゲストパネルを作る](/ja/sdk/) にあります。
+`connectHost` のメソッド、上限、エラーコードを正確に知りたいときにこのページを使ってください。フォルダ構成、マニフェスト、インストールについては [拡張機能を作る](/sdk/) から始めてください。
 
 ```ts
 import { connectHost, HostRequestError } from "@openchamber/sdk";
@@ -13,50 +13,50 @@ import { connectHost, HostRequestError } from "@openchamber/sdk";
 const host = connectHost();
 ```
 
-`window` がない、または iframe の外だと `connectHost` は `HOST_UNAVAILABLE` を投げます。パネルを外すときは `dispose()` を呼んでください。飛行中の呼び出しは `HOST_UNAVAILABLE` で落ちます。
+`connectHost` は `window` がないと `HOST_UNAVAILABLE` を throw します。OpenChamber の外では、すべての呼び出しが `HOST_UNAVAILABLE` で reject されるクライアントを返します。ページを破棄するときは `dispose()` を呼んでください。進行中の呼び出しは同じコードで reject されます。
 
-## ready とその後の push
+## OpenChamber から届くもの
 
-`onReady` は最初のホストスナップショットで発火し、ホストが更新したときにもう一度発火します。
+`onReady` は最初のスナップショットで発火し、OpenChamber がそれを更新するたびに再び発火します。
 
-| フィールド | 中身 |
+| フィールド | 内容 |
 | --- | --- |
 | `theme.mode` | `light` または `dark` |
-| `theme.tokens` | ホストの色、フォント、半径。UI をマウントする前に `applyHostReady` へ渡す。 |
-| `locale` | ホストの言語タグ |
-| `directory` | 今のプロジェクトディレクトリ。なければ `null` |
-| `session` | `{ id, title }` または `null`。タイトルがなければセッション id。 |
-| `surface` | レールは `panel`、attach 窓は `dialog`。`openSurface` ではない。 |
-| `connection` | `{ connected, account }` |
-| `settings` | 宣言した integration フィールドだけ |
+| `theme.tokens` | アプリの色(サーフェス、テキスト、操作状態、primary、success/warning/error/info)、`font`、`mono`、`radius`。UI をマウントする前に `applyHostReady` に渡してください。 |
+| `locale` | アプリの言語タグ |
+| `directory` | 現在のプロジェクトディレクトリ、または `null` |
+| `session` | `{ id, title, busy }` または `null`。タイトルがなければセッション ID になります。`busy` はライブの状態です。セッションが持っていれば `model` と `agent`(OpenCode のエージェント)も含まれます。 |
+| `surface` | レール上なら `panel`、添付ウィンドウなら `dialog` |
+| `connection` | あなたの連携の `{ connected, account }` |
+| `settings` | `integration.settings` で宣言した入力欄の値 |
 
-アクセストークンは `ready` にも `request` の結果にも出ません。
+アクセストークンはここにも `request` の結果にも決して現れません。
 
-遅れて購読しても、`onDirectory`、`onSession`、`onSessionLifecycle`、`onConnection`、`onSettings` は最後の ready を再生します。その後のホスト push も、`onReady` と同じくこれらのリスナーを更新します。
+`onDirectory`、`onSession`、`onSessionLifecycle`、`onConnection`、`onSettings` は、遅れて購読しても最新の値を再送し、その後は変化のたびに発火し続けます。
 
 ## メソッド
 
-| 呼び出し | すること |
+| 呼び出し | 動作 |
 | --- | --- |
-| `toast({ kind, message })` | ホストのトースト。`kind` は `info`、`success`、`error`。 |
-| `openUrl(url)` | ホストで URL を開く |
-| `openSurface(surfaceId)` | ホストのクロムをそのサーフェスへ切る |
-| `writeClipboard(text)` | ホストでコピー。1–32000 文字。 |
-| `compose({ text, mode? })` | チャット欄に書く。送信はしない。既定の `mode` は `append`。上書きするなら `replace`。trim 後 1–16000 文字。 |
-| `attach({ ... })` | コンポーザーにチップを置く。GitHub と Linear と排他。 |
-| `startSession({ ... })` | セッションを作り、同じスナップショットを書く。戻り値は `{ sessionId, sent }`。 |
-| `prompt({ text, send? })` | 今のセッションに書くか送る。`send` なし、または `false` は下書きを置き換える。`send: true` は送信。戻り値は `{ sent }`。 |
-| `sessionLink({ ... })` | 今のセッションに attach スナップショットを書く。セッションは作らない。 |
-| `close()` | attach 窓を閉じる。レールでは何もしない。 |
-| `oauthStart()` | プロバイダの authorize URL を開く。ホスト Linear ゲストならファーストパーティの Linear URL。 |
-| `oauthDisconnect()` | このゲストのトークンを捨てる。ホスト Linear ゲストなら Linear 接続を切る。 |
-| `request({ method, path, query?, body? })` | 宣言した `apiOrigin` 上だけの GET または書き込み |
-| `agentRequest({ method, path, query?, body? })` | proxy to this guest's local agent on loopback. Same path rules as `request`, but the origin is the agent the host started. |
-| `agentStatus()` | `stopped`, `starting`, `ready`, or `failed` |
+| `toast({ kind, message })` | アプリにトーストを表示します。`kind` は `info`、`success`、`error` のいずれかです。 |
+| `openUrl(url)` | ユーザーのブラウザで URL を開く |
+| `openSurface(surfaceId)` | アプリをその画面に切り替える |
+| `writeClipboard(text)` | テキストをコピーします。1 から 32000 文字。 |
+| `compose({ text, mode? })` | 送信せずにチャット欄にテキストを入れます。`mode` は `append`(デフォルト)または `replace`。トリム後 1 から 16000 文字。 |
+| `attach({ ... })` | チャット欄にチップを付けます。GitHub や Linear の項目が置かれるのと同じ場所です。チップは同時に 1 つだけ。 |
+| `startSession({ ... })` | その項目を添付したセッションを作ります。`{ sessionId, sent }` を返します。`sessions` 権限が必要です。 |
+| `prompt({ text, send? })` | 現在のセッションに書き込む、または送信します。`{ sent }` を返します。送信には `prompt` 権限が必要です。 |
+| `sessionLink({ ... })` | セッションを作らずに、現在のセッションに項目を添付する |
+| `close()` | 添付ウィンドウを閉じます。レール上では何もしません。 |
+| `oauthStart()` | プロバイダーの認可ページを開く。`host: { provider: "linear" }` 連携なら Linear のページ |
+| `oauthDisconnect()` | 保存されたトークン、または Linear 接続を忘れる |
+| `request({ method, path, query?, body? })` | ユーザーのトークンを付けて連携の `apiOrigin` を呼ぶ |
+| `serviceRequest({ method, path, query?, body? })` | 拡張機能のローカルサービスを呼ぶ(`GUEST_SERVICES.md` を参照) |
+| `serviceStatus()` | `stopped`、`starting`、`ready`、`failed` のいずれか |
 
-## attach と startSession
+## attach、startSession、sessionLink
 
-どちらも同じ識別フィールドを取ります。
+3 つとも同じ項目フィールドを受け取ります。
 
 ```ts
 await host.attach({
@@ -88,39 +88,15 @@ await host.startSession({
 });
 ```
 
-`id` はあなたの識別子です。GitHub の番号ではありません。`kind` は `issue` または `pull` で、既定は `issue` です。`text` は任意のモデル向け文脈で、trim 後 1–16000 です。
+`providerId` はパネル ID です。いずれにせよ OpenChamber があなたの ID で上書きします。`id` は項目に対するあなた自身の識別子です。`kind` は `issue`(デフォルト)または `pull` です。`text` はモデルに渡す任意のコンテキストで、トリム後 1 から 16000 文字です。
 
-`startSession` は今のプロジェクトにセッションを作ります。`worktree: true` は先に worktree を作るようホストに頼みます。ゲストは git と話しません。プロジェクトがない、worktree が落ちた、セッション作成が落ちた、はホストエラーです。モデルが選ばれていれば `text` が最初のメッセージになります。
+`startSession` は現在のプロジェクトにセッションを作ります。`worktree: true` を付けると、OpenChamber はまず git worktree を作り、そこでセッションを開きます。`text` があってモデルが選択されていれば、最初のメッセージとして送られます。結果は `{ sessionId, sent }` で、`sent` は `sent`、`no-model`、`skipped`、`failed` のいずれかです。`no-model` と `failed` の後もセッションは存在します。開いているプロジェクトがない、worktree の作成に失敗した、セッションの作成に失敗した場合は `HOST_REJECTED` エラーになります。
 
-## prompt、sessionLink、sessionLifecycle
+`sessionLink` は今開いているセッションに項目を添付します。プロジェクトやセッションがない場合は `NO_SESSION` エラーになります。
 
-```ts
-await host.sessionLink({
-  providerId: "acme-hello",
-  id: "TICKET-1",
-  title: "Login is broken",
-  url: "https://example.com/TICKET-1",
-});
+送信前にクライアント側で適用される上限:
 
-await host.prompt({ text: "Fix the login" });
-await host.prompt({ text: "Fix the login", send: true });
-
-host.onSessionLifecycle((event) => {
-  document.body.dataset.phase = event.phase;
-});
-```
-
-`sessionLink` は `attach` と同じ識別フィールドを取ります。今のセッションにそのスナップショットを書きます。セッションは作りません。プロジェクトもセッションもないときは拒否です。
-
-`prompt` は今のセッションに書くか送ります。`send` なし、または `false` は下書きを置き換えます。`send: true` は `startSession` と同じモデル経路で送ります。セッションなしは `NO_SESSION`。送信時に忙しいセッションは `SESSION_BUSY`。busy 中でも compose は動きます。結果は `{ sent }` で、`sent`、`no-model`、`skipped`、`failed` です。ゲストはモデルもエージェントも選びません。
-| `NO_AGENT` | no agent declared, not granted when required, or not running |
-| `AGENT_FAILED` | the agent crashed or never became ready |
-
-`onSessionLifecycle` はホストの push です。ライブ状態の `busy` と `retry` は `started`。`idle` は `completed`。未知の状態型は `failure`。中断ではありません。遅いリスナーは最後の段階を受け取ります。専用 push がまだ来ていなければ `ready.session.busy` からです。
-
-ホストが見る前にクライアントが切る上限です。
-
-| フィールド | 最大 |
+| フィールド | 最大文字数 |
 | --- | --- |
 | `id` | 128 |
 | `title` | 200 |
@@ -129,17 +105,32 @@ host.onSessionLifecycle((event) => {
 | `author` | 80 |
 | 各ブランチ名 | 200 |
 
+## prompt とセッションのライフサイクル
+
+```ts
+await host.prompt({ text: "Fix the login" });
+await host.prompt({ text: "Fix the login", send: true });
+
+host.onSessionLifecycle((event) => {
+  document.body.dataset.phase = event.phase;
+});
+```
+
+`send` なしの `prompt` はチャット欄のテキストを置き換えます。`send: true` を付けると、ユーザーが選択しているモデルとエージェントでメッセージを送ります。拡張機能がそれらを選ぶことはありません。開いているセッションがなければ `NO_SESSION` です。セッションがビジー中の送信は `SESSION_BUSY` になります。ビジー中でも欄への書き込みはできます。結果は `{ sent }` で、値は `startSession` と同じです。
+
+`onSessionLifecycle` はセッションが何をしているかを伝えます。`phase` は、モデルが作業中なら `started`、アイドルになったら `completed`、予期しない状態なら `failure` です。遅れて登録したリスナーにも現在の phase がすぐ届きます。
+
 ## request
 
 ```ts
 const user = await host.request({ method: "GET", path: "/api/v2/user" });
 ```
 
-`path` は `/` で始まり、宣言した `apiOrigin` に留まり、スキームを含んではいけません。ホストが `Authorization` を付けます。トークンゲストは生トークンを送ります。OAuth とホスト Linear は Bearer です。結果は `{ status, body }` です。ゲストが JSON を parse します。
+`path` は `/` で始まり、スキームやホストを含みません。OpenChamber がマニフェストの `apiOrigin` と結合し、`Authorization` ヘッダーを付けます。トークン連携は貼り付けられたトークンをそのまま送るか、マニフェストで `token.scheme: "bearer"` を設定していれば `Bearer <token>` として、`"basic"` を設定していれば `Basic base64(username:token)` として送ります。OAuth と Linear の連携は常に `Bearer` を送ります。結果は `{ status, body }` です。body はテキストなので、JSON は自分でパースしてください。
 
-ホスト Linear ゲストは同じ呼び出しで `GET /api/linear/issues/get` もできます。ホストはファーストパーティの Linear ルートで答えます。
+Linear 連携では `GET /api/linear/issues/get` も呼べます。これには OpenChamber が自身の Linear ルートから応答します。
 
-20 秒の沈黙は `HOST_TIMEOUT` です。
+20 秒以内に応答がなければ `HOST_TIMEOUT` です。
 
 ```ts
 try {
@@ -151,46 +142,37 @@ try {
 }
 ```
 
+## serviceRequest
 
-## agentRequest
-
-When the manifest declares `contributes.agent`, the panel talks to that process through the host. The iframe never opens the socket or receives the agent token.
+マニフェストで `contributes.service` を宣言すると、OpenChamber がそのプロセスを起動し、ページは同じ種類の呼び出しでそれと話します。ページ自身がソケットを開くことはありません。
 
 ```ts
-const status = await host.agentStatus();
-const result = await host.agentRequest({ method: "GET", path: "/containers" });
+const status = await host.serviceStatus();
+const result = await host.serviceRequest({ method: "GET", path: "/containers" });
 ```
 
-`path` must start with `/` and never include a scheme. The host proxies only to that guest's loopback port. Non-empty `sockets` / `exec` need an **Allow local agent** grant in Settings → Extensions before the first request. Full contract: package file `GUEST_AGENTS.md`.
+`path` は `request` と同じ規則に従います。ローカルサービスを宣言すると、インストール時にユーザーが承認する権限に `service` が加わります。承認されるまで、すべての `serviceRequest` は `NO_SERVICE` です。完全な契約はパッケージ内のファイル `GUEST_SERVICES.md` にあります。
 
 ## エラーコード
 
-失敗した呼び出しは `HostRequestError` を投げます。`code` は次のいずれかです。未知のワイヤコードは `HOST_REJECTED` になります。`error` 文字列はそのままです。
+失敗した呼び出しは `HostRequestError` を throw します。`code` は次のいずれかで、`message` に詳細が入ります。
 
-| コード | いつ |
+| コード | 発生条件 |
 | --- | --- |
-| `HOST_UNAVAILABLE` | window がない、iframe でない、または `dispose()` 済み |
-| `HOST_TIMEOUT` | ホストが 20 秒黙った |
-| `HOST_REJECTED` | ホストが拒否した、またはコードが無い／未知 |
-| `DISCONNECTED` | ゲストにトークンも Linear 接続もない |
-| `BAD_PATH` | `path` が `apiOrigin` を出た、または壊れていた |
+| `HOST_UNAVAILABLE` | window がない、OpenChamber の中ではない、または `dispose()` が実行された |
+| `HOST_TIMEOUT` | 20 秒間応答がない |
+| `HOST_REJECTED` | OpenChamber が拒否した、またはこの SDK が知らないコードで応答した |
+| `DISCONNECTED` | 連携用のトークンや Linear 接続がない |
+| `BAD_PATH` | `path` の形式が不正、または許可されたオリジンの外に出ようとした |
 | `NO_INTEGRATION` | マニフェストに `integration` がない |
-| `NO_SESSION` | 開いているセッションなしで `prompt` または `sessionLink` |
-| `SESSION_BUSY` | セッションが忙しいときに `prompt({ send: true })` |
-
-## ホストプロバイダとしての Linear
-
-`host.provider: "linear"` はファーストパーティの Linear 接続を使います。`apiOrigin` は `https://api.linear.app` だけです。これは起動用で、型ではありません。`apiVersion` 1 に第二のホストプロバイダを足さないでください。
-
-## apiVersion 1 で凍結
-
-これらの名前は予約です。ホスト側の穴はまだありません。
-
-- ホスト上の `issues.search` / `issues.get`。チップは `attach`。一覧はゲストが描く
-- 公開 OAuth ブローカー
-- コマンド、ショートカット、git remote、magic prompts
+| `NO_SESSION` | 開いているセッションがない状態での `prompt` または `sessionLink` |
+| `SESSION_BUSY` | セッションがビジー中の `prompt({ send: true })` |
+| `DISABLED` | ユーザーが 設定 → 拡張機能 で拡張機能を一時停止した |
+| `NO_SERVICE` | ローカルサービスが未宣言、未承認、または未起動 |
+| `NOT_GRANTED` | この呼び出しに必要な権限をユーザーが承認していない |
+| `SERVICE_FAILED` | ローカルサービスがクラッシュした、または ready にならなかった |
 
 ## 関連
 
-- [ゲストパネルを作る](/ja/sdk/) — フォルダ、ZIP、git URL、バンドル、マニフェスト
-- [UI キット](/ja/sdk/ui/) — 一覧、カード、attach ピッカー、pull 窓
+- [拡張機能を作る](/sdk/): フォルダ、マニフェスト、インストール、権限
+- [UI キット](/sdk/ui/): ボタン、入力欄、リスト、その他の部品

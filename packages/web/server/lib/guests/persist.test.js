@@ -50,9 +50,9 @@ describe('extension persist', () => {
     expect(await readExtensionStore(file)).toEqual({
       paths: ['/one'],
       sources: {},
-      agentGrants: {},
+      capabilityGrants: {},
       disabledGuests: {},
-      agentSocketOverrides: {},
+      serviceSocketOverrides: {},
     });
     await writeExtensionStore(file, {
       paths: ['/one', '/two'],
@@ -61,17 +61,17 @@ describe('extension persist', () => {
     expect(await readExtensionStore(file)).toEqual({
       paths: ['/one', '/two'],
       sources: { '/two': 'zip' },
-      agentGrants: {},
+      capabilityGrants: {},
       disabledGuests: {},
-      agentSocketOverrides: {},
+      serviceSocketOverrides: {},
     });
     await writeExtensionPaths(['/two'], file);
     expect(await readExtensionStore(file)).toEqual({
       paths: ['/two'],
       sources: { '/two': 'zip' },
-      agentGrants: {},
+      capabilityGrants: {},
       disabledGuests: {},
-      agentSocketOverrides: {},
+      serviceSocketOverrides: {},
     });
     expect(guestCopiesDir(file)).toBe(path.join(dir, 'extensions'));
     expect(isCopiedGuestRoot(path.join(dir, 'extensions', 'hello'), file)).toBe(true);
@@ -79,47 +79,47 @@ describe('extension persist', () => {
     await fs.rm(dir, { recursive: true, force: true });
   });
 
-  test('round-trips agent grants', async () => {
+  test('round-trips service grants', async () => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'oc-ext-'));
     const file = extensionsPersistPath(dir);
     await writeExtensionStore(file, {
       paths: ['/one'],
       sources: {},
-      agentGrants: { docker: true },
+      capabilityGrants: { docker: ['service'] },
     });
     expect(await readExtensionStore(file)).toEqual({
       paths: ['/one'],
       sources: {},
-      agentGrants: { docker: true },
+      capabilityGrants: { docker: ['service'] },
       disabledGuests: {},
-      agentSocketOverrides: {},
+      serviceSocketOverrides: {},
     });
     await fs.rm(dir, { recursive: true, force: true });
   });
 
-  test('round-trips agent socket overrides', async () => {
+  test('round-trips service socket overrides', async () => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'oc-ext-'));
     const file = extensionsPersistPath(dir);
     await writeExtensionStore(file, {
       paths: ['/one'],
       sources: {},
-      agentGrants: { docker: true },
-      agentSocketOverrides: { docker: { docker: '/custom/docker.sock' } },
+      capabilityGrants: { docker: ['service'] },
+      serviceSocketOverrides: { docker: { docker: '/custom/docker.sock' } },
     });
     expect(await readExtensionStore(file)).toEqual({
       paths: ['/one'],
       sources: {},
-      agentGrants: { docker: true },
+      capabilityGrants: { docker: ['service'] },
       disabledGuests: {},
-      agentSocketOverrides: { docker: { docker: '/custom/docker.sock' } },
+      serviceSocketOverrides: { docker: { docker: '/custom/docker.sock' } },
     });
     await writeExtensionPaths(['/one'], file);
     expect(await readExtensionStore(file)).toEqual({
       paths: ['/one'],
       sources: {},
-      agentGrants: { docker: true },
+      capabilityGrants: { docker: ['service'] },
       disabledGuests: {},
-      agentSocketOverrides: { docker: { docker: '/custom/docker.sock' } },
+      serviceSocketOverrides: { docker: { docker: '/custom/docker.sock' } },
     });
     await fs.rm(dir, { recursive: true, force: true });
   });
@@ -135,11 +135,25 @@ describe('extension persist', () => {
     expect(await readExtensionStore(file)).toEqual({
       paths: ['/one'],
       sources: {},
-      agentGrants: {},
+      capabilityGrants: {},
       disabledGuests: { docker: true },
-      agentSocketOverrides: {},
+      serviceSocketOverrides: {},
     });
     await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  test('keeps the store whole under concurrent writes', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'oc-guest-persist-'));
+    const file = extensionsPersistPath(dir);
+    try {
+      await Promise.all(Array.from({ length: 12 }, (_, index) => (
+        writeExtensionStore(file, { paths: [`/guests/${index}`] })
+      )));
+      const store = await readExtensionStore(file);
+      expect(store.paths).toHaveLength(1);
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true });
+    }
   });
 
   test('refuses a corrupt store', async () => {

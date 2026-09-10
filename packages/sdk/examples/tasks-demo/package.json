@@ -1,0 +1,24 @@
+{
+  "name": "@openchamber/example-tasks-demo",
+  "version": "1.0.0",
+  "private": true,
+  "openchamber": {
+    "apiVersion": 1,
+    "contributes": {
+      "panel": {
+        "id": "tasks-demo",
+        "name": "Tasks Demo",
+        "icon": "task",
+        "entry": "panel/index.html"
+      },
+      "attach": "dialog",
+      "capabilities": [
+        "prompt",
+        "sessions"
+      ]
+    }
+  },
+  "dependencies": {
+    "@openchamber/sdk": "workspace:*"
+  }
+}

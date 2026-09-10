@@ -1,227 +1,19 @@
 import { z } from 'zod';
 
 import { OPENCHAMBER_SDK_MANIFEST_API_VERSIONS } from './api-version.ts';
-import type { OpenChamberManifestApiVersion } from './api-version.ts';
 import { OPENCHAMBER_ENGINE_PATTERN } from './host-version.ts';
-
-const PANEL_ID = /^[a-z][a-z0-9-]*$/;
-
-export type PanelContribution = {
-  id: string;
-  name: string;
-  icon: string;
-  entry: string;
-};
-
-export type AttachMode = 'panel' | 'dialog';
-
-export type AttachContribution = boolean | AttachMode;
-
-export type IntegrationSettingField = {
-  id: string;
-  label: string;
-};
-
-export type IntegrationOAuthAccount = {
-  path: string;
-  name: string;
-};
-
-export type IntegrationOAuth = {
-  authorizeUrl: string;
-  tokenUrl: string;
-  apiOrigin: string;
-  scopes?: string[];
-  account?: IntegrationOAuthAccount;
-};
-
-export type IntegrationToken = {
-  apiOrigin: string;
-  account?: IntegrationOAuthAccount;
-};
-
-export type IntegrationHostProvider = 'linear';
-
-export type IntegrationHost = {
-  provider: IntegrationHostProvider;
-};
-
-export type IntegrationAuth = 'oauth' | 'token' | 'host';
-
-export type GuestAuthorization = 'bearer' | 'header';
-
-export type ResolvedGuestApi = {
-  apiOrigin: string;
-  account?: IntegrationOAuthAccount;
-  authorization: GuestAuthorization;
-};
-
-export const HOST_LINEAR_API_ORIGIN = 'https://api.linear.app';
-
-export type IntegrationContribution = {
-  name: string;
-  description: string;
-  oauth?: IntegrationOAuth;
-  token?: IntegrationToken;
-  host?: IntegrationHost;
-  settings?: IntegrationSettingField[];
-};
-
-/** Catalog card. Drops oauth URLs and token apiOrigin. */
-export type PublicIntegration = {
-  name: string;
-  description: string;
-  auth: IntegrationAuth;
-  settings?: IntegrationSettingField[];
-};
-
-export const resolveIntegrationAuth = (
-  integration: Pick<IntegrationContribution, 'oauth' | 'token' | 'host'>,
-): IntegrationAuth | null => {
-  const kinds = [Boolean(integration.oauth), Boolean(integration.token), Boolean(integration.host)]
-    .filter(Boolean).length;
-  if (kinds !== 1) {
-    return null;
-  }
-  if (integration.host) return 'host';
-  return integration.oauth ? 'oauth' : 'token';
-};
-
-export const resolveIntegrationApi = (
-  integration: IntegrationContribution,
-): ResolvedGuestApi | null => {
-  if (integration.oauth) {
-    return {
-      apiOrigin: integration.oauth.apiOrigin,
-      account: integration.oauth.account,
-      authorization: 'bearer',
-    };
-  }
-  if (integration.token) {
-    return {
-      apiOrigin: integration.token.apiOrigin,
-      account: integration.token.account,
-      authorization: 'header',
-    };
-  }
-  if (integration.host?.provider === 'linear') {
-    return {
-      apiOrigin: HOST_LINEAR_API_ORIGIN,
-      authorization: 'bearer',
-    };
-  }
-  return null;
-};
-
-export type SocketPlatform = 'linux' | 'darwin' | 'win32';
-
-/** Declared socket the agent may dial. Candidates are per host platform. */
-export type SocketBinding = {
-  id: string;
-  candidatesByPlatform: Partial<Record<SocketPlatform, string[]>>;
-};
-
-export type AgentPermissions = {
-  sockets?: SocketBinding[];
-  exec?: string[];
-};
-
-/** Catalog grant chip: ids only. Paths live on `socketBindings`. */
-export type PublicAgentPermissions = {
-  sockets?: string[];
-  exec?: string[];
-};
-
-/** Resolved socket for this host after override + candidate scan. */
-export type PublicSocketBinding = {
-  id: string;
-  candidates: string[];
-  resolved: string | null;
-  override: string | null;
-};
-
-export type AgentContribution = {
-  entry: string;
-  runtime: 'host';
-  permissions?: AgentPermissions;
-};
-
-/** Catalog card for a local agent. Drops nothing secret; grant is host state. */
-export type PublicAgent = {
-  runtime: 'host';
-  permissions?: PublicAgentPermissions;
-  socketBindings?: PublicSocketBinding[];
-  granted: boolean;
-};
-
-export type OpenChamberContributes = {
-  panel: PanelContribution;
-  attach?: AttachContribution;
-  integration?: IntegrationContribution;
-  agent?: AgentContribution;
-};
-
-export const resolveAttachMode = (attach: AttachContribution | undefined): AttachMode | null => {
-  if (attach === true || attach === 'panel') return 'panel';
-  if (attach === 'dialog') return 'dialog';
-  return null;
-};
-
-export type OpenChamberEngines = {
-  openchamber: string;
-};
-
-export type OpenChamberManifest = {
-  apiVersion: OpenChamberManifestApiVersion;
-  engines?: OpenChamberEngines;
-  contributes: OpenChamberContributes;
-};
-
-export type ParseManifestErrorCode =
-  | 'not-object'
-  | 'missing-openchamber'
-  | 'unsupported-api-version'
-  | 'invalid-engines'
-  | 'invalid-version'
-  | 'missing-panel'
-  | 'invalid-panel-id'
-  | 'invalid-panel-name'
-  | 'invalid-panel-icon'
-  | 'invalid-panel-entry'
-  | 'invalid-attach'
-  | 'invalid-integration'
-  | 'invalid-agent';
-
-export type ParseManifestFailure = {
-  ok: false;
-  code: ParseManifestErrorCode;
-  message: string;
-};
-
-export type ParseManifestSuccess = {
-  ok: true;
-  manifest: OpenChamberManifest;
-  /** npm `package.json` version when parsing a package envelope. */
-  version?: string;
-};
-
-export type ParseManifestResult = ParseManifestSuccess | ParseManifestFailure;
-
-const isSafeAssetPath = (value: string): boolean => {
-  if (value.includes('\0') || value.includes('\\') || value.startsWith('/') || value.includes('://')) {
-    return false;
-  }
-  const segments = value.split('/');
-  if (segments.some((segment) => segment === '' || segment === '.' || segment === '..')) {
-    return false;
-  }
-  return /^[a-zA-Z0-9][a-zA-Z0-9._/-]*$/.test(value);
-};
-
-/** Package SVG path for the rail, e.g. `icon.svg`. Remixicon names use `PANEL_ID`. */
-export const isGuestPackageSvgIcon = (value: string): boolean => (
-  isSafeAssetPath(value) && value.toLowerCase().endsWith('.svg')
-);
+import {
+  PANEL_ID,
+  isGuestPackageSvgIcon,
+  isSafeAssetPath,
+  resolveIntegrationAuth,
+  type ServicePermissions,
+  type ParseManifestErrorCode,
+  type ParseManifestFailure,
+  type ParseManifestResult,
+  type ParseManifestSuccess,
+  type SocketBinding,
+} from './manifest.ts';
 
 const isPanelIcon = (value: string): boolean => (
   PANEL_ID.test(value) || isGuestPackageSvgIcon(value)
@@ -290,6 +82,8 @@ const integrationTokenSchema = z.object({
     path: z.string().trim().refine(isSafeApiPath),
     name: z.string().trim().regex(ACCOUNT_NAME),
   }).optional(),
+  scheme: z.enum(['raw', 'bearer', 'basic']).optional(),
+  usernameLabel: z.string().trim().min(1).max(64).optional(),
 });
 
 const integrationHostSchema = z.object({
@@ -304,22 +98,6 @@ const integrationSchema = z.object({
   host: integrationHostSchema.optional(),
   settings: z.array(integrationSettingSchema).optional(),
 }).refine((value) => resolveIntegrationAuth(value) !== null, { path: ['oauth'] });
-
-export const toPublicIntegration = (integration: IntegrationContribution): PublicIntegration => {
-  const auth = resolveIntegrationAuth(integration) ?? 'oauth';
-  const next: PublicIntegration = {
-    name: integration.name,
-    description: integration.description,
-    auth,
-  };
-  if (integration.settings && integration.settings.length > 0) {
-    next.settings = integration.settings.map((field) => ({
-      id: field.id,
-      label: field.label,
-    }));
-  }
-  return next;
-};
 
 const SOCKET_PLATFORMS = ['linux', 'darwin', 'win32'] as const;
 
@@ -371,11 +149,11 @@ const socketEntrySchema = z.union([
   socketBindingObjectSchema.transform(normalizeSocketObject),
 ]);
 
-const agentPermissionsSchema = z.object({
+const servicePermissionsSchema = z.object({
   sockets: z.array(socketEntrySchema).max(32).optional(),
   exec: z.array(z.string().trim().min(1).max(128)).max(32).optional(),
 }).strict().transform((value) => {
-  const next: AgentPermissions = {};
+  const next: ServicePermissions = {};
   if (value.sockets && value.sockets.length > 0) {
     next.sockets = value.sockets;
   }
@@ -385,10 +163,10 @@ const agentPermissionsSchema = z.object({
   return next;
 });
 
-const agentSchema = z.object({
+const serviceSchema = z.object({
   entry: z.string().trim().refine(isSafeAssetPath),
   runtime: z.literal('host'),
-  permissions: agentPermissionsSchema.optional(),
+  permissions: servicePermissionsSchema.optional(),
 });
 
 export const openChamberManifestSchema = z.object({
@@ -399,47 +177,12 @@ export const openChamberManifestSchema = z.object({
   contributes: z.object({
     panel: panelSchema,
     attach: z.union([z.boolean(), z.enum(['panel', 'dialog'])]).optional(),
+    capabilities: z.array(z.enum(['prompt', 'sessions'])).max(8).optional(),
     integration: integrationSchema.optional(),
-    agent: agentSchema.optional(),
+    service: serviceSchema.optional(),
   }),
 });
 
-export const toPublicAgent = (
-  agent: AgentContribution | undefined,
-  granted: boolean,
-  socketBindings?: PublicSocketBinding[],
-): PublicAgent | undefined => {
-  if (!agent) {
-    return undefined;
-  }
-  const next: PublicAgent = {
-    runtime: agent.runtime,
-    granted,
-  };
-  if (agent.permissions) {
-    const permissions: PublicAgentPermissions = {};
-    if (agent.permissions.sockets && agent.permissions.sockets.length > 0) {
-      permissions.sockets = agent.permissions.sockets.map((binding) => binding.id);
-    }
-    if (agent.permissions.exec && agent.permissions.exec.length > 0) {
-      permissions.exec = [...agent.permissions.exec];
-    }
-    if (permissions.sockets || permissions.exec) {
-      next.permissions = permissions;
-    }
-  }
-  if (socketBindings && socketBindings.length > 0) {
-    next.socketBindings = socketBindings.map((binding) => ({
-      id: binding.id,
-      candidates: [...binding.candidates],
-      resolved: binding.resolved,
-      override: binding.override,
-    }));
-  }
-  return next;
-};
-
-/** Guest package version: `1.2.3`, optional prerelease / build. */
 export const PACKAGE_VERSION_PATTERN = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 
 const packageVersionSchema = z.string().trim().regex(PACKAGE_VERSION_PATTERN).max(64);
@@ -463,60 +206,58 @@ const fail = (code: ParseManifestErrorCode, message: string): ParseManifestFailu
 });
 
 const failureFromIssue = (issue: { path: ReadonlyArray<PropertyKey>; code: string }): ParseManifestFailure => {
-  const path = issue.path.join('.');
+  // Paths are reported relative to the `openchamber` block whether the
+  // document was a bare manifest or a package.json envelope.
+  const segments = issue.path.map(String);
+  const path = (segments[0] === 'openchamber' ? segments.slice(1) : segments).join('.');
+  const isPackageEnvelope = segments[0] === 'openchamber';
   if (!path && issue.code === 'invalid_type') {
-    return fail('not-object', 'Manifest must be a plain object.');
+    return isPackageEnvelope
+      ? fail('missing-openchamber', 'package.json openchamber must be a plain object.')
+      : fail('not-object', 'Manifest must be a plain object.');
   }
-  if (path.includes('apiVersion') || issue.code === 'invalid_value') {
+  if (segments.length === 1 && segments[0] === 'version') {
+    return fail('invalid-version', 'package.json version must be semver like 1.0.0.');
+  }
+  if (path === 'apiVersion') {
     return fail(
       'unsupported-api-version',
       `Unsupported apiVersion. This host accepts ${OPENCHAMBER_SDK_MANIFEST_API_VERSIONS.join(' and ')}.`,
     );
   }
-  if (path === 'version' || path.endsWith('.version')) {
-    return fail(
-      'invalid-version',
-      'package.json version must be semver like 1.0.0.',
-    );
+  if (path === 'engines' || path.startsWith('engines.')) {
+    return fail('invalid-engines', 'engines.openchamber must be a version like 1.22.0 or >=1.22.0.');
   }
-  if (path.includes('engines')) {
-    return fail(
-      'invalid-engines',
-      'engines.openchamber must be a version like 1.22.0 or >=1.22.0.',
-    );
+  if (path === 'contributes' || path === 'contributes.panel') {
+    return fail('missing-panel', 'contributes.panel is required.');
   }
-  if (path.endsWith('id')) {
-    return fail('invalid-panel-id', 'panel.id must be kebab-case starting with a letter.');
+  switch (path) {
+    case 'contributes.panel.id':
+      return fail('invalid-panel-id', 'panel.id must be kebab-case starting with a letter.');
+    case 'contributes.panel.name':
+      return fail('invalid-panel-name', 'panel.name must be a non-empty string.');
+    case 'contributes.panel.icon':
+      return fail('invalid-panel-icon', 'panel.icon must be a Remixicon name or a package .svg path.');
+    case 'contributes.panel.entry':
+      return fail('invalid-panel-entry', 'panel.entry must be a relative path inside the package.');
+    case 'contributes.attach':
+      return fail('invalid-attach', 'contributes.attach must be true, false, "panel", or "dialog".');
+    case 'contributes.capabilities':
+      return fail('invalid-capabilities', 'contributes.capabilities may list "prompt" and "sessions".');
+    default:
+      break;
   }
-  if (path.endsWith('name')) {
-    return fail('invalid-panel-name', 'panel.name must be a non-empty string.');
+  if (path.startsWith('contributes.capabilities')) {
+    return fail('invalid-capabilities', 'contributes.capabilities may list "prompt" and "sessions".');
   }
-  if (path.endsWith('icon')) {
-    return fail(
-      'invalid-panel-icon',
-      'panel.icon must be a Remixicon name or a package .svg path.',
-    );
-  }
-  if (path.endsWith('entry')) {
-    return fail('invalid-panel-entry', 'panel.entry must be a relative path inside the package.');
-  }
-  if (path.endsWith('attach')) {
-    return fail('invalid-attach', 'contributes.attach must be true, false, "panel", or "dialog".');
-  }
-  if (path.includes('integration')) {
+  if (path.startsWith('contributes.integration')) {
     return fail(
       'invalid-integration',
       'contributes.integration needs a name, description, and oauth, token, or host.',
     );
   }
-  if (path.includes('agent')) {
-    return fail(
-      'invalid-agent',
-      'contributes.agent needs entry, runtime "host", and optional permissions.',
-    );
-  }
-  if (path.includes('openchamber') && issue.code === 'invalid_type') {
-    return fail('missing-openchamber', 'package.json openchamber must be a plain object.');
+  if (path.startsWith('contributes.service')) {
+    return fail('invalid-service', 'contributes.service needs entry, runtime "host", and optional permissions.');
   }
   return fail('missing-panel', 'contributes.panel is required.');
 };

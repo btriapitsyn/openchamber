@@ -19,18 +19,19 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { GuestApprovalDialog } from './GuestApprovalDialog';
 import { toast } from '@/components/ui';
-import { grantGuestAgent, setGuestAgentSocketPath } from '@/lib/guests/agent';
+import { setGuestServiceSocketPath } from '@/lib/guests/service';
+import { guestNeedsApproval } from '@/lib/guests/capabilities';
 import { guestPackageIconSrc, resolveGuestIconName } from '@/lib/guests/icon';
-import { installGuest, setGuestEnabled, uninstallGuest, type InstallGuestErrorCode } from '@/lib/guests/install';
+import { approveGuestCapabilities, installGuest, setGuestEnabled, uninstallGuest, type InstallGuestErrorCode } from '@/lib/guests/install';
+import { closeGuestTabsById } from '@/lib/guests/tabs';
 import { loadGuestCatalog } from '@/lib/guests/load-catalog';
 import type { GuestSource, InstalledGuest } from '@/lib/guests/types';
 import { useGuestsStore } from '@/lib/guests/store';
 import { useI18n, type I18nKey } from '@/lib/i18n';
 import { getRuntimeUrlResolver } from '@/lib/runtime-url';
-import { pluginModeFromId } from '@/lib/surfaces/modes';
 import { cn } from '@/lib/utils';
-import { useUIStore } from '@/stores/useUIStore';
 import type { PublicSocketBinding } from '@openchamber/sdk';
 
 const errorToastKey = (code: InstallGuestErrorCode): I18nKey => {
@@ -54,27 +55,18 @@ const sourceKey = (source?: GuestSource): I18nKey => {
   return 'settings.extensions.source.bundled';
 };
 
-const agentNeedsGrant = (guest: InstalledGuest): boolean => {
-  const agent = guest.agent;
-  if (!agent || agent.granted) {
-    return false;
-  }
-  const sockets = agent.permissions?.sockets?.length ?? 0;
-  const exec = agent.permissions?.exec?.length ?? 0;
-  return sockets > 0 || exec > 0;
-};
 
-const agentPermissionList = (guest: InstalledGuest): string => {
-  const socketParts = (guest.agent?.socketBindings ?? []).map((binding) => (
+const servicePermissionList = (guest: InstalledGuest): string => {
+  const socketParts = (guest.service?.socketBindings ?? []).map((binding) => (
     binding.resolved ? `${binding.id}=${binding.resolved}` : `${binding.id}?`
   ));
-  const legacySockets = (guest.agent?.permissions?.sockets ?? []).filter((id) => (
-    !(guest.agent?.socketBindings ?? []).some((binding) => binding.id === id)
+  const legacySockets = (guest.service?.permissions?.sockets ?? []).filter((id) => (
+    !(guest.service?.socketBindings ?? []).some((binding) => binding.id === id)
   ));
   const parts = [
     ...socketParts,
     ...legacySockets,
-    ...(guest.agent?.permissions?.exec ?? []),
+    ...(guest.service?.permissions?.exec ?? []),
   ];
   return parts.join(', ');
 };
@@ -99,7 +91,7 @@ const SocketOverrideRow: React.FC<{
 
   const save = async (next: string | null) => {
     setSaving(true);
-    const ok = await setGuestAgentSocketPath(guest.id, binding.id, next);
+    const ok = await setGuestServiceSocketPath(guest.id, binding.id, next);
     setSaving(false);
     if (!ok) {
       toast.error(t('settings.extensions.toast.socketSaveFailed'));
@@ -124,8 +116,8 @@ const SocketOverrideRow: React.FC<{
           <Input
             value={value}
             onChange={(event) => setValue(event.target.value)}
-            placeholder={t('settings.extensions.agent.socket.path', { id: binding.id })}
-            aria-label={t('settings.extensions.agent.socket.path.aria', { id: binding.id })}
+            placeholder={t('settings.extensions.service.socket.path', { id: binding.id })}
+            aria-label={t('settings.extensions.service.socket.path.aria', { id: binding.id })}
             className="h-8 min-w-0 flex-1 rounded-md px-3"
             disabled={busy || saving}
             autoFocus
@@ -135,10 +127,10 @@ const SocketOverrideRow: React.FC<{
             variant="ghost"
             size="xs"
             disabled={busy || saving}
-            aria-label={t('settings.extensions.agent.socket.save.aria', { id: binding.id })}
+            aria-label={t('settings.extensions.service.socket.save.aria', { id: binding.id })}
             onClick={() => void save(value.trim() || null)}
           >
-            {t('settings.extensions.agent.socket.save')}
+            {t('settings.extensions.service.socket.save')}
           </Button>
           {binding.override ? (
             <Button
@@ -146,10 +138,10 @@ const SocketOverrideRow: React.FC<{
               variant="ghost"
               size="xs"
               disabled={busy || saving}
-              aria-label={t('settings.extensions.agent.socket.clear.aria', { id: binding.id })}
+              aria-label={t('settings.extensions.service.socket.clear.aria', { id: binding.id })}
               onClick={() => void save(null)}
             >
-              {t('settings.extensions.agent.socket.clear')}
+              {t('settings.extensions.service.socket.clear')}
             </Button>
           ) : null}
           {binding.resolved ? (
@@ -158,10 +150,10 @@ const SocketOverrideRow: React.FC<{
               variant="ghost"
               size="xs"
               disabled={busy || saving}
-              aria-label={t('settings.extensions.agent.socket.cancel.aria', { id: binding.id })}
+              aria-label={t('settings.extensions.service.socket.cancel.aria', { id: binding.id })}
               onClick={cancel}
             >
-              {t('settings.extensions.agent.socket.cancel')}
+              {t('settings.extensions.service.socket.cancel')}
             </Button>
           ) : null}
         </div>
@@ -169,8 +161,8 @@ const SocketOverrideRow: React.FC<{
         <div className="flex min-w-0 items-center gap-1">
           <div className="typography-meta min-w-0 flex-1 truncate text-muted-foreground">
             {binding.resolved
-              ? t('settings.extensions.agent.socket.resolved', { path: binding.resolved })
-              : t('settings.extensions.agent.socket.unresolved')}
+              ? t('settings.extensions.service.socket.resolved', { path: binding.resolved })
+              : t('settings.extensions.service.socket.unresolved')}
           </div>
           <Button
             type="button"
@@ -178,7 +170,7 @@ const SocketOverrideRow: React.FC<{
             size="icon"
             className={SETTINGS_ICON_BUTTON_CLASS}
             disabled={busy || saving}
-            aria-label={t('settings.extensions.agent.socket.edit.aria', { id: binding.id })}
+            aria-label={t('settings.extensions.service.socket.edit.aria', { id: binding.id })}
             onClick={() => setEditing(true)}
           >
             <Icon name="pencil" className="h-3.5 w-3.5" />
@@ -192,7 +184,7 @@ const SocketOverrideRow: React.FC<{
 type ExtensionCardProps = {
   guest: InstalledGuest;
   busy: boolean;
-  onAllowAgent: (id: string, name: string) => Promise<void>;
+  onReview: (guest: InstalledGuest) => void;
   onRemove: (id: string, name: string) => Promise<void>;
   onSetEnabled: (id: string, name: string, enabled: boolean) => Promise<void>;
 };
@@ -200,15 +192,15 @@ type ExtensionCardProps = {
 const ExtensionCard: React.FC<ExtensionCardProps> = ({
   guest,
   busy,
-  onAllowAgent,
+  onReview,
   onRemove,
   onSetEnabled,
 }) => {
   const { t } = useI18n();
   const [open, setOpen] = React.useState(false);
   const enabled = guest.enabled !== false;
-  const needsGrant = agentNeedsGrant(guest);
-  const permissions = agentPermissionList(guest);
+  const needsApproval = guestNeedsApproval(guest);
+  const permissions = servicePermissionList(guest);
   const canRemove = Boolean(guest.source && guest.source !== 'bundled');
   const iconSrc = React.useMemo(
     () => guestPackageIconSrc(guest.id, guest.icon, getRuntimeUrlResolver().authenticatedAsset),
@@ -220,12 +212,16 @@ const ExtensionCard: React.FC<ExtensionCardProps> = ({
     guest.path || guest.id,
   ].filter(Boolean);
   const meta = metaParts.join(' · ');
-  const statusLabel = enabled
-    ? t('settings.extensions.status.enabled')
-    : t('settings.extensions.status.disabled');
-  const statusClassName = enabled
-    ? 'bg-[var(--status-success)]/15 text-[var(--status-success)]'
-    : 'bg-[var(--surface-muted)] text-muted-foreground';
+  const statusLabel = needsApproval
+    ? t('settings.extensions.status.needsApproval')
+    : enabled
+      ? t('settings.extensions.status.enabled')
+      : t('settings.extensions.status.disabled');
+  const statusClassName = needsApproval
+    ? 'bg-[var(--status-warning)]/15 text-[var(--status-warning)]'
+    : enabled
+      ? 'bg-[var(--status-success)]/15 text-[var(--status-success)]'
+      : 'bg-[var(--surface-muted)] text-muted-foreground';
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
@@ -262,18 +258,18 @@ const ExtensionCard: React.FC<ExtensionCardProps> = ({
         </CollapsibleTrigger>
         <CollapsibleContent className="border-t border-[var(--interactive-border)] px-4 py-4">
           <div className="space-y-3">
-            {guest.agent?.granted ? (
-              <p className="typography-meta text-muted-foreground">
-                {t('settings.extensions.agent.allowed')}
-              </p>
-            ) : null}
             {permissions ? (
               <p className="typography-meta truncate text-muted-foreground">
-                {t('settings.extensions.agent.permissions', { list: permissions })}
+                {t('settings.extensions.service.permissions', { list: permissions })}
+              </p>
+            ) : null}
+            {guest.service ? (
+              <p className="typography-meta text-muted-foreground">
+                {t('settings.extensions.service.warning')}
               </p>
             ) : null}
             {enabled
-              ? (guest.agent?.socketBindings ?? []).map((binding) => (
+              ? (guest.service?.socketBindings ?? []).map((binding) => (
                 <SocketOverrideRow
                   key={binding.id}
                   guest={guest}
@@ -284,15 +280,15 @@ const ExtensionCard: React.FC<ExtensionCardProps> = ({
               ))
               : null}
             <div className="flex flex-wrap items-center gap-2">
-              {enabled && needsGrant ? (
+              {needsApproval ? (
                 <Button
                   type="button"
                   size="sm"
                   disabled={busy}
-                  aria-label={t('settings.extensions.agent.allow.aria', { name: guest.name })}
-                  onClick={() => void onAllowAgent(guest.id, guest.name)}
+                  aria-label={t('settings.extensions.review.aria', { name: guest.name })}
+                  onClick={() => onReview(guest)}
                 >
-                  {t('settings.extensions.agent.allow')}
+                  {t('settings.extensions.review')}
                 </Button>
               ) : null}
               {enabled ? (
@@ -345,6 +341,7 @@ export const ExtensionsPage: React.FC = () => {
   const [installValue, setInstallValue] = React.useState('');
   const [busy, setBusy] = React.useState(false);
   const [reinstall, setReinstall] = React.useState<{ input: string; name: string } | null>(null);
+  const [approval, setApproval] = React.useState<InstalledGuest | null>(null);
 
   React.useEffect(() => {
     void loadGuestCatalog();
@@ -388,6 +385,9 @@ export const ExtensionsPage: React.FC = () => {
         : t('settings.extensions.toast.added', { name: result.guest.name }),
     );
     await loadGuestCatalog();
+    if (guestNeedsApproval(result.guest)) {
+      setApproval(result.guest);
+    }
     return true;
   };
 
@@ -421,20 +421,28 @@ export const ExtensionsPage: React.FC = () => {
       toast.error(t('settings.extensions.toast.removeFailed'));
       return;
     }
+    closeGuestTabsById(id);
     toast.success(t('settings.extensions.toast.removed', { name }));
     await loadGuestCatalog();
   };
 
-  const allowAgent = async (id: string, name: string) => {
+  const approve = async (guest: InstalledGuest) => {
     setBusy(true);
-    const ok = await grantGuestAgent(id);
+    const ok = await approveGuestCapabilities(guest.id, guest.capabilities.requested);
     setBusy(false);
     if (!ok) {
-      toast.error(t('settings.extensions.toast.agentGrantFailed'));
+      toast.error(t('settings.extensions.toast.approveFailed'));
       return;
     }
-    toast.success(t('settings.extensions.toast.agentGranted', { name }));
+    setApproval(null);
+    toast.success(t('settings.extensions.toast.approved', { name: guest.name }));
     await loadGuestCatalog();
+  };
+
+  // Declining at install is the same as never installing: the package goes.
+  const decline = async (guest: InstalledGuest) => {
+    setApproval(null);
+    await remove(guest.id, guest.name);
   };
 
   const setEnabled = async (id: string, name: string, enabled: boolean) => {
@@ -446,16 +454,7 @@ export const ExtensionsPage: React.FC = () => {
       return;
     }
     if (!enabled) {
-      const mode = pluginModeFromId(id);
-      const ui = useUIStore.getState();
-      for (const [directory, panel] of Object.entries(ui.contextPanelByDirectory)) {
-        const tabIds = panel.tabs
-          .filter((tab) => tab.mode === mode)
-          .map((tab) => tab.id);
-        if (tabIds.length > 0) {
-          ui.closeContextPanelTabs(directory, tabIds);
-        }
-      }
+      closeGuestTabsById(id);
     }
     toast.success(
       enabled
@@ -489,7 +488,7 @@ export const ExtensionsPage: React.FC = () => {
             key={guest.id}
             guest={guest}
             busy={busy}
-            onAllowAgent={allowAgent}
+            onReview={setApproval}
             onRemove={remove}
             onSetEnabled={setEnabled}
           />
@@ -533,6 +532,14 @@ export const ExtensionsPage: React.FC = () => {
           </SettingsStackedField>
         </SettingsSection>
       )}
+
+      <GuestApprovalDialog
+        guest={approval}
+        busy={busy}
+        onApprove={(guest) => void approve(guest)}
+        onDecline={(guest) => void decline(guest)}
+        onDismiss={() => setApproval(null)}
+      />
 
       <Dialog
         open={reinstall !== null}

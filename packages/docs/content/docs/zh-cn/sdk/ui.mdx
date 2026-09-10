@@ -1,65 +1,106 @@
 ---
 title: UI 套件
-description: 用 @openchamber/sdk/ui 画任务列表、卡片、attach 选择器或 pull 窗口。
+description: 来自 @openchamber/sdk/ui 的按钮、输入框、下拉框、标签页、列表和其他构件，让扩展看起来与 OpenChamber 的其余部分一致。
 ---
 
 # UI 套件
 
-想让面板看起来像宿主的跟踪器时，引入 `@openchamber/sdk/ui`。套件用宿主 token 画 DOM。它不跟供应商说话。你还是自己调 `host.request` 和 `host.attach`。
+`@openchamber/sdk/ui` 是一组现成的控件，采用应用的颜色、字体和间距，让你的扩展无需复制样式就能与 OpenChamber 的其余部分保持一致。每个控件都是一个函数：你给它一个你拥有的元素和它的设置，它就在那里绘制自己并返回 `{ update, dispose }`。你把控件组合成一个界面，并自己管理数据。套件从不调用你的提供方或 OpenChamber；`host.request`、`host.attach` 等仍由你自己调用。你也可以不用套件，自己编写 HTML 和 CSS。
 
-可以跳过套件，自己画 DOM。
+## 先调用 `applyHostReady`
 
-任何挂载之前先调用 `applyHostReady`。
+控件从 `applyHostReady` 写入页面的 CSS 变量中读取颜色。在 `host.onReady` 内、第一次挂载之前调用它，这样用户切换主题时颜色会跟随应用的主题。
 
 ```ts
-import { applyHostReady, mountIssuePage } from "@openchamber/sdk/ui";
+import { applyHostReady } from "@openchamber/sdk/ui";
 
 host.onReady((ctx) => {
   applyHostReady(ctx, document.documentElement);
-  mountIssuePage(document.querySelector("#root")!, {
-    items: tasks,
-    filters,
-    onSelect: (item) => {
-      void host.attach({
-        providerId: "acme-hello",
-        id: item.id,
-        title: item.title,
-        url: item.url ?? "",
-      });
-    },
-  });
+  // mount things here
 });
 ```
 
-## 挂什么
+## 可以挂载的控件
 
-| 调用 | 放哪里 |
+| 函数 | 绘制的内容 |
 | --- | --- |
-| `mountIssuePage` | 栏上的列表。紧凑筛选、图标搜索、标识加标题的行。 |
-| `mountIssueCard` | 点行之后的任务。返回、状态、元数据、描述、评论、页脚按钮。 |
-| `mountAttachIssues` | + 菜单选择器。搜索保持打开。选中后调用 `host.attach` 和 `host.close`。 |
-| `mountPullRequest` | pull 或合并请求窗口。标签是 Overview、Checks、Comments。 |
-| `mountButton` | 共用的连接按钮 |
-| `mountTextField` | 共用的连接字段 |
-| `mountEmpty` | 共用的空状态 |
+| `mountButton` | 一个按钮。`variant` 为 `default`、`secondary`、`outline`、`ghost` 或 `destructive`；`size` 为 `default`、`sm` 或 `xs`。`loading` 显示加载指示并阻止点击。 |
+| `mountTextField` | 带标签的输入框，或使用 `multiline` 的多行文本框。可选的 `helper` 或 `error` 文本、`password` 掩码，以及用于令牌和 id 的 `mono`。 |
+| `mountSearchField` | 带放大镜和清除按钮的搜索框。Escape 清空它。 |
+| `mountSelect` | 一个下拉框。`searchable` 在列表顶部添加筛选框。方向键移动，Enter 选择，Escape 关闭。 |
+| `mountCheckbox`、`mountSwitch` | 带标签和可选 `description` 的复选框或开关。 |
+| `mountTabs` | 药丸式标签页，每个可带可选计数。左右方向键在它们之间移动。 |
+| `mountBadge` | 一个小药丸标记。`tone` 为 `neutral`、`primary`、`success`、`warning`、`error` 或 `info`。 |
+| `mountList` | 键盘友好的列表。每行可以有前置键、标题、副标题、右对齐的附加文本和一个标记。 |
+| `mountEmpty` | 居中的空状态，带标题、一行正文和可选按钮。 |
+| `mountSpinner` | 带可选标签的加载环。 |
+| `mountBanner` | 带色调的通知，含标题、正文和可选操作。 |
+| `mountSeparator` | 一条细线，中间可带标签。 |
+| `mountProgress` | 0 到 100 的进度条。 |
+| `mountMenu` | 打开操作列表的按钮。菜单项可以是危险操作、禁用项或分隔线。 |
+| `mountText` | 来自你的提供方的文本。Markdown 风格的图片和 `http(s)` 链接会变成真正的图片和链接；其他内容保持纯文本，因此可以安全显示不受信任的内容。 |
 
-描述和评论保持纯文本。套件会把 `![alt](https://…)` 和 `[label](https://…)` 提成媒体。头像 URL 不进 attach 载荷。
+控件旁还附带三个纯函数辅助工具。`filterSelectOptions(options, query)` 是 `mountSelect` 使用的匹配逻辑。`splitTextMedia(text)` 是 `mountText` 在绘制前做的处理。`moveListSelection` 是列表、下拉框和菜单共用的键盘步进逻辑，供你构建自己的列表时使用。
 
-`mountPullRequest` 接受带记录、检查和评论的 `mode: "view"`，或带提交处理函数的 `mode: "create"`。页脚回调是 attach、新会话、新 worktree、ready 和 merge。套件负责画。git 留在宿主。
+## 带搜索的列表
 
-## 筛选和行
+```ts
+import { applyHostReady, mountEmpty, mountList, mountSearchField } from "@openchamber/sdk/ui";
 
-筛选上的 `value` 是起始选择。之后你用新的 `items` 做 `update` 时，组件会保住用户的选择。只有重新挂载时才再传 `value`。
+host.onReady((ctx) => {
+  applyHostReady(ctx, document.documentElement);
+  const root = document.querySelector("#root")!;
+  const searchRoot = root.appendChild(document.createElement("div"));
+  const listRoot = root.appendChild(document.createElement("div"));
 
-`slot` 放筛选位置。`start` 在左边伸长并保留标签。`end` 挤到右边，面板窄于 520px 时变成图标。不写 `slot` 时，第一个筛选是 `start`，其余是 `end`。
+  let query = "";
+  let empty: { dispose: () => void } | null = null;
 
-一行可以带 `badge` 和 `subtitle`。就像 GitHub 选择器显示仓库或 `head → base`。
+  const list = mountList(listRoot, {
+    items: [],
+    onSelect: (id) => {
+      const task = tasks.find((item) => item.id === id);
+      if (task) void host.attach({ providerId: "acme-hello", id, title: task.title, url: task.url });
+    },
+  });
 
-`hasMore` / `onMore` 加载下一远程页。`toggle` 是一个复选框。含义由访客写进 `attach.text`。`session` 是第二个复选框，像 Create in worktree。勾上时调用 `host.startSession({ worktree: true })`，不要调 `attach`。`action` 是页上的按钮。
+  const paint = () => {
+    const rows = tasks
+      .filter((task) => task.title.toLowerCase().includes(query.toLowerCase()))
+      .map((task) => ({ id: task.id, leading: task.key, title: task.title, meta: task.updated }));
+    list.update({ items: rows });
+    empty?.dispose();
+    empty = rows.length === 0
+      ? mountEmpty(listRoot, { title: "No tasks match", body: "Try a shorter search." })
+      : null;
+  };
 
-宿主不搜索，也不持久化访客筛选。
+  mountSearchField(searchRoot, {
+    value: query,
+    placeholder: "Search tasks",
+    onChange: (next) => {
+      query = next;
+      paint();
+    },
+  });
+  paint();
+});
+```
 
-## 相关
+`update` 只接受发生变化的设置。只要高亮的行仍然存在，列表就会在更新之间保持该高亮。
 
-- [构建访客面板](/zh-cn/sdk/) — 文件夹、打包和清单
-- [宿主 API](/zh-cn/sdk/host/) — `connectHost`、attach 和错误
+## 提供方文本中的链接
+
+你的页面运行在沙箱中，无法自行打开新标签页。使用 `mountText` 时，传入 `onOpenUrl`，把链接交给 OpenChamber：
+
+```ts
+mountText(root, {
+  text: comment.body,
+  onOpenUrl: (url) => void host.openUrl(url),
+});
+```
+
+## 相关页面
+
+- [构建扩展](/sdk/)：文件夹、清单和安装
+- [Host API](/sdk/host/)：`connectHost`、attach 和错误码

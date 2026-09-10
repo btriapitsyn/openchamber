@@ -1,6 +1,6 @@
-import { clearNode, ensureStyle } from './dom.ts';
-import { UI_CSS } from './style.ts';
 import { mountButton, type ButtonHandle } from './button.ts';
+import { el, ensureStyle, setText, type Handle } from './dom.ts';
+import { UI_CSS } from './style.ts';
 
 export type EmptyProps = {
   title: string;
@@ -11,44 +11,36 @@ export type EmptyProps = {
   };
 };
 
-export type EmptyHandle = {
-  update: (next: Partial<EmptyProps>) => void;
-  dispose: () => void;
-};
+export type EmptyHandle = Handle<EmptyProps>;
 
 export const mountEmpty = (root: Element, initial: EmptyProps): EmptyHandle => {
   ensureStyle(UI_CSS);
   let props = initial;
-  const shell = document.createElement('div');
-  shell.className = 'oc-sdk-empty-state';
+  const shell = el('div', 'oc-sdk oc-sdk-empty');
+  const title = el('h2', 'oc-sdk-empty-title');
+  const body = el('p', 'oc-sdk-empty-body');
+  const slot = el('div', 'oc-sdk-empty-action');
+  shell.append(title, body, slot);
   root.append(shell);
   let action: ButtonHandle | null = null;
 
   const paint = (): void => {
-    action?.dispose();
-    action = null;
-    clearNode(shell);
-    const title = document.createElement('h2');
-    title.className = 'oc-sdk-empty-title';
-    title.textContent = props.title;
-    shell.append(title);
-    if (props.body) {
-      const body = document.createElement('p');
-      body.className = 'oc-sdk-empty-body';
-      body.textContent = props.body;
-      shell.append(body);
+    setText(title, props.title);
+    setText(body, props.body);
+    body.hidden = !props.body;
+    slot.hidden = !props.action;
+    if (!props.action) {
+      action?.dispose();
+      action = null;
+      return;
     }
-    if (props.action) {
-      const slot = document.createElement('div');
-      slot.className = 'oc-sdk-empty-action';
-      action = mountButton(slot, {
-        label: props.action.label,
-        onClick: props.action.onClick,
-      });
-      shell.append(slot);
+    const next = { label: props.action.label, onClick: props.action.onClick };
+    if (action) {
+      action.update(next);
+    } else {
+      action = mountButton(slot, { ...next, variant: 'outline', size: 'sm' });
     }
   };
-
   paint();
 
   return {
@@ -59,7 +51,6 @@ export const mountEmpty = (root: Element, initial: EmptyProps): EmptyHandle => {
     dispose: () => {
       action?.dispose();
       action = null;
-      clearNode(shell);
       shell.remove();
     },
   };

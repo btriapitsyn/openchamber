@@ -42,13 +42,13 @@ const effects = (overrides: {
     | { ok: true; result: { status: number; body: string } }
     | { ok: false; code: 'HOST_REJECTED' | 'DISCONNECTED' | 'BAD_PATH' | 'NO_INTEGRATION'; message: string }
   >;
-  agentRequest?: (request: GuestRequest) => Promise<
+  serviceRequest?: (request: GuestRequest) => Promise<
     | { ok: true; result: { status: number; body: string } }
-    | { ok: false; code: 'HOST_REJECTED' | 'NO_AGENT' | 'AGENT_FAILED' | 'BAD_PATH'; message: string }
+    | { ok: false; code: 'HOST_REJECTED' | 'NO_SERVICE' | 'SERVICE_FAILED' | 'BAD_PATH'; message: string }
   >;
-  agentStatus?: () => Promise<
+  serviceStatus?: () => Promise<
     | { ok: true; result: { status: 'stopped' | 'starting' | 'ready' | 'failed' } }
-    | { ok: false; code: 'HOST_REJECTED' | 'NO_AGENT'; message: string }
+    | { ok: false; code: 'HOST_REJECTED' | 'NO_SERVICE'; message: string }
   >;
 } = {}) => ({
   toast: overrides.toast ?? (() => {}),
@@ -64,8 +64,8 @@ const effects = (overrides: {
   oauthStart: overrides.oauthStart ?? (async () => true),
   oauthDisconnect: overrides.oauthDisconnect ?? (async () => true),
   request: overrides.request ?? (async () => ({ ok: true, result: { status: 200, body: '{}' } })),
-  agentRequest: overrides.agentRequest ?? (async () => ({ ok: true, result: { status: 200, body: '{}' } })),
-  agentStatus: overrides.agentStatus ?? (async () => ({ ok: true, result: { status: 'ready' as const } })),
+  serviceRequest: overrides.serviceRequest ?? (async () => ({ ok: true, result: { status: 200, body: '{}' } })),
+  serviceStatus: overrides.serviceStatus ?? (async () => ({ ok: true, result: { status: 'ready' as const } })),
 });
 
 describe('answerGuestMessage', () => {
@@ -443,17 +443,17 @@ describe('answerGuestMessage', () => {
     });
   });
 
-  test('proxies agentRequest and agentStatus', async () => {
-    const agent = await answerGuestMessage({
+  test('proxies serviceRequest and serviceStatus', async () => {
+    const service = await answerGuestMessage({
       channel: OPENCHAMBER_SDK_CHANNEL,
       v: 1,
-      type: 'agent-request',
+      type: 'service-request',
       id: 'oc-12',
       payload: { method: 'GET', path: '/containers' },
     }, effects({
-      agentRequest: async () => ({ ok: true, result: { status: 200, body: '[]' } }),
+      serviceRequest: async () => ({ ok: true, result: { status: 200, body: '[]' } }),
     }));
-    expect(agent).toEqual({
+    expect(service).toEqual({
       channel: OPENCHAMBER_SDK_CHANNEL,
       v: 1,
       type: 'result',
@@ -465,10 +465,10 @@ describe('answerGuestMessage', () => {
     const status = await answerGuestMessage({
       channel: OPENCHAMBER_SDK_CHANNEL,
       v: 1,
-      type: 'agent-status',
+      type: 'service-status',
       id: 'oc-13',
     }, effects({
-      agentStatus: async () => ({ ok: true, result: { status: 'ready' } }),
+      serviceStatus: async () => ({ ok: true, result: { status: 'ready' } }),
     }));
     expect(status).toEqual({
       channel: OPENCHAMBER_SDK_CHANNEL,
@@ -480,18 +480,18 @@ describe('answerGuestMessage', () => {
     });
   });
 
-  test('forwards NO_AGENT from agentRequest', async () => {
+  test('forwards NO_SERVICE from serviceRequest', async () => {
     const reply = await answerGuestMessage({
       channel: OPENCHAMBER_SDK_CHANNEL,
       v: 1,
-      type: 'agent-request',
+      type: 'service-request',
       id: 'oc-14',
       payload: { method: 'GET', path: '/containers' },
     }, effects({
-      agentRequest: async () => ({
+      serviceRequest: async () => ({
         ok: false,
-        code: 'NO_AGENT',
-        message: 'Allow this extension\'s local agent in Settings → Extensions.',
+        code: 'NO_SERVICE',
+        message: 'Allow this extension\'s local service in Settings → Extensions.',
       }),
     }));
     expect(reply).toEqual({
@@ -500,8 +500,8 @@ describe('answerGuestMessage', () => {
       type: 'result',
       id: 'oc-14',
       ok: false,
-      error: 'Allow this extension\'s local agent in Settings → Extensions.',
-      code: 'NO_AGENT',
+      error: 'Allow this extension\'s local service in Settings → Extensions.',
+      code: 'NO_SERVICE',
     });
   });
 });

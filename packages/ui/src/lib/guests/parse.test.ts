@@ -10,6 +10,7 @@ describe('parseGuestCatalogJson', () => {
         name: 'Hello',
         icon: 'window',
         entry: 'panel/index.html',
+        capabilities: { requested: [], granted: [] },
         version: '1.0.0',
         source: 'path',
         path: '/tmp/hello',
@@ -18,6 +19,7 @@ describe('parseGuestCatalogJson', () => {
         name: 'Zip',
         icon: 'window',
         entry: 'panel/index.html',
+        capabilities: { requested: [], granted: [] },
         source: 'zip',
         path: '/data/guests/zip-hello',
       }, {
@@ -25,6 +27,7 @@ describe('parseGuestCatalogJson', () => {
         name: 'Git',
         icon: 'window',
         entry: 'panel/index.html',
+        capabilities: { requested: [], granted: [] },
         source: 'git',
         path: '/data/guests/git-hello',
       }],
@@ -34,6 +37,7 @@ describe('parseGuestCatalogJson', () => {
         name: 'Hello',
         icon: 'window',
         entry: 'panel/index.html',
+        capabilities: { requested: [], granted: [] },
         version: '1.0.0',
         source: 'path',
         path: '/tmp/hello',
@@ -43,6 +47,7 @@ describe('parseGuestCatalogJson', () => {
         name: 'Zip',
         icon: 'window',
         entry: 'panel/index.html',
+        capabilities: { requested: [], granted: [] },
         source: 'zip',
         path: '/data/guests/zip-hello',
       },
@@ -51,6 +56,7 @@ describe('parseGuestCatalogJson', () => {
         name: 'Git',
         icon: 'window',
         entry: 'panel/index.html',
+        capabilities: { requested: [], granted: [] },
         source: 'git',
         path: '/data/guests/git-hello',
       },
@@ -64,6 +70,7 @@ describe('parseGuestCatalogJson', () => {
         name: 'Hello',
         icon: 'window',
         entry: 'panel/index.html',
+        capabilities: { requested: [], granted: [] },
         attach: 'dialog',
       }],
     }))).toEqual([
@@ -72,6 +79,7 @@ describe('parseGuestCatalogJson', () => {
         name: 'Hello',
         icon: 'window',
         entry: 'panel/index.html',
+        capabilities: { requested: [], granted: [] },
         attach: 'dialog',
       },
     ]);
@@ -84,6 +92,7 @@ describe('parseGuestCatalogJson', () => {
         name: 'ClickUp',
         icon: 'window',
         entry: 'panel/index.html',
+        capabilities: { requested: [], granted: [] },
         integration: {
           name: 'ClickUp',
           description: 'Tasks from a ClickUp list',
@@ -100,6 +109,7 @@ describe('parseGuestCatalogJson', () => {
         name: 'ClickUp',
         icon: 'window',
         entry: 'panel/index.html',
+        capabilities: { requested: [], granted: [] },
         integration: {
           name: 'ClickUp',
           description: 'Tasks from a ClickUp list',
@@ -110,14 +120,15 @@ describe('parseGuestCatalogJson', () => {
     ]);
   });
 
-  test('keeps a public agent slice', () => {
+  test('keeps a public service slice', () => {
     expect(parseGuestCatalogJson(JSON.stringify({
       guests: [{
         id: 'docker',
         name: 'Docker',
         icon: 'box-3',
         entry: 'panel/index.html',
-        agent: {
+        capabilities: { requested: [], granted: [] },
+        service: {
           runtime: 'host',
           granted: false,
           permissions: {
@@ -138,7 +149,8 @@ describe('parseGuestCatalogJson', () => {
         name: 'Docker',
         icon: 'box-3',
         entry: 'panel/index.html',
-        agent: {
+        capabilities: { requested: [], granted: [] },
+        service: {
           runtime: 'host',
           granted: false,
           permissions: {
@@ -170,6 +182,7 @@ describe('parseInstalledGuestJson', () => {
         name: 'Clone',
         icon: 'window',
         entry: 'panel/index.html',
+        capabilities: { requested: [], granted: [] },
         source: 'path',
         path: '/tmp/clone',
       },
@@ -178,6 +191,7 @@ describe('parseInstalledGuestJson', () => {
       name: 'Clone',
       icon: 'window',
       entry: 'panel/index.html',
+      capabilities: { requested: [], granted: [] },
       source: 'path',
       path: '/tmp/clone',
     });
@@ -189,6 +203,7 @@ describe('parseInstalledGuestJson', () => {
       name: 'Clone',
       icon: 'window',
       entry: 'panel/index.html',
+      capabilities: { requested: [], granted: [] },
     }))).toBeNull();
   });
 });

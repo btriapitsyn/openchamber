@@ -317,9 +317,10 @@ function startInstalledInstance(directory, port) {
 
 function packageWeb() {
   step('Building web bundle', () => run('bun', ['run', '--cwd', 'packages/web', 'build']));
-  const packOutput = step('Creating web package archive', () => run('npm', ['pack', '--pack-destination', repoRoot], { cwd: path.join(repoRoot, 'packages/web'), capture: true }));
+  // bun rewrites the workspace link to @openchamber/sdk; npm pack would ship `workspace:*`.
+  const packOutput = step('Creating web package archive', () => run('bun', ['pm', 'pack', '--destination', repoRoot], { cwd: path.join(repoRoot, 'packages/web'), capture: true }));
   const packageName = packOutput.split('\n').find((line) => line.trim().endsWith('.tgz'))?.trim();
-  if (!packageName) throw new Error('Archive creation failed: npm pack did not print a .tgz file.');
+  if (!packageName) throw new Error('Archive creation failed: bun pm pack did not print a .tgz file.');
   return path.join(repoRoot, packageName);
 }
 

@@ -1,48 +1,60 @@
-import { clearNode, ensureStyle } from './dom.ts';
+import { el, ensureStyle, setAttr, setText, type Handle } from './dom.ts';
 import { UI_CSS } from './style.ts';
 
 export type TextFieldProps = {
-  label: string;
+  label?: string;
   value: string;
-  password?: boolean;
-  placeholder?: string;
-  disabled?: boolean;
   onChange: (value: string) => void;
+  placeholder?: string;
+  password?: boolean;
+  multiline?: boolean;
+  rows?: number;
+  disabled?: boolean;
+  /** Error text. Turns the ring red and replaces `helper`. */
+  error?: string;
+  helper?: string;
+  /** Monospace input, for tokens and identifiers. */
+  mono?: boolean;
 };
 
-export type TextFieldHandle = {
-  update: (next: Partial<TextFieldProps>) => void;
-  dispose: () => void;
-};
+export type TextFieldHandle = Handle<TextFieldProps>;
 
 export const mountTextField = (root: Element, initial: TextFieldProps): TextFieldHandle => {
   ensureStyle(UI_CSS);
   let props = initial;
-  const field = document.createElement('label');
-  field.className = 'oc-sdk-field';
-  const caption = document.createElement('span');
-  caption.className = 'oc-sdk-field-label';
-  const input = document.createElement('input');
-  input.className = 'oc-sdk-field-input';
-  field.append(caption, input);
+  const field = el('label', 'oc-sdk oc-sdk-field');
+  const caption = el('span', 'oc-sdk-field-label');
+  const input = props.multiline ? el('textarea', 'oc-sdk-input') : el('input', 'oc-sdk-input');
+  const note = el('span', 'oc-sdk-field-note');
+  field.append(caption, input, note);
   root.append(field);
 
   const paint = (): void => {
-    caption.textContent = props.label;
-    input.type = props.password ? 'password' : 'text';
-    input.value = props.value;
-    input.disabled = Boolean(props.disabled);
-    if (props.placeholder) {
-      input.placeholder = props.placeholder;
+    setText(caption, props.label);
+    caption.hidden = !props.label;
+    if (input instanceof HTMLInputElement) {
+      input.type = props.password ? 'password' : 'text';
     } else {
-      input.removeAttribute('placeholder');
+      input.rows = props.rows ?? 3;
     }
+    if (input.value !== props.value) {
+      input.value = props.value;
+    }
+    input.disabled = Boolean(props.disabled);
+    setAttr(input, 'placeholder', props.placeholder);
+    input.dataset.mono = props.mono ? 'true' : 'false';
+    const invalid = Boolean(props.error);
+    field.dataset.invalid = invalid ? 'true' : 'false';
+    input.setAttribute('aria-invalid', invalid ? 'true' : 'false');
+    const text = props.error ?? props.helper ?? '';
+    setText(note, text);
+    note.hidden = text === '';
   };
 
-  input.addEventListener('input', () => {
+  const onInput = (): void => {
     props.onChange(input.value);
-  });
-
+  };
+  input.addEventListener('input', onInput);
   paint();
 
   return {
@@ -51,7 +63,7 @@ export const mountTextField = (root: Element, initial: TextFieldProps): TextFiel
       paint();
     },
     dispose: () => {
-      clearNode(field);
+      input.removeEventListener('input', onInput);
       field.remove();
     },
   };

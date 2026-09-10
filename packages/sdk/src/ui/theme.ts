@@ -1,4 +1,4 @@
-import type { GuestHostSurface, HostTheme } from '../protocol.ts';
+import type { GuestHostSurface, HostTheme } from '../contract.ts';
 
 export type ThemeRoot = {
   style: {
@@ -22,7 +22,17 @@ const TOKEN_VARS = [
   ['--oc-selection', 'selection'],
   ['--oc-focus', 'focus'],
   ['--oc-primary', 'primary'],
+  ['--oc-muted-surface', 'mutedSurface'],
+  ['--oc-elevated-fg', 'elevatedForeground'],
+  ['--oc-active', 'active'],
+  ['--oc-selection-fg', 'selectionForeground'],
+  ['--oc-primary-fg', 'primaryForeground'],
+  ['--oc-success', 'success'],
+  ['--oc-warning', 'warning'],
+  ['--oc-error', 'error'],
+  ['--oc-info', 'info'],
   ['--oc-font', 'font'],
+  ['--oc-mono', 'mono'],
   ['--oc-radius', 'radius'],
   ['--surface-background', 'background'],
   ['--surface-elevated', 'elevated'],
@@ -34,7 +44,17 @@ const TOKEN_VARS = [
   ['--interactive-selection', 'selection'],
   ['--interactive-focus-ring', 'focus'],
   ['--primary', 'primary'],
+  ['--surface-muted', 'mutedSurface'],
+  ['--surface-elevated-foreground', 'elevatedForeground'],
+  ['--interactive-active', 'active'],
+  ['--interactive-selection-foreground', 'selectionForeground'],
+  ['--primary-foreground', 'primaryForeground'],
+  ['--status-success', 'success'],
+  ['--status-warning', 'warning'],
+  ['--status-error', 'error'],
+  ['--status-info', 'info'],
   ['--font-sans', 'font'],
+  ['--font-mono', 'mono'],
   ['--radius', 'radius'],
 ] as const;
 

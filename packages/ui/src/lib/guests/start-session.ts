@@ -7,7 +7,7 @@ import type {
   StartSessionRequest,
   StartSessionResult,
 } from '@openchamber/sdk';
-import { clampAttachRequest, clampPromptRequest, clampStartSessionRequest } from '@openchamber/sdk';
+import { clampPromptRequest, clampStartSessionRequest } from '@openchamber/sdk';
 
 import type { I18nKey, I18nParams } from '@/lib/i18n';
 import { generateBranchSlug } from '@/lib/git/branchNameGenerator';

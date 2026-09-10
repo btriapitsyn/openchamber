@@ -1,65 +1,106 @@
 ---
 title: UI kit
-description: Draw an issue list, card, attach picker, or pull window with @openchamber/sdk/ui.
+description: Buttons, fields, dropdowns, tabs, lists, and other building blocks from @openchamber/sdk/ui that make an extension look like the rest of OpenChamber.
 ---
 
 # UI kit
 
-Import `@openchamber/sdk/ui` when you want the panel to look like the host trackers. The kit paints DOM from host tokens. It does not talk to the provider. You still call `host.request` and `host.attach`.
+`@openchamber/sdk/ui` is a set of ready-made controls that use the app's colours, fonts, and spacing, so your extension looks like the rest of OpenChamber without copying its styles. Each control is a function: you give it an element you own and its settings, it draws itself there and returns `{ update, dispose }`. You put the controls together into a screen and keep the data. The kit never calls your provider or OpenChamber; you still call `host.request`, `host.attach`, and the rest yourself. You can also skip the kit and write your own HTML and CSS.
 
-You can skip the kit and draw your own DOM.
+## Call `applyHostReady` first
 
-Call `applyHostReady` before any mount.
+The controls read their colours from CSS variables that `applyHostReady` writes onto the page. Call it inside `host.onReady` before the first mount, and the colours follow the app's theme when the user switches it.
 
 ```ts
-import { applyHostReady, mountIssuePage } from "@openchamber/sdk/ui";
+import { applyHostReady } from "@openchamber/sdk/ui";
 
 host.onReady((ctx) => {
   applyHostReady(ctx, document.documentElement);
-  mountIssuePage(document.querySelector("#root")!, {
-    items: tasks,
-    filters,
-    onSelect: (item) => {
-      void host.attach({
-        providerId: "acme-hello",
-        id: item.id,
-        title: item.title,
-        url: item.url ?? "",
-      });
-    },
-  });
+  // mount things here
 });
 ```
 
-## What to mount
+## What you can mount
 
-| Call | Where it belongs |
+| Function | What it draws |
 | --- | --- |
-| `mountIssuePage` | rail list. Compact filters, search as an icon, identifier plus title rows. |
-| `mountIssueCard` | issue after a row click. Back, status, metadata, description, comments, footer button. |
-| `mountAttachIssues` | + menu picker. Search stays open. On select, call `host.attach` and `host.close`. |
-| `mountPullRequest` | pull or merge-request window. Tabs are Overview, Checks, and Comments. |
-| `mountButton` | shared connect button |
-| `mountTextField` | shared connect field |
-| `mountEmpty` | shared empty state |
+| `mountButton` | A button. `variant` is `default`, `secondary`, `outline`, `ghost`, or `destructive`; `size` is `default`, `sm`, or `xs`. `loading` shows a spinner and blocks clicks. |
+| `mountTextField` | A labelled input, or a textarea with `multiline`. Optional `helper` or `error` text, `password` masking, and `mono` for tokens and ids. |
+| `mountSearchField` | A search box with a magnifier and a clear button. Escape clears it. |
+| `mountSelect` | A dropdown. `searchable` adds a filter box at the top of the list. Arrow keys move, Enter picks, Escape closes. |
+| `mountCheckbox`, `mountSwitch` | A checkbox or a toggle with a label and an optional `description`. |
+| `mountTabs` | Pill tabs, each with an optional count. Left and right arrows move between them. |
+| `mountBadge` | A small pill. `tone` is `neutral`, `primary`, `success`, `warning`, `error`, or `info`. |
+| `mountList` | A keyboard-friendly list. Each row can have a leading key, a title, a subtitle, right-aligned meta text, and a badge. |
+| `mountEmpty` | A centred empty state with a title, a body line, and an optional button. |
+| `mountSpinner` | A loading ring with an optional label. |
+| `mountBanner` | A toned notice with a title, a body, and an optional action. |
+| `mountSeparator` | A thin line, optionally with a label in the middle. |
+| `mountProgress` | A progress bar from 0 to 100. |
+| `mountMenu` | A button that opens a list of actions. Items can be destructive, disabled, or a separator. |
+| `mountText` | Text from your provider. Markdown-style images and `http(s)` links become real images and links; everything else stays plain text, so untrusted content is safe to show. |
 
-Description and comments stay plain text. The kit lifts `![alt](https://…)` and `[label](https://…)` into media. Avatar URLs stay off the attach payload.
+Three plain helpers ship next to the controls. `filterSelectOptions(options, query)` is the match `mountSelect` uses. `splitTextMedia(text)` is what `mountText` does before drawing. `moveListSelection` is the keyboard step the list, select, and menu share, in case you build your own list.
 
-`mountPullRequest` takes `mode: "view"` with a record, checks, and comments, or `mode: "create"` with a submit handler. Footer callbacks are attach, new session, new worktree, ready, and merge. The kit paints. Git stays on the host.
+## A list with search
 
-## Filters and rows
+```ts
+import { applyHostReady, mountEmpty, mountList, mountSearchField } from "@openchamber/sdk/ui";
 
-`value` on a filter is the starting choice. After that the component keeps the user's picks when you `update` with a new `items` list. Pass `value` again only when you remount.
+host.onReady((ctx) => {
+  applyHostReady(ctx, document.documentElement);
+  const root = document.querySelector("#root")!;
+  const searchRoot = root.appendChild(document.createElement("div"));
+  const listRoot = root.appendChild(document.createElement("div"));
 
-`slot` places a filter. `start` grows on the left and keeps its label. `end` packs to the right and turns into an icon when the panel is under 520px. Skip `slot` and the first filter is `start`, the rest are `end`.
+  let query = "";
+  let empty: { dispose: () => void } | null = null;
 
-A row may carry `badge` and `subtitle`. Use those when the GitHub picker would show a repo or `head → base`.
+  const list = mountList(listRoot, {
+    items: [],
+    onSelect: (id) => {
+      const task = tasks.find((item) => item.id === id);
+      if (task) void host.attach({ providerId: "acme-hello", id, title: task.title, url: task.url });
+    },
+  });
 
-`hasMore` / `onMore` loads the next remote page. `toggle` is one checkbox. The guest puts the meaning in `attach.text`. `session` is a second checkbox, like Create in worktree. When it is checked, call `host.startSession({ worktree: true })` instead of `attach`. `action` is a page button.
+  const paint = () => {
+    const rows = tasks
+      .filter((task) => task.title.toLowerCase().includes(query.toLowerCase()))
+      .map((task) => ({ id: task.id, leading: task.key, title: task.title, meta: task.updated }));
+    list.update({ items: rows });
+    empty?.dispose();
+    empty = rows.length === 0
+      ? mountEmpty(listRoot, { title: "No tasks match", body: "Try a shorter search." })
+      : null;
+  };
 
-The host does not search and does not persist guest filters.
+  mountSearchField(searchRoot, {
+    value: query,
+    placeholder: "Search tasks",
+    onChange: (next) => {
+      query = next;
+      paint();
+    },
+  });
+  paint();
+});
+```
+
+`update` takes only the settings that changed. The list keeps its highlighted row across updates as long as that row is still there.
+
+## Links from provider text
+
+Your page runs in a sandbox and cannot open a new tab by itself. When you use `mountText`, pass `onOpenUrl` and hand the link to OpenChamber:
+
+```ts
+mountText(root, {
+  text: comment.body,
+  onOpenUrl: (url) => void host.openUrl(url),
+});
+```
 
 ## Related
 
-- [Build a guest panel](/sdk/) — folder, bundle, and manifest
-- [Host API](/sdk/host/) — `connectHost`, attach, and errors
+- [Build an extension](/sdk/) for the folder, manifest, and install
+- [Host API](/sdk/host/) for `connectHost`, attach, and error codes

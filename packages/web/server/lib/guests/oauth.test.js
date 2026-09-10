@@ -8,7 +8,10 @@ import {
   clearGuestPendingForTests,
   consumeGuestAuthorization,
   createPkcePair,
+  encodeBasicCredential,
+  guestAuthorizationHeader,
   guestRedirectUri,
+  saveGuestAccessToken,
   startGuestAuthorization,
   toPublicGuestAuth,
 } from './oauth.js';
@@ -138,7 +141,7 @@ describe('consumeGuestAuthorization', () => {
     }
   });
 
-  test('accepts a missing state when this guest has one pending exchange', async () => {
+  test('rejects a callback without state even when this guest has one pending exchange', async () => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'oc-guest-oauth-'));
     const persistPath = guestAuthPersistPath(dir);
     await patchGuestAuth('clickup', { clientId: 'app-id', clientSecret: 'app-secret' }, persistPath);
@@ -165,13 +168,12 @@ describe('consumeGuestAuthorization', () => {
       throw new Error(`unexpected fetch ${target}`);
     };
     try {
-      const result = await consumeGuestAuthorization({
+      await expect(consumeGuestAuthorization({
         guest: clickupGuest,
         persistPath,
         code: 'auth-code',
         state: '',
-      });
-      expect(result.connected).toBe(true);
+      })).rejects.toThrow();
     } finally {
       globalThis.fetch = originalFetch;
       await fs.rm(dir, { recursive: true, force: true });
@@ -252,5 +254,71 @@ describe('createPkcePair', () => {
     expect(pair.verifier.length).toBeGreaterThan(20);
     expect(pair.challenge.length).toBeGreaterThan(20);
     expect(pair.verifier).not.toBe(pair.challenge);
+  });
+});
+
+describe('saveGuestAccessToken with a basic scheme', () => {
+  const jiraGuest = {
+    id: 'jira',
+    integration: {
+      name: 'Jira',
+      description: 'Issues',
+      token: {
+        apiOrigin: 'https://acme.atlassian.net',
+        scheme: 'basic',
+        account: { path: '/rest/api/3/myself', name: 'displayName' },
+      },
+    },
+  };
+
+  test('encodes username:token, probes with a Basic header, and stores only the pair', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'oc-guest-basic-'));
+    const persistPath = guestAuthPersistPath(dir);
+    const originalFetch = globalThis.fetch;
+    let seenAuthorization = '';
+    globalThis.fetch = async (url, init) => {
+      expect(String(url)).toBe('https://acme.atlassian.net/rest/api/3/myself');
+      seenAuthorization = init.headers.Authorization;
+      return new Response(JSON.stringify({ displayName: 'Ada Lovelace' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    };
+    try {
+      const result = await saveGuestAccessToken({ guest: jiraGuest, persistPath, token: 'api-token', username: 'ada@acme.example' });
+      expect(result).toEqual({ connected: true, account: 'Ada Lovelace' });
+      const expected = encodeBasicCredential('ada@acme.example', 'api-token');
+      expect(seenAuthorization).toBe(`Basic ${expected}`);
+      const stored = await getGuestAuth('jira', persistPath);
+      expect(stored.accessToken).toBe(expected);
+      expect(stored.tokenType).toBe('basic');
+      expect(guestAuthorizationHeader(stored.accessToken, 'basic')).toBe(`Basic ${expected}`);
+    } finally {
+      globalThis.fetch = originalFetch;
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('refuses a basic integration without a username', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'oc-guest-basic-'));
+    const persistPath = guestAuthPersistPath(dir);
+    try {
+      await expect(saveGuestAccessToken({ guest: jiraGuest, persistPath, token: 'api-token' }))
+        .rejects.toMatchObject({ code: 'USERNAME_MISSING' });
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('uses the username as the account label when the manifest declares no account probe', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'oc-guest-basic-'));
+    const persistPath = guestAuthPersistPath(dir);
+    const guest = { ...jiraGuest, integration: { ...jiraGuest.integration, token: { apiOrigin: 'https://acme.atlassian.net', scheme: 'basic' } } };
+    try {
+      const result = await saveGuestAccessToken({ guest, persistPath, token: 'api-token', username: 'ada@acme.example' });
+      expect(result).toEqual({ connected: true, account: 'ada@acme.example' });
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true });
+    }
   });
 });

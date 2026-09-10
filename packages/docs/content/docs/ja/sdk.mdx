@@ -1,50 +1,54 @@
 ---
-title: ゲストパネルを作る
-description: OpenChamber のレールに載る HTML パネルを作り、connectHost でホストと話す。
+title: 拡張機能を作る
+description: "@openchamber/sdk で OpenChamber に自分のパネルを追加し、フォルダや git URL からインストールして、connectHost でアプリと話す。"
 ---
 
-# ゲストパネルを作る
+# 拡張機能を作る
 
-`@openchamber/sdk` は第三者のパネルを OpenChamber のレールに載せます。パネルは iframe 内の HTML です。OpenChamber とは `connectHost()` で話します。
+`@openchamber/sdk` を使うと、OpenChamber に自分のパネルを追加できます。拡張機能とは、OpenChamber が右側のレールに表示する小さなウェブページです。アプリとは `connectHost()` で話します。現在のプロジェクトとセッションを読む、トーストを出す、チャット欄にテキストを入れる、タスクをセッションに添付する、そしてユーザーの承認があればセッションを開始してプロンプトを送る、といったことができます。
 
-動くのはウェブとデスクトップです。VS Code とモバイルはカタログを unsupported にします。iframe は読み込みません。
+拡張機能は OpenChamber のウェブ版とデスクトップ版で動きます。VS Code とモバイルはまだ読み込みません。
 
-## 渡すもの
+## 拡張機能とは何か
 
-フォルダに次の 3 つです。
+3 つのファイルが入ったフォルダです。
 
-- `openchamber` ブロックのある `package.json`
-- `panel/index.html`
-- `panel/main.js`。古典的な IIFE。iframe は ESM を読めません。
+- `openchamber` ブロック(マニフェスト)を持つ `package.json`
+- `panel/index.html`、OpenChamber が表示するページ
+- `panel/main.js`、あなたのスクリプト。単一の classic ファイル(ES モジュールではなく IIFE)にビルドしたもの。ページはサンドボックス化された iframe で読み込まれるためです
 
-`oc-dev` は `panel/main.js` を出すとき、まだ `panel/main.ts` をコンパイルします。パッケージ済みの OpenChamber と `openchamber serve` はしません。IIFE を渡してください。
+OpenChamber はあなたのコードをコンパイルしません。ビルド済みの `.js` ファイルを同梱してください。SDK にはバンドラーコマンドが含まれています。IIFE を出力できるバンドラーなら何でも使えます。
 
 ```bash
-bun run --filter @openchamber/sdk bundle -- panel/main.ts panel/main.js
+npm install @openchamber/sdk
+bunx openchamber-guest-bundle panel/main.ts panel/main.js
 ```
 
-HTML はそのファイルを指します。
+このバンドラーコマンドは Bun で動きます。Bun がない場合は、esbuild など他のバンドラーを `--format=iife --platform=browser` で使ってください。
 
-## 作業中の入れ方
+3 つのファイルすべてを含む、動作する完全な拡張機能は [例](/sdk/example/) ページにあります。コピーして、API と一覧を差し替えてください。
 
-1. ウェブかデスクトップで OpenChamber を起動する。
-2. **Settings → Extensions** を開く。
-3. フォルダパス、ローカルの `.zip`、または https の git / zip URL を追加する。
+`index.html` からは通常の `<script src="main.js"></script>` で `main.js` を読み込みます。
 
-レールにアイコンが出ます。クリックすると HTML が載ります。同じ `id` をふたつのパネルで使えません。
+## 作業中にインストールする
 
+1. OpenChamber をウェブかデスクトップで起動します。
+2. 設定 → 拡張機能 を開きます。
+3. フォルダの絶対パスを貼り付けて、追加をクリックします。
 
-**フォルダ**インストールは `extensions.json` にパスを残します。Uninstall はカタログ行だけ外します。
+OpenChamber がマニフェストを読み、拡張機能が求めているものの一覧をダイアログで表示します([権限](#権限) を参照)。承認すると、レールにアイコンが現れます。クリックするとページが読み込まれます。
 
-**zip**（または https zip / git URL）は OpenChamber のデータ dir の `extensions/{id}` にコピーされます。ホストが展開し、マニフェストを確認してそのコピーから動かします。Uninstall はコピーを消します。zip には `package.json`、`panel/index.html`、`panel/main.js`、宣言した `icon.svg` / `agent/main.js` を入れてください。`node_modules` と TypeScript は入れないでください。
+ローカルの `.zip` や、git リポジトリまたは zip ファイルへの https リンクも追加できます。これらは OpenChamber のデータフォルダにコピーされ、そのコピーから実行されます。そのため `node_modules` や TypeScript のソースではなく、ビルド済みファイルを同梱してください。拡張機能を削除するとコピーも消えます。フォルダからのインストールはそのフォルダから直接動くので、編集、再ビルド、再読み込みができます。
 
 ## マニフェスト
 
 ```json
 {
-  "name": "@acme/hello-panel",
+  "name": "@acme/hello",
+  "version": "1.0.0",
   "openchamber": {
     "apiVersion": 1,
+    "engines": { "openchamber": ">=1.24.0" },
     "contributes": {
       "panel": {
         "id": "acme-hello",
@@ -53,13 +57,14 @@ HTML はそのファイルを指します。
         "entry": "panel/index.html"
       },
       "attach": "dialog",
+      "capabilities": ["prompt", "sessions"],
       "integration": {
         "name": "Acme",
         "description": "Tasks from Acme",
-        "oauth": {
-          "authorizeUrl": "https://acme.example/oauth/authorize",
-          "tokenUrl": "https://acme.example/oauth/token",
-          "apiOrigin": "https://api.acme.example"
+        "token": {
+          "apiOrigin": "https://api.acme.example",
+          "account": { "path": "/me", "name": "login" },
+          "scheme": "bearer"
         },
         "settings": [{ "id": "list-id", "label": "List ID" }]
       }
@@ -68,30 +73,61 @@ HTML はそのファイルを指します。
 }
 ```
 
-`apiVersion` は `1` です。それ以外は拒否です。
+`version` は必須で、semver でなければなりません。設定 → 拡張機能 のカードに表示されます。
 
-`engines.openchamber` は任意です。`1.22.0` または `>=1.22.0` を使います。この OpenChamber が古いとインストールは拒否されます。
+`apiVersion` は `1` です。OpenChamber は他の値を拒否します。
 
-`contributes.agent` は任意です。Docker ソケットなど向けにホストが起動するローカルプロセスを指定します。パネルは `agentRequest` を呼び、プロセスはホストが持ちます。パッケージの `GUEST_AGENTS.md` を参照。
+`engines.openchamber` は任意です。拡張機能が動作する最も古い OpenChamber のバージョンを、`1.24.0` または `>=1.24.0` の形で指定します。古いビルドは、後で失敗する代わりにインストール自体を拒否します。
 
-`id` は kebab-case です。`icon` はレールと同じ kebab-case の Remixicon 名です。`RiWindowLine` は `window` になります。または `icon.svg` のようなパッケージ内 SVG パスを置きます。URL と絶対パスは parse に落ちます。`entry` はパッケージ内に留めます。`../` と絶対パスは parse に落ちます。
+`contributes.panel` はレールの項目を記述します。`id` は kebab-case で、インストール済みの拡張機能の中で一意でなければなりません。`icon` は Remixicon の名前(`RiWindowLine` なら `window`)か、フォルダ内の SVG ファイル(`icon.svg` など)です。`entry` はフォルダ内の HTML ファイルです。
 
-`attach` は任意です。
+`contributes.attach` は任意です。チャット欄の横にある + メニューに拡張機能を追加し、ユーザーがタスクを選んでセッションに添付できるようにします。
 
-- `true` または `"panel"` は、レールを開く + メニュー行を足します
-- `"dialog"` は同じ iframe をホストの窓で開きます
-- 省略するか `false` にすると、それらのメニューには出ません
+- `"dialog"` はページをウィンドウで開く
+- `true` または `"panel"` は代わりにレールのパネルを開く
+- 省略すると拡張機能はそのメニューに出ない
 
-`ready.surface` は `panel` か `dialog` です。レールに一覧、窓にピッカーを描けます。
+ページは `ctx.surface`(`panel` または `dialog`)でどちらの場所にいるか判断できるので、レールには一覧を、ウィンドウには選択画面を表示する、といった作り方ができます。
 
-`integration` は任意です。ホストは **Settings → Integrations** にカードを描きます。OAuth ゲストはそこに client id を貼ります。トークンゲストは API トークンを貼ります。`host: { "provider": "linear" }` はファーストパーティの Linear 接続を使い、client id は聞きません。ゲストはトークンを見ません。
+`contributes.integration` は任意です。設定 → 連携 にカードを追加し、ユーザーがそこでアカウントを接続します。[アカウントとネットワーク](#アカウントとネットワーク) を参照してください。
 
-`request`、OAuth、attach、エラーは [ホスト API](/ja/sdk/host/) を見てください。
+`contributes.service` は任意です。Docker ソケットのようにウェブページからは届かないもののために、OpenChamber が拡張機能の隣で起動するローカルプロセスを宣言します。パッケージ内のファイル `GUEST_SERVICES.md` を参照してください。
 
-## パネルの最初の行
+## 権限
+
+パネルを描くことと現在のセッションを読むことに権限は要りません。ユーザーの代わりに何かを行うものには要ります。それらを `contributes.capabilities` に列挙します。
+
+| 権限 | 許可されること |
+| --- | --- |
+| `prompt` | ユーザーのセッションにメッセージを送る(`prompt({ send: true })`、`text` 付きの `startSession`) |
+| `sessions` | セッションと worktree を作る(`startSession`) |
+
+さらに 2 つが自動で追加されます。`integration` を宣言すると `network`、`service` を宣言すると `service` です。
+
+ユーザーは拡張機能をインストールするときに一覧を一度だけ見て、承認するか拡張機能を削除するかを選びます。新しいバージョンがより多くを求める場合、ダイアログが再び表示されます。ユーザーが承認していない権限を必要とする呼び出しは `NOT_GRANTED` で失敗します。
+
+## アカウントとネットワーク
+
+ページはサンドボックスで動き、インターネットを直接呼べません。`integration` を宣言すると、OpenChamber が `host.request` を通じて、ユーザーのトークンを付けて代わりに呼び出します。トークンがページに届くことはありません。
+
+- `token`: ユーザーが 設定 → 連携 のカードに API トークンを貼り付けます。`apiOrigin` は `request` が呼べる唯一のオリジンです。`account` は任意で、GET のパスとフィールド名を指定すると、カードに誰が接続しているかを表示できます。`scheme` はトークンの送り方を指定します。下の表を参照してください。どのヘッダーを期待するかはプロバイダーの API ドキュメントで確認してください。
+- `oauth`: ユーザーがクライアント ID を貼り付け、OpenChamber が認可フローを実行します。`authorizeUrl`、`tokenUrl`、`apiOrigin` が必要です。
+- `host: { "provider": "linear" }`: OpenChamber にすでに接続済みの Linear アカウントを再利用します。クライアント ID は不要です。
+
+各 `scheme` が送るもの:
+
+| `scheme` | OpenChamber が送るヘッダー | 使いどころ |
+| --- | --- | --- |
+| 省略 | `Authorization: <token>` | API がヘッダーにプレフィックスなしのトークンを記載している |
+| `"bearer"` | `Authorization: Bearer <token>` | API が bearer トークンまたは personal access token を記載している |
+| `"basic"` | `Authorization: Basic base64(username:token)` | API がユーザー名 (多くはメール) と API トークンによる HTTP Basic 認証を記載している。カードは両方を尋ね、`usernameLabel` が最初の欄のラベルになる |
+
+`settings` はカードにプレーンテキストの入力欄を追加します。その値は `ctx.settings` に届きます。
+
+## パネルの最初の数行
 
 ```ts
-import { connectHost, HostRequestError } from "@openchamber/sdk";
+import { connectHost } from "@openchamber/sdk";
 
 const host = connectHost();
 
@@ -101,11 +137,12 @@ host.onReady((ctx) => {
 });
 ```
 
-iframe の外では `connectHost` は拒否します。
+`connectHost` は OpenChamber の中でのみ動きます。ただのファイルとして開くと、すべての呼び出しが `HOST_UNAVAILABLE` で reject されます。
 
-一覧、カード、attach ピッカーが要るなら `@openchamber/sdk/ui` を入れてください。キットは使わなくてもよく、自分の DOM を描いて構いません。[UI キット](/ja/sdk/ui/) を見てください。
+パネルをアプリの他の部分と同じ見た目にするには、`@openchamber/sdk/ui` の部品を使ってください。ボタン、入力欄、ドロップダウン、タブ、リストなどが、アプリの色とフォントでスタイルされています。[UI キット](/sdk/ui/) を参照してください。自分で HTML と CSS を書くこともできます。
 
 ## 関連
 
-- [ホスト API](/ja/sdk/host/) — `connectHost` のメソッド、上限、エラーコード
-- [UI キット](/ja/sdk/ui/) — 一覧、カード、attach ピッカー、pull 窓
+- [Host API](/sdk/host/): `connectHost` の全メソッド、上限、エラーコード
+- [UI キット](/sdk/ui/): 部品
+- [例](/sdk/example/): コピーして使える 3 ファイルの完全な拡張機能

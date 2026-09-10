@@ -5,6 +5,7 @@ import path from 'node:path';
 
 import {
   dropGuestTokens,
+  forgetGuestAuth,
   getGuestAuth,
   guestAuthPersistPath,
   patchGuestAuth,
@@ -44,6 +45,20 @@ describe('guest auth store', () => {
     expect(after?.clientId).toBe('id');
     expect(after?.settings).toEqual({ 'list-id': '123' });
     await fs.promises.rm(dir, { recursive: true, force: true });
+  });
+
+  test('forgets a guest entirely when its package is removed', async () => {
+    const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'oc-guest-auth-'));
+    const file = guestAuthPersistPath(dir);
+    try {
+      await patchGuestAuth('clickup', { clientId: 'app', clientSecret: 'secret', accessToken: 'token' }, file);
+      await patchGuestAuth('other', { accessToken: 'keep' }, file);
+      await forgetGuestAuth('clickup', file);
+      expect(await getGuestAuth('clickup', file)).toBeNull();
+      expect((await getGuestAuth('other', file))?.accessToken).toBe('keep');
+    } finally {
+      await fs.promises.rm(dir, { recursive: true, force: true });
+    }
   });
 
   test('treats a blank file as an empty store', async () => {

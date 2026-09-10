@@ -697,19 +697,19 @@
       },
       "items": [
         {
-          "label": "Build a panel",
+          "label": "Build an extension",
           "link": "/sdk/",
           "translations": {
-            "uk": "Зібрати панель",
-            "zh-CN": "构建面板",
-            "es": "Crear un panel",
-            "pt-BR": "Criar um painel",
-            "ko": "패널 만들기",
-            "pl": "Zbuduj panel",
-            "fr": "Créer un panneau",
-            "ja": "パネルを作る",
-            "de": "Ein Panel bauen",
-            "tr": "Panel oluştur"
+            "uk": "Зробити розширення",
+            "zh-CN": "构建扩展",
+            "es": "Crear una extensión",
+            "pt-BR": "Criar uma extensão",
+            "ko": "확장 만들기",
+            "pl": "Zbuduj rozszerzenie",
+            "fr": "Créer une extension",
+            "ja": "拡張機能を作る",
+            "de": "Eine Erweiterung bauen",
+            "tr": "Eklenti oluştur"
           }
         },
         {
@@ -742,6 +742,22 @@
             "ja": "UI キット",
             "de": "UI-Kit",
             "tr": "UI kiti"
+          }
+        },
+        {
+          "label": "Example",
+          "link": "/sdk/example/",
+          "translations": {
+            "uk": "Приклад",
+            "zh-CN": "示例",
+            "es": "Ejemplo",
+            "pt-BR": "Exemplo",
+            "ko": "예제",
+            "pl": "Przykład",
+            "fr": "Exemple",
+            "ja": "サンプル",
+            "de": "Beispiel",
+            "tr": "Örnek"
           }
         }
       ]

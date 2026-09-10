@@ -29,4 +29,22 @@ describe('bundle-guest', () => {
       await rm(dir, { recursive: true, force: true });
     }
   });
+
+  test('--node keeps ESM for a local service entry', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'oc-guest-bundle-'));
+    const outfile = path.join(dir, 'service.js');
+    try {
+      const proc = Bun.spawn(['bun', script, '--node', guestEntry, outfile], {
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+      const exit = await proc.exited;
+      expect(exit).toBe(0);
+      const text = await readFile(outfile, 'utf8');
+      expect(text).toContain('openchamber.sdk');
+      expect(text).not.toMatch(/^\(\(\) => \{/);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
 });

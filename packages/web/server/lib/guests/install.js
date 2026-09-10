@@ -8,7 +8,7 @@ import {
   resolveGuestPackageRoot,
   toPublicGuest,
 } from './catalog.js';
-import { stopGuestAgent } from './agent.js';
+import { stopGuestService } from './service.js';
 import { cloneGitRepository, isHttpsGitUrl, isHttpsZipUrl } from './clone.js';
 import { extractZipBuffer, unwrapGuestRoot } from './extract-zip.js';
 import {
@@ -45,7 +45,7 @@ const persistGuest = async (guest, root, source, persistPath, { replace = false 
         ...guest,
         source,
         path: root,
-        agentGranted: Boolean(stored.agentGrants?.[guest.id]),
+        capabilityGrants: stored.capabilityGrants?.[guest.id] ?? [],
         enabled: !stored.disabledGuests?.[guest.id],
       }),
     };
@@ -65,14 +65,14 @@ const persistGuest = async (guest, root, source, persistPath, { replace = false 
   await writeExtensionStore(persistPath, {
     paths: [...after.paths, root],
     sources: { ...after.sources, [root]: source },
-    agentGrants: after.agentGrants,
+    capabilityGrants: after.capabilityGrants,
     disabledGuests: after.disabledGuests,
-    agentSocketOverrides: after.agentSocketOverrides,
+    serviceSocketOverrides: after.serviceSocketOverrides,
   });
   return {
     ok: true,
     replaced: Boolean(clash),
-    guest: toPublicGuest({ ...guest, source, path: root, agentGranted: false, enabled: true }),
+    guest: toPublicGuest({ ...guest, source, path: root, capabilityGrants: [], enabled: true }),
   };
 };
 
@@ -97,7 +97,9 @@ const installCopiedGuest = async ({ source, prepare, persistPath, openchamberVer
       return inspected;
     }
     const dest = path.join(copies, inspected.guest.id);
-    if (await resolveGuestPackageRoot(dest)) {
+    const store = await readExtensionStore(persistPath);
+    const registered = store.paths.some((entry) => path.resolve(entry) === dest);
+    if (registered) {
       if (!replace) {
         await removeDir(staging);
         return { ok: false, code: 'id-taken', id: inspected.guest.id };
@@ -108,6 +110,10 @@ const installCopiedGuest = async ({ source, prepare, persistPath, openchamberVer
         return removed;
       }
     }
+    // A copy on disk that the store does not know about is a leftover from an
+    // install that died between the move and the persist. It would otherwise
+    // block this id forever, so it is replaced rather than reported.
+    await removeDir(dest);
     await fs.rename(packageRoot, dest);
     if (packageRoot !== staging) {
       await removeDir(staging);
@@ -139,6 +145,10 @@ const readLocalZip = async (filePath) => {
 const downloadZip = async (url) => {
   const response = await fetch(url, { redirect: 'follow' });
   if (!response.ok) {
+    return null;
+  }
+  // A public URL can redirect to a private one; the final hop is checked too.
+  if (response.url && !isHttpsZipUrl(response.url) && !isHttpsGitUrl(response.url)) {
     return null;
   }
   const length = Number(response.headers.get('content-length'));
@@ -193,7 +203,7 @@ export const installGuestFromPath = async (rawPath, persistPath, { openchamberVe
   return persistGuest(inspected.guest, root, 'path', persistPath, { replace });
 };
 
-export const installGuestFromUrl = async (rawUrl, persistPath, { openchamberVersion, replace = false } = {}) => {
+export const installGuestFromUrl = async (rawUrl, persistPath, { openchamberVersion, replace = false, gitBinary } = {}) => {
   if (isHttpsZipUrl(rawUrl)) {
     try {
       const buffer = await downloadZip(rawUrl);
@@ -208,26 +218,26 @@ export const installGuestFromUrl = async (rawUrl, persistPath, { openchamberVers
   if (!isHttpsGitUrl(rawUrl)) {
     return { ok: false, code: 'invalid-url' };
   }
-  return installGuestFromGitSource(rawUrl, persistPath, { openchamberVersion, replace });
+  return installGuestFromGitSource(rawUrl, persistPath, { openchamberVersion, replace, gitBinary });
 };
 
-export const installGuestFromGitSource = async (source, persistPath, { openchamberVersion, replace = false } = {}) => (
+export const installGuestFromGitSource = async (source, persistPath, { openchamberVersion, replace = false, gitBinary } = {}) => (
   installCopiedGuest({
     source: 'git',
     persistPath,
     openchamberVersion,
     replace,
     prepare: async (staging) => {
-      const cloned = await cloneGitRepository(source, staging);
+      const cloned = await cloneGitRepository(source, staging, { gitBinary });
       return cloned.ok ? { ok: true, root: staging } : cloned;
     },
   })
 );
 
-export const installGuest = async (request, persistPath, { openchamberVersion } = {}) => {
+export const installGuest = async (request, persistPath, { openchamberVersion, gitBinary } = {}) => {
   const replace = Boolean(request.replace);
   if (request.url) {
-    return installGuestFromUrl(request.url, persistPath, { openchamberVersion, replace });
+    return installGuestFromUrl(request.url, persistPath, { openchamberVersion, replace, gitBinary });
   }
   return installGuestFromPath(request.path, persistPath, { openchamberVersion, replace });
 };
@@ -257,20 +267,20 @@ export const uninstallGuest = async (id, persistPath) => {
       sources[entry] = stored.sources[entry];
     }
   }
-  const agentGrants = { ...(stored.agentGrants ?? {}) };
-  delete agentGrants[id];
+  const capabilityGrants = { ...(stored.capabilityGrants ?? {}) };
+  delete capabilityGrants[id];
   const disabledGuests = { ...(stored.disabledGuests ?? {}) };
   delete disabledGuests[id];
-  const agentSocketOverrides = { ...(stored.agentSocketOverrides ?? {}) };
-  delete agentSocketOverrides[id];
+  const serviceSocketOverrides = { ...(stored.serviceSocketOverrides ?? {}) };
+  delete serviceSocketOverrides[id];
   await writeExtensionStore(persistPath, {
     paths: kept,
     sources,
-    agentGrants,
+    capabilityGrants,
     disabledGuests,
-    agentSocketOverrides,
+    serviceSocketOverrides,
   });
-  await stopGuestAgent(id);
+  await stopGuestService(id);
   if (removedRoot && isCopiedGuestRoot(removedRoot, persistPath)) {
     await fs.rm(removedRoot, { recursive: true, force: true });
   }

@@ -1,10 +1,11 @@
 import { OPENCHAMBER_SDK_API_VERSION, OPENCHAMBER_SDK_CHANNEL } from './api-version.ts';
 import {
   GUEST_REQUEST_TIMEOUT_MS,
+  isGuestRequestPath,
   clampAttachRequest,
   clampPromptRequest,
   clampStartSessionRequest,
-  hostMessageSchema,
+  readHostMessage,
   type AttachIssueRequest,
   type ComposeRequest,
   type PromptRequest,
@@ -22,12 +23,12 @@ import {
   type SessionSnapshot,
   type StartSessionResult,
   type ToastRequest,
-  type AgentStatusResult,
-  isAgentStatusResult,
+  type ServiceStatusResult,
+  isServiceStatusResult,
   isGuestRequestResult,
   isPromptResult,
   isStartSessionResult,
-} from './protocol.ts';
+} from './contract.ts';
 
 export type HostFrame = {
   addEventListener: Window['addEventListener'];
@@ -66,8 +67,8 @@ export type HostClient = {
   oauthStart: () => Promise<void>;
   oauthDisconnect: () => Promise<void>;
   request: (request: GuestRequest) => Promise<GuestRequestResult>;
-  agentRequest: (request: GuestRequest) => Promise<GuestRequestResult>;
-  agentStatus: () => Promise<AgentStatusResult>;
+  serviceRequest: (request: GuestRequest) => Promise<GuestRequestResult>;
+  serviceStatus: () => Promise<ServiceStatusResult>;
   dispose: () => void;
 };
 
@@ -86,6 +87,12 @@ type Pending = {
   reject: (error: HostRequestError) => void;
   timer: ReturnType<typeof setTimeout>;
 };
+
+// The host drops a message its schema rejects without answering, so a bad
+// path would otherwise surface only as HOST_TIMEOUT twenty seconds later.
+const rejectBadPath = (): Promise<never> => Promise.reject(
+  new HostRequestError('BAD_PATH', 'Request path must start with "/" and stay on the declared origin.'),
+);
 
 const nextId = (n: { value: number }): string => {
   n.value += 1;
@@ -123,24 +130,35 @@ export const connectHost = (options: HostClientOptions = {}): HostClient => {
     target.parent.postMessage(message, '*');
   };
 
+  // One listener that throws must not starve the ones after it; the error
+  // surfaces on the console the way an event handler's would.
+  const emit = <T,>(listeners: Iterable<(value: T) => void>, value: T): void => {
+    for (const listener of listeners) {
+      try {
+        listener(value);
+      } catch (error) {
+        console.error(error);
+      }
+    }
+  };
+
   const onMessage = (event: Event): void => {
     if (!(event instanceof MessageEvent)) return;
     if (!acceptSource(event.source)) return;
-    const parsed = hostMessageSchema.safeParse(event.data);
-    if (!parsed.success) return;
-    const message = parsed.data;
+    const message = readHostMessage(event.data);
+    if (!message) return;
 
     if (message.type === 'ready') {
       lastReady = message.payload;
       lastLifecycle = lifecycleFromSession(message.payload.session);
-      for (const listener of readyListeners) listener(message.payload);
-      for (const listener of directoryListeners) listener(message.payload.directory);
-      for (const listener of sessionListeners) listener(message.payload.session);
+      emit(readyListeners, message.payload);
+      emit(directoryListeners, message.payload.directory);
+      emit(sessionListeners, message.payload.session);
       if (lastLifecycle) {
-        for (const listener of lifecycleListeners) listener(lastLifecycle);
+        emit(lifecycleListeners, lastLifecycle);
       }
-      for (const listener of connectionListeners) listener(message.payload.connection);
-      for (const listener of settingsListeners) listener(message.payload.settings);
+      emit(connectionListeners, message.payload.connection);
+      emit(settingsListeners, message.payload.settings);
       return;
     }
 
@@ -148,7 +166,7 @@ export const connectHost = (options: HostClientOptions = {}): HostClient => {
       if (lastReady) {
         lastReady = { ...lastReady, directory: message.payload.directory };
       }
-      for (const listener of directoryListeners) listener(message.payload.directory);
+      emit(directoryListeners, message.payload.directory);
       return;
     }
 
@@ -161,13 +179,13 @@ export const connectHost = (options: HostClientOptions = {}): HostClient => {
       } else if (lastLifecycle?.sessionId !== message.payload.session.id) {
         lastLifecycle = lifecycleFromSession(message.payload.session);
       }
-      for (const listener of sessionListeners) listener(message.payload.session);
+      emit(sessionListeners, message.payload.session);
       return;
     }
 
     if (message.type === 'session-lifecycle') {
       lastLifecycle = message.payload;
-      for (const listener of lifecycleListeners) listener(message.payload);
+      emit(lifecycleListeners, message.payload);
       return;
     }
 
@@ -175,7 +193,7 @@ export const connectHost = (options: HostClientOptions = {}): HostClient => {
       if (lastReady) {
         lastReady = { ...lastReady, connection: message.payload.connection };
       }
-      for (const listener of connectionListeners) listener(message.payload.connection);
+      emit(connectionListeners, message.payload.connection);
       return;
     }
 
@@ -183,7 +201,7 @@ export const connectHost = (options: HostClientOptions = {}): HostClient => {
       if (lastReady) {
         lastReady = { ...lastReady, settings: message.payload.settings };
       }
-      for (const listener of settingsListeners) listener(message.payload.settings);
+      emit(settingsListeners, message.payload.settings);
       return;
     }
 
@@ -359,38 +377,38 @@ export const connectHost = (options: HostClientOptions = {}): HostClient => {
       type: 'oauth-disconnect',
       id: nextId(ids),
     }),
-    request: (payload) => send({
+    request: (payload) => (isGuestRequestPath(payload.path) ? send({
       channel: OPENCHAMBER_SDK_CHANNEL,
       v: OPENCHAMBER_SDK_API_VERSION,
       type: 'request',
       id: nextId(ids),
       payload,
-    }).then((result) => {
+    }) : rejectBadPath()).then((result) => {
       if (!isGuestRequestResult(result)) {
         throw new HostRequestError('HOST_REJECTED', 'Host request result was empty.');
       }
       return result;
     }),
-    agentRequest: (payload) => send({
+    serviceRequest: (payload) => (isGuestRequestPath(payload.path) ? send({
       channel: OPENCHAMBER_SDK_CHANNEL,
       v: OPENCHAMBER_SDK_API_VERSION,
-      type: 'agent-request',
+      type: 'service-request',
       id: nextId(ids),
       payload,
-    }).then((result) => {
+    }) : rejectBadPath()).then((result) => {
       if (!isGuestRequestResult(result)) {
-        throw new HostRequestError('HOST_REJECTED', 'Host agent request result was empty.');
+        throw new HostRequestError('HOST_REJECTED', 'Host service request result was empty.');
       }
       return result;
     }),
-    agentStatus: () => send({
+    serviceStatus: () => send({
       channel: OPENCHAMBER_SDK_CHANNEL,
       v: OPENCHAMBER_SDK_API_VERSION,
-      type: 'agent-status',
+      type: 'service-status',
       id: nextId(ids),
     }).then((result) => {
-      if (!isAgentStatusResult(result)) {
-        throw new HostRequestError('HOST_REJECTED', 'Host did not return agent status.');
+      if (!isServiceStatusResult(result)) {
+        throw new HostRequestError('HOST_REJECTED', 'Host did not return service status.');
       }
       return result;
     }),

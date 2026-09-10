@@ -211,6 +211,16 @@ describe('installGuestFromUrl', () => {
       ok: false,
       code: 'invalid-url',
     });
+    for (const privateUrl of [
+      'https://127.0.0.1/panel.git',
+      'https://localhost/panel.zip',
+      'https://10.0.0.5/panel.git',
+      'https://192.168.1.2/panel.zip',
+      'https://[::1]/panel.git',
+      'https://user:pass@example.com/panel.git',
+    ]) {
+      expect(await installGuestFromUrl(privateUrl, persistPath)).toEqual({ ok: false, code: 'invalid-url' });
+    }
     expect(await installGuestFromUrl('ftp://example.com/panel.git', persistPath)).toEqual({
       ok: false,
       code: 'invalid-url',

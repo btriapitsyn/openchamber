@@ -115,7 +115,7 @@ export const buildPublicSocketBindings = async (bindings, overrides = {}, option
  * }} [options]
  * @returns {Promise<Record<string, string>>}
  */
-export const resolveAgentSocketEnv = async (bindings, overrides = {}, options = {}) => {
+export const resolveServiceSocketEnv = async (bindings, overrides = {}, options = {}) => {
   const publicBindings = await buildPublicSocketBindings(bindings, overrides, options);
   /** @type {Record<string, string>} */
   const sockets = {};

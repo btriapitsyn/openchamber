@@ -2,7 +2,7 @@ import express from 'express';
 import fs from 'node:fs/promises';
 import { z } from 'zod';
 
-import { isGuestRequestPath, resolveIntegrationAuth } from '@openchamber/sdk';
+import { GUEST_CAPABILITIES, isGuestRequestPath, requestedGuestCapabilities, resolveIntegrationAuth } from '@openchamber/sdk';
 
 import {
   findInstalledGuest,
@@ -11,11 +11,10 @@ import {
   resolveGuestServedFile,
   toPublicGuest,
 } from './catalog.js';
-import { compileGuestScript } from './compile-script.js';
 import { injectGuestAssetTokens, parseGuestUrlToken } from './html-tokens.js';
 import { installGuest, parseInstallRequest, uninstallGuest } from './install.js';
-import { extensionsPersistPath, readExtensionStore } from './persist.js';
-import { getGuestAuth, guestAuthPersistPath, patchGuestAuth } from './auth-store.js';
+import { extensionsPersistPath, readExtensionStore, setCapabilityGrants } from './persist.js';
+import { forgetGuestAuth, getGuestAuth, guestAuthPersistPath, patchGuestAuth } from './auth-store.js';
 import {
   disconnectHostGuest,
   startHostGuestAuthorization,
@@ -32,13 +31,13 @@ import {
 } from './oauth.js';
 import { proxyGuestRequest } from './request.js';
 import {
-  GuestAgentError,
-  getAgentStatus,
-  proxyGuestAgentRequest,
-  setAgentGranted,
-  setAgentSocketOverride,
+  GuestServiceError,
+  getServiceStatus,
+  proxyGuestServiceRequest,
+  setServiceSocketOverride,
   setGuestEnabled,
-} from './agent.js';
+  stopGuestService,
+} from './service.js';
 
 const json16 = express.json({ limit: '16kb' });
 const json80 = express.json({ limit: '80kb' });
@@ -50,6 +49,11 @@ const clientBodySchema = z.object({
 
 const tokenBodySchema = z.object({
   token: z.string().trim().min(1).max(800),
+  username: z.string().trim().max(200).optional(),
+});
+
+const capabilityGrantSchema = z.object({
+  granted: z.array(z.enum(GUEST_CAPABILITIES)).max(GUEST_CAPABILITIES.length),
 });
 
 const requestBodySchema = z.object({
@@ -129,10 +133,11 @@ const declaredSettings = (guest) => {
   return new Map(fields.map((field) => [field.id, field]));
 };
 
-export const registerGuestRoutes = (app, { openchamberDataDir, openchamberVersion }) => {
+export const registerGuestRoutes = (app, { openchamberDataDir, openchamberVersion, resolveGitBinaryForSpawn }) => {
   const persistPath = extensionsPersistPath(openchamberDataDir);
   const authPath = guestAuthPersistPath(openchamberDataDir);
   const versionOptions = { openchamberVersion };
+  const installOptions = () => ({ openchamberVersion, gitBinary: resolveGitBinaryForSpawn() });
 
   const loadGuest = async (id) => {
     if (!isGuestPanelId(id)) {
@@ -160,7 +165,7 @@ export const registerGuestRoutes = (app, { openchamberDataDir, openchamberVersio
         const hasUrl = typeof req.body?.url === 'string';
         return res.status(400).json({ error: hasUrl ? 'invalid-url' : 'invalid-path' });
       }
-      const result = await installGuest(request, persistPath, versionOptions);
+      const result = await installGuest(request, persistPath, installOptions());
       if (!result.ok) {
         const status = result.code === 'id-taken' || result.code === 'already-installed' ? 409 : 400;
         const body = { error: result.code };
@@ -190,6 +195,8 @@ export const registerGuestRoutes = (app, { openchamberDataDir, openchamberVersio
         const status = result.code === 'bundled' ? 400 : 404;
         return res.status(status).json({ error: result.code });
       }
+      // Remove means forget: tokens, client secret, and settings go with the package.
+      await forgetGuestAuth(id, authPath);
       res.status(204).end();
     } catch (error) {
       console.error('Failed to uninstall guest:', error);
@@ -254,12 +261,12 @@ export const registerGuestRoutes = (app, { openchamberDataDir, openchamberVersio
       if (!parsed.success) {
         return res.status(400).json({ error: 'invalid-token' });
       }
-      await saveGuestAccessToken({ guest, persistPath: authPath, token: parsed.data.token });
+      await saveGuestAccessToken({ guest, persistPath: authPath, token: parsed.data.token, username: parsed.data.username });
       const stored = await getGuestAuth(guest.id, authPath);
       res.json(await toGuestAuthResponse(guest.integration, stored));
     } catch (error) {
       if (error instanceof GuestOAuthError) {
-        const status = error.code === 'TOKEN_INVALID' ? 400 : 400;
+        const status = 400;
         return res.status(status).json({ error: error.code, message: error.message });
       }
       console.error('Failed to save guest token:', error);
@@ -314,7 +321,7 @@ export const registerGuestRoutes = (app, { openchamberDataDir, openchamberVersio
       res.json(started);
     } catch (error) {
       if (error instanceof GuestOAuthError) {
-        const status = error.code === 'CLIENT_MISSING' ? 400 : 400;
+        const status = 400;
         return res.status(status).json({ error: error.code, message: error.message });
       }
       console.error('Failed to start guest oauth:', error);
@@ -378,6 +385,12 @@ export const registerGuestRoutes = (app, { openchamberDataDir, openchamberVersio
           'DISABLED',
         );
       }
+      if (!(store.capabilityGrants?.[guest.id] ?? []).includes('network')) {
+        throw new GuestOAuthError(
+          `${guest.name} has not been allowed to use external services. Review it in Settings → Extensions.`,
+          'NOT_GRANTED',
+        );
+      }
       const parsed = requestBodySchema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ error: 'invalid-request' });
@@ -401,21 +414,21 @@ export const registerGuestRoutes = (app, { openchamberDataDir, openchamberVersio
     }
   });
 
-  app.post('/api/guests/:id/agent/request', json80, async (req, res) => {
+  app.post('/api/guests/:id/service/request', json80, async (req, res) => {
     try {
       const guest = await loadGuest(req.params.id);
-      if (!guest?.agent) {
+      if (!guest?.service) {
         return res.status(404).json({ error: 'not-found' });
       }
       const parsed = requestBodySchema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ error: 'invalid-request' });
       }
-      const result = await proxyGuestAgentRequest({
+      const result = await proxyGuestServiceRequest({
         guestId: guest.id,
         guestName: guest.name,
         packageRoot: guest.packageRoot,
-        agent: guest.agent,
+        service: guest.service,
         persistPath,
         method: parsed.data.method,
         path: parsed.data.path,
@@ -424,43 +437,59 @@ export const registerGuestRoutes = (app, { openchamberDataDir, openchamberVersio
       });
       res.json(result);
     } catch (error) {
-      if (error instanceof GuestAgentError) {
-        const status = error.code === 'AGENT_FAILED' ? 502 : 400;
+      if (error instanceof GuestServiceError) {
+        const status = error.code === 'SERVICE_FAILED' ? 502 : 400;
         return res.status(status).json({ error: error.code, message: error.message });
       }
-      console.error('Failed to proxy guest agent request:', error);
-      res.status(500).json({ error: 'Failed to proxy guest agent request' });
+      console.error('Failed to proxy guest service request:', error);
+      res.status(500).json({ error: 'Failed to proxy guest service request' });
     }
   });
 
-  app.get('/api/guests/:id/agent/status', async (req, res) => {
+  app.get('/api/guests/:id/service/status', async (req, res) => {
     try {
       const guest = await loadGuest(req.params.id);
-      if (!guest?.agent) {
+      if (!guest?.service) {
         return res.status(404).json({ error: 'not-found' });
       }
-      res.json({ status: getAgentStatus(guest.id) });
+      res.json({ status: getServiceStatus(guest.id) });
     } catch (error) {
-      console.error('Failed to read guest agent status:', error);
-      res.status(500).json({ error: 'Failed to read guest agent status' });
+      console.error('Failed to read guest service status:', error);
+      res.status(500).json({ error: 'Failed to read guest service status' });
     }
   });
 
-  app.put('/api/guests/:id/agent/grant', json16, async (req, res) => {
+  app.put('/api/guests/:id/capabilities', json16, async (req, res) => {
     try {
       const guest = await loadGuest(req.params.id);
-      if (!guest?.agent) {
+      if (!guest) {
         return res.status(404).json({ error: 'not-found' });
       }
-      await setAgentGranted(guest.id, persistPath, true);
+      const parsed = capabilityGrantSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: 'invalid-request' });
+      }
+      // Approval covers exactly what the installed package asks for. A grant
+      // for something the manifest does not request is meaningless and a
+      // partial grant would leave the guest half-working, so both are refused.
+      const requested = requestedGuestCapabilities(guest);
+      const granted = parsed.data.granted;
+      const matchesRequest = granted.length === requested.length && requested.every((capability) => granted.includes(capability));
+      if (granted.length > 0 && !matchesRequest) {
+        return res.status(400).json({ error: 'invalid-request' });
+      }
+      await setCapabilityGrants(guest.id, persistPath, granted);
+      if (granted.length === 0) {
+        await stopGuestService(guest.id);
+      }
       const next = await loadGuest(guest.id);
       if (!next) {
         return res.status(404).json({ error: 'not-found' });
       }
       res.json({ guest: toPublicGuest(next) });
     } catch (error) {
-      console.error('Failed to grant guest agent:', error);
-      res.status(500).json({ error: 'Failed to grant guest agent' });
+      console.error('Failed to record guest capabilities:', error);
+      res.status(500).json({ error: 'Failed to record guest capabilities' });
     }
   });
 
@@ -486,21 +515,21 @@ export const registerGuestRoutes = (app, { openchamberDataDir, openchamberVersio
     }
   });
 
-  app.put('/api/guests/:id/agent/sockets', json16, async (req, res) => {
+  app.put('/api/guests/:id/service/sockets', json16, async (req, res) => {
     try {
       const guest = await loadGuest(req.params.id);
-      if (!guest?.agent) {
+      if (!guest?.service) {
         return res.status(404).json({ error: 'not-found' });
       }
       const parsed = socketOverrideBodySchema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ error: 'invalid-request' });
       }
-      const declared = guest.agent.permissions?.sockets ?? [];
+      const declared = guest.service.permissions?.sockets ?? [];
       if (!declared.some((binding) => binding.id === parsed.data.id)) {
-        return res.status(400).json({ error: 'unknown-socket', message: 'Socket id is not declared by this agent.' });
+        return res.status(400).json({ error: 'unknown-socket', message: 'Socket id is not declared by this service.' });
       }
-      await setAgentSocketOverride(
+      await setServiceSocketOverride(
         guest.id,
         parsed.data.id,
         persistPath,
@@ -512,8 +541,8 @@ export const registerGuestRoutes = (app, { openchamberDataDir, openchamberVersio
       }
       res.json({ guest: toPublicGuest(next) });
     } catch (error) {
-      console.error('Failed to update guest agent socket path:', error);
-      res.status(500).json({ error: 'Failed to update guest agent socket path' });
+      console.error('Failed to update guest service socket path:', error);
+      res.status(500).json({ error: 'Failed to update guest service socket path' });
     }
   });
 
@@ -528,22 +557,22 @@ export const registerGuestRoutes = (app, { openchamberDataDir, openchamberVersio
         return res.status(404).end();
       }
       const rawPath = req.params.filePath;
-      const relativePath = decodeURIComponent(Array.isArray(rawPath) ? rawPath.join('/') : (rawPath || ''));
+      let relativePath;
+      try {
+        relativePath = decodeURIComponent(Array.isArray(rawPath) ? rawPath.join('/') : (rawPath || ''));
+      } catch {
+        return res.status(404).end();
+      }
       const served = await resolveGuestServedFile(guest.packageRoot, relativePath);
       if (!served) {
         return res.status(404).end();
       }
       const { filePath, contentType } = served;
-      const compiled = contentType.includes('javascript')
-        ? await compileGuestScript(filePath)
-        : null;
-      let raw = compiled;
-      if (!raw) {
-        try {
-          raw = await fs.readFile(filePath);
-        } catch {
-          return res.status(404).end();
-        }
+      let raw;
+      try {
+        raw = await fs.readFile(filePath);
+      } catch {
+        return res.status(404).end();
       }
       const token = parseGuestUrlToken(req.query.oc_url_token);
       const body = contentType.startsWith('text/html') && token
@@ -552,6 +581,11 @@ export const registerGuestRoutes = (app, { openchamberDataDir, openchamberVersio
       res.setHeader('Content-Type', contentType);
       res.setHeader('X-Content-Type-Options', 'nosniff');
       res.setHeader('Cache-Control', 'no-store');
+      // Guest files are third-party code served from the OpenChamber origin.
+      // The rail embeds them in a sandboxed iframe; this header makes the
+      // document sandboxed even when opened directly, so a guest page can
+      // never run with the user's session on the app origin.
+      res.setHeader('Content-Security-Policy', 'sandbox allow-scripts');
       res.send(body);
     } catch (error) {
       console.error('Failed to serve guest asset:', error);

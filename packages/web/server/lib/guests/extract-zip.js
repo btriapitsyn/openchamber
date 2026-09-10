@@ -83,7 +83,12 @@ export const extractZipBuffer = async (buffer, destRoot) => {
     let data;
     try {
       const payload = buffer.subarray(dataStart, dataEnd);
-      data = method === COMPRESSION_STORE ? payload : inflateRawSync(payload);
+      // The declared size is already within the archive budget; capping the
+      // inflate at that size keeps a tiny deflate stream from expanding into
+      // gigabytes before the length check below can reject it.
+      data = method === COMPRESSION_STORE
+        ? payload
+        : inflateRawSync(payload, { maxOutputLength: Math.max(1, uncompressedSize) });
     } catch {
       return { ok: false, code: 'extract-failed' };
     }

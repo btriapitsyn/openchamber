@@ -33,7 +33,11 @@ type HostBridgeEffects = {
   writeClipboard: (text: string) => Promise<boolean>;
   compose: (text: string, mode: 'replace' | 'append') => void;
   attach: (issue: AttachIssueRequest) => void;
-  startSession: (request: StartSessionRequest) => Promise<StartSessionResult | null>;
+  startSession: (request: StartSessionRequest) => Promise<
+    | StartSessionResult
+    | { ok: false; code: HostRequestErrorCode; message: string }
+    | null
+  >;
   prompt: (request: PromptRequest) => Promise<
     | { ok: true; result: PromptResult }
     | { ok: false; code: HostRequestErrorCode; message: string }
@@ -46,9 +50,9 @@ type HostBridgeEffects = {
   oauthStart: () => Promise<boolean>;
   oauthDisconnect: () => Promise<boolean>;
   request: (request: GuestRequest) => Promise<GuestRequestProxyResult>;
-  agentRequest: (request: GuestRequest) => Promise<GuestRequestProxyResult>;
-  agentStatus: () => Promise<
-    | { ok: true; result: { status: import('@openchamber/sdk').AgentStatus } }
+  serviceRequest: (request: GuestRequest) => Promise<GuestRequestProxyResult>;
+  serviceStatus: () => Promise<
+    | { ok: true; result: { status: import('@openchamber/sdk').ServiceStatus } }
     | { ok: false; code: HostRequestErrorCode; message: string }
   >;
 };
@@ -226,9 +230,13 @@ export const answerGuestMessage = async (
         return errorResult(message.id, 'URL must be http or https.');
       }
       const started = await effects.startSession(message.payload);
-      return started
-        ? okResult(message.id, started)
-        : errorResult(message.id, 'Could not start that session.');
+      if (!started) {
+        return errorResult(message.id, 'Could not start that session.');
+      }
+      if ('sessionId' in started) {
+        return okResult(message.id, started);
+      }
+      return errorResult(message.id, started.message, started.code);
     }
     case 'prompt': {
       const prompted = await effects.prompt(message.payload);
@@ -265,15 +273,15 @@ export const answerGuestMessage = async (
       }
       return okResult(message.id, result.result);
     }
-    case 'agent-request': {
-      const result = await effects.agentRequest(message.payload);
+    case 'service-request': {
+      const result = await effects.serviceRequest(message.payload);
       if (!result.ok) {
         return errorResult(message.id, result.message, result.code);
       }
       return okResult(message.id, result.result);
     }
-    case 'agent-status': {
-      const result = await effects.agentStatus();
+    case 'service-status': {
+      const result = await effects.serviceStatus();
       if (!result.ok) {
         return errorResult(message.id, result.message, result.code);
       }

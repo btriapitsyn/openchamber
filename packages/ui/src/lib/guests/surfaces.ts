@@ -1,10 +1,20 @@
 import type { ContextSurfaceDescriptor } from '@/lib/surfaces/registry';
 import { pluginModeFromId } from '@/lib/surfaces/modes';
 
+import { isGuestActive } from './capabilities.ts';
+
 import { guestPackageIconSrc, resolveGuestIconName } from './icon.ts';
 import type { InstalledGuest } from './types.ts';
 
-export const guestSurfaceFromInstalled = (
+/** Rail surfaces for the enabled guests, in catalog order. The rail and the digit shortcuts must agree on this list. */
+export const enabledGuestSurfaces = (
+  guests: readonly InstalledGuest[],
+  authenticatedAsset: (path: string) => string,
+): ContextSurfaceDescriptor[] => guests
+  .filter(isGuestActive)
+  .map((guest) => guestSurfaceFromInstalled(guest, authenticatedAsset));
+
+const guestSurfaceFromInstalled = (
   guest: InstalledGuest,
   authenticatedAsset: (path: string) => string,
 ): ContextSurfaceDescriptor => ({

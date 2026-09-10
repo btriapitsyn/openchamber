@@ -1,65 +1,106 @@
 ---
 title: UI キット
-description: @openchamber/sdk/ui で課題一覧、カード、attach ピッカー、pull 窓を描く。
+description: "@openchamber/sdk/ui のボタン、入力欄、ドロップダウン、タブ、リストなどの部品で、拡張機能を OpenChamber の他の部分と同じ見た目にする。"
 ---
 
 # UI キット
 
-ホストのトラッカーと同じ見た目にしたいとき、`@openchamber/sdk/ui` を import します。キットはホストトークンから DOM を描きます。プロバイダとは話しません。`host.request` と `host.attach` は自分で呼びます。
+`@openchamber/sdk/ui` は、アプリの色、フォント、余白を使う既製のコントロール一式です。スタイルをコピーしなくても、拡張機能が OpenChamber の他の部分と同じ見た目になります。各コントロールは関数です。あなたが所有する要素と設定を渡すと、そこに自身を描画して `{ update, dispose }` を返します。コントロールを組み合わせて画面を作り、データはあなたが持ちます。キットがプロバイダーや OpenChamber を呼ぶことはありません。`host.request`、`host.attach` などは引き続きあなたが呼びます。キットを使わず、自分で HTML と CSS を書くこともできます。
 
-キットは使わなくてもよく、自分の DOM を描いて構いません。
+## まず `applyHostReady` を呼ぶ
 
-マウントの前に `applyHostReady` を呼んでください。
+コントロールは、`applyHostReady` がページに書き込む CSS 変数から色を読みます。最初のマウントの前に `host.onReady` の中で呼んでください。そうすると、ユーザーがテーマを切り替えたときに色がアプリに追従します。
 
 ```ts
-import { applyHostReady, mountIssuePage } from "@openchamber/sdk/ui";
+import { applyHostReady } from "@openchamber/sdk/ui";
 
 host.onReady((ctx) => {
   applyHostReady(ctx, document.documentElement);
-  mountIssuePage(document.querySelector("#root")!, {
-    items: tasks,
-    filters,
-    onSelect: (item) => {
-      void host.attach({
-        providerId: "acme-hello",
-        id: item.id,
-        title: item.title,
-        url: item.url ?? "",
-      });
-    },
-  });
+  // mount things here
 });
 ```
 
-## 何をマウントするか
+## マウントできるもの
 
-| 呼び出し | 置き場 |
+| 関数 | 描画するもの |
 | --- | --- |
-| `mountIssuePage` | レールの一覧。コンパクトなフィルタ、アイコンの検索、識別子＋タイトルの行。 |
-| `mountIssueCard` | 行クリック後の課題。戻る、状態、メタ、説明、コメント、フッタボタン。 |
-| `mountAttachIssues` | + メニューのピッカー。検索は開いたまま。選んだら `host.attach` と `host.close`。 |
-| `mountPullRequest` | pull またはマージリクエストの窓。タブは Overview、Checks、Comments。 |
-| `mountButton` | 共通の接続ボタン |
-| `mountTextField` | 共通の接続フィールド |
-| `mountEmpty` | 共通の空状態 |
+| `mountButton` | ボタン。`variant` は `default`、`secondary`、`outline`、`ghost`、`destructive`。`size` は `default`、`sm`、`xs`。`loading` はスピナーを表示してクリックを止めます。 |
+| `mountTextField` | ラベル付きの入力欄。`multiline` で textarea になります。任意の `helper` や `error` テキスト、`password` マスク、トークンや ID 向けの `mono` があります。 |
+| `mountSearchField` | 虫眼鏡とクリアボタン付きの検索欄。Escape でクリアします。 |
+| `mountSelect` | ドロップダウン。`searchable` でリストの上に絞り込み欄が付きます。矢印キーで移動、Enter で選択、Escape で閉じます。 |
+| `mountCheckbox`、`mountSwitch` | ラベルと任意の `description` 付きのチェックボックスまたはトグル。 |
+| `mountTabs` | ピル型のタブ。各タブに任意の件数を付けられます。左右の矢印キーで移動します。 |
+| `mountBadge` | 小さなピル。`tone` は `neutral`、`primary`、`success`、`warning`、`error`、`info`。 |
+| `mountList` | キーボードで扱いやすいリスト。各行に先頭のキー、タイトル、サブタイトル、右寄せのメタテキスト、バッジを持てます。 |
+| `mountEmpty` | 中央寄せの空状態。タイトル、本文 1 行、任意のボタン。 |
+| `mountSpinner` | 任意のラベル付きのローディングリング。 |
+| `mountBanner` | トーン付きの通知。タイトル、本文、任意のアクション。 |
+| `mountSeparator` | 細い線。中央に任意のラベルを置けます。 |
+| `mountProgress` | 0 から 100 のプログレスバー。 |
+| `mountMenu` | アクション一覧を開くボタン。項目は destructive、disabled、または区切り線にできます。 |
+| `mountText` | プロバイダーから来たテキスト。Markdown 形式の画像と `http(s)` リンクは実際の画像とリンクになり、それ以外はプレーンテキストのままなので、信頼できない内容も安全に表示できます。 |
 
-説明とコメントはプレーンテキストのままです。キットは `![alt](https://…)` と `[label](https://…)` をメディアに上げます。アバター URL は attach のペイロードに入れません。
+コントロールの隣に、3 つのプレーンなヘルパーが同梱されています。`filterSelectOptions(options, query)` は `mountSelect` が使う絞り込みです。`splitTextMedia(text)` は `mountText` が描画前に行う処理です。`moveListSelection` はリスト、セレクト、メニューが共有するキーボード移動で、自分でリストを作る場合に使えます。
 
-`mountPullRequest` はレコード、チェック、コメント付きの `mode: "view"`、または submit ハンドラ付きの `mode: "create"` を取ります。フッタのコールバックは attach、新規セッション、新規 worktree、ready、merge です。キットは描きます。git はホスト側です。
+## 検索付きのリスト
 
-## フィルタと行
+```ts
+import { applyHostReady, mountEmpty, mountList, mountSearchField } from "@openchamber/sdk/ui";
 
-フィルタの `value` は初期選択です。その後、新しい `items` で `update` しても、コンポーネントはユーザーの選択を保ちます。`value` を再度渡すのはリマウントのときだけです。
+host.onReady((ctx) => {
+  applyHostReady(ctx, document.documentElement);
+  const root = document.querySelector("#root")!;
+  const searchRoot = root.appendChild(document.createElement("div"));
+  const listRoot = root.appendChild(document.createElement("div"));
 
-`slot` はフィルタの位置です。`start` は左に伸び、ラベルを残します。`end` は右に詰まり、パネルが 520px 未満になるとアイコンになります。`slot` を省略すると、最初が `start`、残りが `end` です。
+  let query = "";
+  let empty: { dispose: () => void } | null = null;
 
-行は `badge` と `subtitle` を持てます。GitHub ピッカーがリポジトリや `head → base` を出すのと同じです。
+  const list = mountList(listRoot, {
+    items: [],
+    onSelect: (id) => {
+      const task = tasks.find((item) => item.id === id);
+      if (task) void host.attach({ providerId: "acme-hello", id, title: task.title, url: task.url });
+    },
+  });
 
-`hasMore` / `onMore` は次の遠隔ページを読みます。`toggle` はチェックボックス 1 つです。意味はゲストが `attach.text` に入れます。`session` は 2 つ目のチェックで、Create in worktree と同じです。入っていれば `attach` の代わりに `host.startSession({ worktree: true })` を呼びます。`action` はページ上のボタンです。
+  const paint = () => {
+    const rows = tasks
+      .filter((task) => task.title.toLowerCase().includes(query.toLowerCase()))
+      .map((task) => ({ id: task.id, leading: task.key, title: task.title, meta: task.updated }));
+    list.update({ items: rows });
+    empty?.dispose();
+    empty = rows.length === 0
+      ? mountEmpty(listRoot, { title: "No tasks match", body: "Try a shorter search." })
+      : null;
+  };
 
-ホストは検索せず、ゲストのフィルタも保存しません。
+  mountSearchField(searchRoot, {
+    value: query,
+    placeholder: "Search tasks",
+    onChange: (next) => {
+      query = next;
+      paint();
+    },
+  });
+  paint();
+});
+```
+
+`update` には変更した設定だけを渡します。リストは、ハイライト中の行がまだ存在する限り、更新をまたいでその行を保持します。
+
+## プロバイダーのテキスト内のリンク
+
+ページはサンドボックスで動き、自力で新しいタブを開けません。`mountText` を使うときは `onOpenUrl` を渡して、リンクを OpenChamber に委ねてください。
+
+```ts
+mountText(root, {
+  text: comment.body,
+  onOpenUrl: (url) => void host.openUrl(url),
+});
+```
 
 ## 関連
 
-- [ゲストパネルを作る](/ja/sdk/) — フォルダ、バンドル、マニフェスト
-- [ホスト API](/ja/sdk/host/) — `connectHost`、attach、エラー
+- [拡張機能を作る](/sdk/): フォルダ、マニフェスト、インストール
+- [Host API](/sdk/host/): `connectHost`、attach、エラーコード

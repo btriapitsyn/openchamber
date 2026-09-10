@@ -3,14 +3,16 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
 
+import { GUEST_CAPABILITIES } from '@openchamber/sdk';
+
 const GUEST_SOURCES = ['path', 'zip', 'git'];
 
 const storeSchema = z.object({
   paths: z.array(z.string().min(1).refine((entry) => !entry.includes('\0'))),
   sources: z.record(z.string(), z.enum(GUEST_SOURCES)).optional(),
-  agentGrants: z.record(z.string(), z.literal(true)).optional(),
+  capabilityGrants: z.record(z.string(), z.array(z.enum(GUEST_CAPABILITIES))).optional(),
   disabledGuests: z.record(z.string(), z.literal(true)).optional(),
-  agentSocketOverrides: z.record(
+  serviceSocketOverrides: z.record(
     z.string(),
     z.record(z.string(), z.string().min(1).refine((entry) => !entry.includes('\0'))),
   ).optional(),
@@ -56,9 +58,9 @@ export const isCopiedGuestRoot = (root, persistPath) => {
 const emptyStore = () => ({
   paths: [],
   sources: {},
-  agentGrants: {},
+  capabilityGrants: {},
   disabledGuests: {},
-  agentSocketOverrides: {},
+  serviceSocketOverrides: {},
 });
 
 export const readExtensionStore = async (persistPath) => {
@@ -71,9 +73,9 @@ export const readExtensionStore = async (persistPath) => {
     return {
       paths: parsed.paths,
       sources: parsed.sources ?? {},
-      agentGrants: parsed.agentGrants ?? {},
+      capabilityGrants: parsed.capabilityGrants ?? {},
       disabledGuests: parsed.disabledGuests ?? {},
-      agentSocketOverrides: parsed.agentSocketOverrides ?? {},
+      serviceSocketOverrides: parsed.serviceSocketOverrides ?? {},
     };
   } catch (error) {
     if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
@@ -88,9 +90,9 @@ export const writeExtensionStore = async (
   {
     paths,
     sources = {},
-    agentGrants = {},
+    capabilityGrants = {},
     disabledGuests = {},
-    agentSocketOverrides = {},
+    serviceSocketOverrides = {},
   },
 ) => {
   const cleaned = {};
@@ -101,9 +103,9 @@ export const writeExtensionStore = async (
     }
   }
   const grants = {};
-  for (const [id, granted] of Object.entries(agentGrants)) {
-    if (granted) {
-      grants[id] = true;
+  for (const [id, granted] of Object.entries(capabilityGrants)) {
+    if (Array.isArray(granted) && granted.length > 0) {
+      grants[id] = [...granted];
     }
   }
   const disabled = {};
@@ -114,7 +116,7 @@ export const writeExtensionStore = async (
   }
   /** @type {Record<string, Record<string, string>>} */
   const socketOverrides = {};
-  for (const [guestId, bySocket] of Object.entries(agentSocketOverrides)) {
+  for (const [guestId, bySocket] of Object.entries(serviceSocketOverrides)) {
     /** @type {Record<string, string>} */
     const cleanedSockets = {};
     for (const [socketId, socketPath] of Object.entries(bySocket ?? {})) {
@@ -131,18 +133,47 @@ export const writeExtensionStore = async (
     payload.sources = cleaned;
   }
   if (Object.keys(grants).length > 0) {
-    payload.agentGrants = grants;
+    payload.capabilityGrants = grants;
   }
   if (Object.keys(disabled).length > 0) {
     payload.disabledGuests = disabled;
   }
   if (Object.keys(socketOverrides).length > 0) {
-    payload.agentSocketOverrides = socketOverrides;
+    payload.serviceSocketOverrides = socketOverrides;
   }
-  await fs.mkdir(path.dirname(persistPath), { recursive: true });
-  const tmp = `${persistPath}.tmp-${process.pid}`;
-  await fs.writeFile(tmp, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
-  await fs.rename(tmp, persistPath);
+  for (const listener of writeListeners) listener(persistPath);
+  await withStoreWriteLock(persistPath, async () => {
+    await fs.mkdir(path.dirname(persistPath), { recursive: true });
+    const tmp = `${persistPath}.tmp-${process.pid}-${Date.now()}-${(writeSequence += 1)}`;
+    await fs.writeFile(tmp, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+    await fs.rename(tmp, persistPath);
+  });
+};
+
+let writeSequence = 0;
+/** @type {Set<(persistPath: string) => void>} */
+const writeListeners = new Set();
+
+/** Called before every store write with the path about to change. */
+export const onExtensionStoreWrite = (listener) => {
+  writeListeners.add(listener);
+  return () => writeListeners.delete(listener);
+};
+/** @type {Map<string, Promise<void>>} */
+const writeChains = new Map();
+
+// Two writers in one process (say, Enable and Allow clicked back to back)
+// used to share one temp file: the second truncated it under the first's
+// rename and the store came back as half a JSON document. Writes to one path
+// now run one after another, each on its own temp file.
+const withStoreWriteLock = (persistPath, write) => {
+  const previous = writeChains.get(persistPath) ?? Promise.resolve();
+  const next = previous.catch(() => undefined).then(write);
+  writeChains.set(persistPath, next.finally(() => {
+    if (writeChains.get(persistPath) === chained) writeChains.delete(persistPath);
+  }));
+  const chained = writeChains.get(persistPath);
+  return next;
 };
 
 export const readExtensionPaths = async (persistPath) => {
@@ -161,8 +192,27 @@ export const writeExtensionPaths = async (paths, persistPath) => {
   await writeExtensionStore(persistPath, {
     paths,
     sources,
-    agentGrants: current.agentGrants,
+    capabilityGrants: current.capabilityGrants,
     disabledGuests: current.disabledGuests,
-    agentSocketOverrides: current.agentSocketOverrides,
+    serviceSocketOverrides: current.serviceSocketOverrides,
   });
+};
+
+/**
+ * Record the user's approval for one guest. `granted` replaces the previous
+ * list; an empty list withdraws approval. Callers pass the requested list
+ * verbatim, so approval is all-or-nothing per install.
+ * @param {string} guestId
+ * @param {string} persistPath
+ * @param {string[]} granted
+ */
+export const setCapabilityGrants = async (guestId, persistPath, granted) => {
+  const current = await readExtensionStore(persistPath);
+  const capabilityGrants = { ...current.capabilityGrants };
+  if (granted.length > 0) {
+    capabilityGrants[guestId] = [...granted];
+  } else {
+    delete capabilityGrants[guestId];
+  }
+  await writeExtensionStore(persistPath, { ...current, capabilityGrants });
 };

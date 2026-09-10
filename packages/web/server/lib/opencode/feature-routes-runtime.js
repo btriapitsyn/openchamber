@@ -309,7 +309,7 @@ export const createFeatureRoutesRuntime = (dependencies) => {
     registerSessionGoalRoutes(app);
     registerGitHubRoutes(app);
     registerLinearRoutes(app);
-    registerGuestRoutes(app, { openchamberDataDir, openchamberVersion });
+    registerGuestRoutes(app, { openchamberDataDir, openchamberVersion, resolveGitBinaryForSpawn });
     registerGitRoutes(app, {
       emitWorktreeChanged: ({ directories, at }) => {
         const clients = getOpenChamberEventClients();

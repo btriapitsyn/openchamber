@@ -11,6 +11,7 @@ import { focusDesktopWindow, isDesktopShell, isVSCodeRuntime } from '@/lib/deskt
 import { isMobileSurfaceRuntime } from '@/lib/runtimeSurface';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { useI18n } from '@/lib/i18n';
+import { isGuestActive } from '@/lib/guests/capabilities';
 import { loadGuestCatalog } from '@/lib/guests/load-catalog';
 import {
   AUTHORIZATION_POLL_MS,
@@ -51,6 +52,7 @@ const GuestIntegrationCard: React.FC<GuestIntegrationCardProps> = ({ guest }) =>
   const [clientId, setClientId] = React.useState('');
   const [clientSecret, setClientSecret] = React.useState('');
   const [token, setToken] = React.useState('');
+  const [username, setUsername] = React.useState('');
   const [settings, setSettings] = React.useState<Record<string, string>>({});
   const [copied, setCopied] = React.useState(false);
   const pollTimerRef = React.useRef<number | null>(null);
@@ -82,6 +84,7 @@ const GuestIntegrationCard: React.FC<GuestIntegrationCardProps> = ({ guest }) =>
   }
 
   const auth = integration.auth;
+  const needsUsername = auth === 'token' && integration.token?.scheme === 'basic';
   const connected = Boolean(status?.connection.connected);
   const account = status?.connection.account.trim() || '';
   const statusLabel = isWaiting
@@ -119,9 +122,15 @@ const GuestIntegrationCard: React.FC<GuestIntegrationCardProps> = ({ guest }) =>
     return true;
   };
 
-  const saveDeclaredSettings = async (): Promise<boolean> => {
+  const saveDeclaredSettings = async (next: Record<string, string> = settings): Promise<boolean> => {
+    const stored = status?.settings ?? {};
+    const declared = integration.settings ?? [];
+    const unchanged = declared.every((field) => (next[field.id] ?? '').trim() === (stored[field.id] ?? ''));
+    if (unchanged) {
+      return true;
+    }
     reportSettingsSaveState('saving');
-    const saved = await saveGuestSettings(guest.id, settings);
+    const saved = await saveGuestSettings(guest.id, next);
     if (!saved) {
       reportSettingsSaveState('error');
       toast.error(t('settings.integrations.guests.toast.saveFailed', { name }));
@@ -141,8 +150,13 @@ const GuestIntegrationCard: React.FC<GuestIntegrationCardProps> = ({ guest }) =>
       toast.error(t('settings.integrations.guests.toast.tokenRequired'));
       return false;
     }
+    const nextUsername = username.trim();
+    if (needsUsername && !nextUsername) {
+      toast.error(t('settings.integrations.guests.toast.usernameRequired'));
+      return false;
+    }
     reportSettingsSaveState('saving');
-    const saved = await saveGuestAccessToken(guest.id, nextToken);
+    const saved = await saveGuestAccessToken(guest.id, nextToken, needsUsername ? nextUsername : undefined);
     if (!saved) {
       reportSettingsSaveState('error');
       toast.error(t('settings.integrations.guests.toast.tokenInvalid'));
@@ -150,25 +164,8 @@ const GuestIntegrationCard: React.FC<GuestIntegrationCardProps> = ({ guest }) =>
     }
     setStatus(guest.id, saved);
     setToken('');
+    setUsername('');
     reportSettingsSaveState('saved');
-    return true;
-  };
-
-  const saveForm = async (): Promise<boolean> => {
-    if (auth === 'oauth') {
-      const saved = await saveClient();
-      if (!saved) {
-        return false;
-      }
-    } else if (auth === 'token' && token.trim()) {
-      const saved = await saveToken();
-      if (!saved) {
-        return false;
-      }
-    }
-    if ((integration.settings ?? []).length > 0) {
-      return saveDeclaredSettings();
-    }
     return true;
   };
 
@@ -335,6 +332,21 @@ const GuestIntegrationCard: React.FC<GuestIntegrationCardProps> = ({ guest }) =>
                 </SettingsStackedField>
               </>
             ) : null}
+            {needsUsername ? (
+              <SettingsStackedField
+                label={integration.token?.usernameLabel ?? t('settings.integrations.guests.field.username')}
+                controlClassName="w-full max-w-none"
+              >
+                <Input
+                  value={username}
+                  onChange={(event) => setUsername(event.target.value)}
+                  autoComplete="off"
+                  spellCheck={false}
+                  className="h-8 min-w-0 flex-1 rounded-md px-3"
+                  disabled={isBusy}
+                />
+              </SettingsStackedField>
+            ) : null}
             {auth === 'token' ? (
               <SettingsStackedField
                 label={t('settings.integrations.guests.field.token')}
@@ -363,6 +375,7 @@ const GuestIntegrationCard: React.FC<GuestIntegrationCardProps> = ({ guest }) =>
                   onChange={(event) => {
                     setSettings((current) => ({ ...current, [field.id]: event.target.value }));
                   }}
+                  onBlur={() => void saveDeclaredSettings()}
                   autoComplete="off"
                   spellCheck={false}
                   className="h-8 min-w-0 flex-1 rounded-md px-3"
@@ -395,16 +408,6 @@ const GuestIntegrationCard: React.FC<GuestIntegrationCardProps> = ({ guest }) =>
               </SettingsStackedField>
             ) : null}
             <div className="flex flex-wrap items-center gap-2">
-              {auth !== 'host' || (integration.settings ?? []).length > 0 ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  disabled={isBusy}
-                  onClick={() => void saveForm()}
-                >
-                  {t('settings.integrations.guests.actions.save')}
-                </Button>
-              ) : null}
               {connected ? (
                 <Button
                   type="button"
@@ -446,7 +449,7 @@ export const GuestIntegrationsSection: React.FC<{ divider?: boolean }> = ({ divi
     return null;
   }
 
-  const cards = guests.filter((guest) => guest.integration && guest.enabled !== false);
+  const cards = guests.filter((guest) => guest.integration && isGuestActive(guest));
   if (cards.length === 0) {
     return null;
   }

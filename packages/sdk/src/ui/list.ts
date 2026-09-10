@@ -1,130 +1,118 @@
-import { clearNode, ensureStyle } from './dom.ts';
-import { icon } from './icons.ts';
+import { applyTone, type Tone } from './badge.ts';
+import { button, clearNode, el, ensureStyle, setAttr, type Handle } from './dom.ts';
+import { moveListSelection, navigationKey } from './navigation.ts';
 import { UI_CSS } from './style.ts';
-import type { IssueListHandle, IssueListProps, IssueTask } from './types.ts';
 
-type IssueRowParts = {
+export type ListItem = {
   id: string;
   title: string;
-  badge: string;
-  subtitle: string;
+  /** Micro muted line under the title. */
+  subtitle?: string;
+  /** Fixed-width mono text before the title, like an issue key. */
+  leading?: string;
+  /** Muted tabular text at the right, like a date or count. */
+  meta?: string;
+  badge?: { label: string; tone?: Tone };
+  disabled?: boolean;
 };
 
-export const issueRowParts = (item: IssueTask): IssueRowParts => ({
-  id: item.identifier ?? item.id,
-  title: item.title,
-  badge: item.badge?.trim() ?? '',
-  subtitle: item.subtitle?.trim() ?? '',
-});
+export type ListProps = {
+  items: ListItem[];
+  selectedId?: string | null;
+  onSelect: (id: string) => void;
+  emptyText?: string;
+  ariaLabel?: string;
+};
 
-export const mountIssueList = (root: Element, initial: IssueListProps): IssueListHandle => {
+export type ListHandle = Handle<ListProps>;
+
+let listCount = 0;
+
+export const mountList = (root: Element, initial: ListProps): ListHandle => {
   ensureStyle(UI_CSS);
   let props = initial;
-  let more: HTMLButtonElement | null = null;
-
-  const wrap = document.createElement('div');
-  wrap.className = 'oc-sdk-list-wrap';
-  const list = document.createElement('div');
-  list.className = 'oc-sdk-list';
+  const uid = `oc-sdk-list-${listCount += 1}`;
+  const list = el('div', 'oc-sdk oc-sdk-list');
   list.setAttribute('role', 'listbox');
-  wrap.append(list);
-  root.append(wrap);
+  list.tabIndex = 0;
+  root.append(list);
+  let activeId: string | null = null;
+
+  const rowId = (id: string): string => `${uid}-${id}`;
+
+  const setActive = (id: string | null): void => {
+    activeId = id;
+    for (const row of Array.from(list.children)) {
+      if (row instanceof HTMLElement) {
+        row.dataset.active = row.id === rowId(id ?? '') ? 'true' : 'false';
+      }
+    }
+    setAttr(list, 'aria-activedescendant', id ? rowId(id) : null);
+    list.querySelector('[data-active="true"]')?.scrollIntoView({ block: 'nearest' });
+  };
+
+  const span = (className: string, text: string): HTMLSpanElement => {
+    const node = el('span', className);
+    node.textContent = text;
+    return node;
+  };
 
   const paint = (): void => {
     clearNode(list);
-    more?.remove();
-    more = null;
-    if (props.busy && props.items.length === 0) {
-      const empty = document.createElement('div');
-      empty.className = 'oc-sdk-empty';
-      empty.textContent = props.empty ?? 'Loading…';
-      list.append(empty);
-      return;
-    }
+    setAttr(list, 'aria-label', props.ariaLabel);
     if (props.items.length === 0) {
-      const empty = document.createElement('div');
-      empty.className = 'oc-sdk-empty';
-      empty.textContent = props.empty ?? 'No open issues found';
-      list.append(empty);
+      list.append(span('oc-sdk-list-empty', props.emptyText ?? 'Nothing here'));
+      setActive(null);
       return;
     }
     for (const item of props.items) {
-      const row = document.createElement('div');
-      row.className = 'oc-sdk-row';
+      const row = button('oc-sdk-row');
+      row.id = rowId(item.id);
       row.setAttribute('role', 'option');
-      row.tabIndex = 0;
-      row.dataset.id = item.id;
-      if (props.selectedId === item.id) {
-        row.dataset.selected = 'true';
-      }
-      const parts = issueRowParts(item);
-      const id = document.createElement('span');
-      id.className = 'oc-sdk-id';
-      id.textContent = parts.id;
-      const title = document.createElement('span');
-      title.className = 'oc-sdk-title';
-      title.textContent = parts.title;
-      row.append(id, title);
-      if (parts.badge) {
-        const badge = document.createElement('span');
-        badge.className = 'oc-sdk-badge';
-        badge.textContent = parts.badge;
+      row.setAttribute('aria-selected', item.id === props.selectedId ? 'true' : 'false');
+      row.disabled = Boolean(item.disabled);
+      row.tabIndex = -1;
+      if (item.leading) row.append(span('oc-sdk-row-lead', item.leading));
+      const main = el('span', 'oc-sdk-row-main');
+      main.append(span('oc-sdk-row-title', item.title));
+      if (item.subtitle) main.append(span('oc-sdk-row-sub', item.subtitle));
+      row.append(main);
+      if (item.badge) {
+        const badge = span('oc-sdk-badge', item.badge.label);
+        applyTone(badge, item.badge.tone);
         row.append(badge);
       }
-      if (parts.subtitle) {
-        const subtitle = document.createElement('span');
-        subtitle.className = 'oc-sdk-subtitle';
-        subtitle.textContent = parts.subtitle;
-        row.append(subtitle);
-      }
-      if (item.url && props.onOpen) {
-        const openSlot = document.createElement('div');
-        openSlot.className = 'oc-sdk-open-slot';
-        const open = document.createElement('button');
-        open.type = 'button';
-        open.className = 'oc-sdk-open';
-        open.setAttribute('aria-label', props.openLabel ?? 'Open');
-        open.append(icon('open', 16));
-        open.addEventListener('click', (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          props.onOpen?.(item);
-        });
-        openSlot.append(open);
-        row.append(openSlot);
-      }
-      row.addEventListener('click', () => {
-        props.onSelect(item);
-      });
-      row.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          props.onSelect(item);
-        }
-      });
+      if (item.meta) row.append(span('oc-sdk-row-meta', item.meta));
+      row.addEventListener('click', () => props.onSelect(item.id));
       list.append(row);
     }
-    if (props.hasMore && props.onMore) {
-      more = document.createElement('button');
-      more.type = 'button';
-      more.className = 'oc-sdk-more';
-      more.textContent = props.moreLabel ?? 'Load more';
-      more.addEventListener('click', () => {
-        props.onMore?.();
-      });
-      wrap.append(more);
-    }
+    const stillThere = props.items.some((item) => item.id === activeId && !item.disabled);
+    setActive(stillThere ? activeId : props.selectedId ?? null);
   };
 
+  const onKeyDown = (event: KeyboardEvent): void => {
+    const step = navigationKey(event);
+    if (step) {
+      event.preventDefault();
+      setActive(moveListSelection(props.items, activeId, step));
+      return;
+    }
+    if ((event.key === 'Enter' || event.key === ' ') && activeId) {
+      event.preventDefault();
+      props.onSelect(activeId);
+    }
+  };
+  list.addEventListener('keydown', onKeyDown);
   paint();
 
   return {
     update: (next) => {
-      props = next;
+      props = { ...props, ...next };
       paint();
     },
     dispose: () => {
-      wrap.remove();
+      list.removeEventListener('keydown', onKeyDown);
+      list.remove();
     },
   };
 };

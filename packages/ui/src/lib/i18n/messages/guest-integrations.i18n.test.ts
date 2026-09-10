@@ -12,7 +12,6 @@ const requiredKeys = [
   'settings.integrations.guests.status.waiting',
   'settings.integrations.guests.actions.connect',
   'settings.integrations.guests.actions.disconnect',
-  'settings.integrations.guests.actions.save',
   'settings.integrations.guests.actions.copyRedirect',
   'settings.integrations.guests.actions.copied',
   'settings.integrations.guests.field.clientId',

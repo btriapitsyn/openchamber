@@ -1,110 +1,76 @@
-import { ensureStyle } from './dom.ts';
+import { button, el, ensureStyle, setAttr, type Handle } from './dom.ts';
 import { icon } from './icons.ts';
 import { UI_CSS } from './style.ts';
-import type { SearchInputHandle, SearchInputProps } from './types.ts';
 
-const paint = (search: HTMLInputElement, props: SearchInputProps): void => {
-  const placeholder = props.placeholder ?? 'Search issues';
-  search.placeholder = placeholder;
-  search.setAttribute('aria-label', props.label ?? placeholder);
-  if (search.value !== props.value) {
-    search.value = props.value;
-  }
+export type SearchFieldProps = {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  /** Accessible name. Falls back to the placeholder. */
+  label?: string;
+  autofocus?: boolean;
 };
 
-export const mountSearchInput = (
-  root: Element,
-  initial: SearchInputProps,
-  slots?: { toggleRoot?: Element },
-): SearchInputHandle => {
+export type SearchFieldHandle = Handle<SearchFieldProps>;
+
+export const mountSearchField = (root: Element, initial: SearchFieldProps): SearchFieldHandle => {
   ensureStyle(UI_CSS);
   let props = initial;
-  let open = !initial.compact;
-
-  const wrap = document.createElement('div');
-  wrap.className = 'oc-sdk-search-wrap';
-  const field = document.createElement('div');
-  field.className = 'oc-sdk-search-field';
-  const search = document.createElement('input');
-  search.type = 'text';
-  search.className = 'oc-sdk-search';
-  search.spellcheck = false;
-  search.autocomplete = 'off';
-  const toggle = document.createElement('button');
-  toggle.type = 'button';
-  toggle.className = 'oc-sdk-search-toggle';
-  toggle.append(icon('search', 14, 'oc-sdk-filter-icon'));
-  const close = document.createElement('button');
-  close.type = 'button';
-  close.className = 'oc-sdk-search-close';
-  close.append(icon('close', 14));
-  field.append(icon('search', 16, 'oc-sdk-search-icon'), search, close);
-  wrap.append(field);
+  const wrap = el('div', 'oc-sdk oc-sdk-search');
+  const input = el('input', 'oc-sdk-input');
+  input.type = 'text';
+  input.spellcheck = false;
+  input.autocomplete = 'off';
+  input.setAttribute('role', 'searchbox');
+  const clear = button('oc-sdk-search-clear');
+  clear.append(icon('close', 14));
+  clear.tabIndex = -1;
+  wrap.append(icon('search', 16, 'oc-sdk-search-icon'), input, clear);
   root.append(wrap);
-  (slots?.toggleRoot ?? wrap).append(toggle);
 
-  const syncOpen = (): void => {
-    wrap.dataset.compact = props.compact ? 'true' : 'false';
-    wrap.dataset.open = open ? 'true' : 'false';
-    wrap.dataset.active = props.value.trim() !== '' ? 'true' : 'false';
-    const label = props.label ?? props.placeholder ?? 'Search issues';
-    toggle.setAttribute('aria-label', label);
-    toggle.title = label;
-    close.setAttribute('aria-label', 'Close search');
-    close.title = 'Close search';
+  const paint = (): void => {
+    const placeholder = props.placeholder ?? 'Search';
+    setAttr(input, 'placeholder', placeholder);
+    input.setAttribute('aria-label', props.label ?? placeholder);
+    clear.setAttribute('aria-label', 'Clear search');
+    if (input.value !== props.value) {
+      input.value = props.value;
+    }
+    wrap.dataset.active = props.value.trim() === '' ? 'false' : 'true';
   };
 
-  const closeCompact = (): void => {
-    if (!props.compact) {
-      return;
-    }
-    open = false;
+  const clearValue = (): void => {
     if (props.value !== '') {
       props.onChange('');
     }
-    syncOpen();
+    input.focus();
   };
-
   const onInput = (): void => {
-    props.onChange(search.value);
-  };
-  const onToggle = (): void => {
-    open = true;
-    syncOpen();
-    search.focus();
-  };
-  const onClose = (): void => {
-    closeCompact();
+    props.onChange(input.value);
   };
   const onKeyDown = (event: KeyboardEvent): void => {
-    if (event.key === 'Escape' && props.compact && open) {
+    if (event.key === 'Escape' && input.value !== '') {
       event.preventDefault();
-      closeCompact();
+      clearValue();
     }
   };
-
-  search.addEventListener('input', onInput);
-  search.addEventListener('keydown', onKeyDown);
-  toggle.addEventListener('click', onToggle);
-  close.addEventListener('click', onClose);
-  paint(search, props);
-  syncOpen();
+  input.addEventListener('input', onInput);
+  input.addEventListener('keydown', onKeyDown);
+  clear.addEventListener('click', clearValue);
+  paint();
+  if (props.autofocus) {
+    input.focus();
+  }
 
   return {
     update: (next) => {
-      props = next;
-      if (!props.compact) {
-        open = true;
-      }
-      paint(search, props);
-      syncOpen();
+      props = { ...props, ...next };
+      paint();
     },
     dispose: () => {
-      search.removeEventListener('input', onInput);
-      search.removeEventListener('keydown', onKeyDown);
-      toggle.removeEventListener('click', onToggle);
-      close.removeEventListener('click', onClose);
-      toggle.remove();
+      input.removeEventListener('input', onInput);
+      input.removeEventListener('keydown', onKeyDown);
+      clear.removeEventListener('click', clearValue);
       wrap.remove();
     },
   };

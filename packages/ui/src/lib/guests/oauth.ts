@@ -124,12 +124,13 @@ export const saveGuestOauthClient = async (
 export const saveGuestAccessToken = async (
   guestId: string,
   token: string,
+  username?: string,
 ): Promise<GuestOauthStatus | null> => {
   try {
     return await parseStatus(await runtimeFetch(`/api/guests/${guestId}/token`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token }),
+      body: JSON.stringify(username ? { token, username } : { token }),
     }));
   } catch {
     return null;

@@ -4,7 +4,7 @@ import path from 'node:path';
 import {
   buildPublicSocketBindings,
   expandHomePath,
-  resolveAgentSocketEnv,
+  resolveServiceSocketEnv,
   resolveSocketBinding,
 } from './sockets.js';
 
@@ -89,9 +89,9 @@ describe('buildPublicSocketBindings', () => {
   });
 });
 
-describe('resolveAgentSocketEnv', () => {
-  test('builds OPENCHAMBER_AGENT_SOCKETS map from resolved bindings', async () => {
-    const env = await resolveAgentSocketEnv(
+describe('resolveServiceSocketEnv', () => {
+  test('builds OPENCHAMBER_SERVICE_SOCKETS map from resolved bindings', async () => {
+    const env = await resolveServiceSocketEnv(
       [dockerBinding],
       {},
       {

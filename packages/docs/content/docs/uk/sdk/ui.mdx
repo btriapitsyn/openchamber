@@ -1,65 +1,106 @@
 ---
 title: UI-набір
-description: Намалюйте список задач, картку, пікер attach або вікно pull через @openchamber/sdk/ui.
+description: Кнопки, поля, випадні списки, вкладки, списки та інші готові елементи з @openchamber/sdk/ui, з якими розширення виглядає як решта OpenChamber.
 ---
 
 # UI-набір
 
-Імпортуйте `@openchamber/sdk/ui`, якщо панель має виглядати як трекери хоста. Набір малює DOM з токенів хоста. З провайдером він не розмовляє. `host.request` і `host.attach` лишаються вашими.
+`@openchamber/sdk/ui` - це набір готових елементів, які використовують кольори, шрифти й відступи застосунку, тож ваше розширення виглядає як решта OpenChamber без копіювання його стилів. Кожен елемент - функція: ви даєте їй свій DOM-елемент і налаштування, вона малює себе там і повертає `{ update, dispose }`. Ви складаєте з елементів екран і тримаєте дані в себе. Набір ніколи не звертається ні до вашого провайдера, ні до OpenChamber; `host.request`, `host.attach` і решту ви викликаєте самі. Набір можна й не брати, а писати власний HTML і CSS.
 
-Набір можна пропустити і малювати власний DOM.
+## Спершу викличте `applyHostReady`
 
-Викличте `applyHostReady` перед будь-яким mount.
+Елементи читають кольори з CSS-змінних, які `applyHostReady` записує на сторінку. Викликайте її всередині `host.onReady` перед першим монтуванням, і кольори підхоплюватимуть тему застосунку, коли користувач її перемикає.
 
 ```ts
-import { applyHostReady, mountIssuePage } from "@openchamber/sdk/ui";
+import { applyHostReady } from "@openchamber/sdk/ui";
 
 host.onReady((ctx) => {
   applyHostReady(ctx, document.documentElement);
-  mountIssuePage(document.querySelector("#root")!, {
-    items: tasks,
-    filters,
-    onSelect: (item) => {
-      void host.attach({
-        providerId: "acme-hello",
-        id: item.id,
-        title: item.title,
-        url: item.url ?? "",
-      });
-    },
-  });
+  // mount things here
 });
 ```
 
-## Що монтувати
+## Що можна змонтувати
 
-| Виклик | Де стоїть |
+| Функція | Що малює |
 | --- | --- |
-| `mountIssuePage` | список на рейці. Компактні фільтри, пошук іконкою, рядки ідентифікатор плюс заголовок. |
-| `mountIssueCard` | задача після кліку по рядку. Назад, статус, метадані, опис, коментарі, кнопка в футері. |
-| `mountAttachIssues` | пікер меню +. Пошук лишається відкритим. Після вибору викличте `host.attach` і `host.close`. |
-| `mountPullRequest` | вікно pull або merge request. Вкладки Overview, Checks і Comments. |
-| `mountButton` | спільна кнопка підключення |
-| `mountTextField` | спільне поле підключення |
-| `mountEmpty` | спільний порожній стан |
+| `mountButton` | Кнопка. `variant` - `default`, `secondary`, `outline`, `ghost` або `destructive`; `size` - `default`, `sm` або `xs`. `loading` показує спінер і блокує кліки. |
+| `mountTextField` | Поле з підписом або textarea з `multiline`. Необов'язковий текст `helper` чи `error`, маскування `password` і `mono` для токенів та id. |
+| `mountSearchField` | Поле пошуку з лупою і кнопкою очищення. Escape очищає його. |
+| `mountSelect` | Випадний список. `searchable` додає фільтр угорі списку. Стрілки рухають, Enter вибирає, Escape закриває. |
+| `mountCheckbox`, `mountSwitch` | Прапорець або перемикач із підписом і необов'язковим `description`. |
+| `mountTabs` | Вкладки-пігулки, кожна з необов'язковим лічильником. Стрілки вліво і вправо перемикають між ними. |
+| `mountBadge` | Маленька пігулка. `tone` - `neutral`, `primary`, `success`, `warning`, `error` або `info`. |
+| `mountList` | Список, зручний для клавіатури. Кожен рядок може мати ключ спереду, заголовок, підзаголовок, метатекст праворуч і бейдж. |
+| `mountEmpty` | Порожній стан по центру із заголовком, рядком тексту і необов'язковою кнопкою. |
+| `mountSpinner` | Кільце завантаження з необов'язковим підписом. |
+| `mountBanner` | Кольорове повідомлення із заголовком, текстом і необов'язковою дією. |
+| `mountSeparator` | Тонка лінія, за бажанням із підписом посередині. |
+| `mountProgress` | Смуга прогресу від 0 до 100. |
+| `mountMenu` | Кнопка, що відкриває список дій. Пункти можуть бути деструктивними, вимкненими або роздільником. |
+| `mountText` | Текст від вашого провайдера. Зображення у стилі Markdown і `http(s)`-посилання стають справжніми зображеннями і посиланнями; усе інше лишається простим текстом, тому ненадійний вміст показувати безпечно. |
 
-Опис і коментарі лишаються звичайним текстом. Набір піднімає `![alt](https://…)` і `[label](https://…)` у медіа. URL аватарів у payload attach не потрапляють.
+Поруч з елементами йдуть три прості помічники. `filterSelectOptions(options, query)` - те саме зіставлення, яке використовує `mountSelect`. `splitTextMedia(text)` - те, що `mountText` робить перед малюванням. `moveListSelection` - крок клавіатури, спільний для списку, випадного списку і меню, якщо ви будуєте власний список.
 
-`mountPullRequest` бере `mode: "view"` із записом, чеками й коментарями або `mode: "create"` з обробником submit. Колбеки футера — attach, нова сесія, новий worktree, ready і merge. Набір малює. Git лишається на хості.
+## Список із пошуком
 
-## Фільтри й рядки
+```ts
+import { applyHostReady, mountEmpty, mountList, mountSearchField } from "@openchamber/sdk/ui";
 
-`value` на фільтрі — початковий вибір. Далі компонент тримає вибір користувача, коли ви `update` з новим списком `items`. Передавайте `value` знову лише при повторному mount.
+host.onReady((ctx) => {
+  applyHostReady(ctx, document.documentElement);
+  const root = document.querySelector("#root")!;
+  const searchRoot = root.appendChild(document.createElement("div"));
+  const listRoot = root.appendChild(document.createElement("div"));
 
-`slot` ставить фільтр. `start` росте ліворуч і лишає підпис. `end` пакується праворуч і стає іконкою, коли панель вужча за 520px. Пропустіть `slot` — перший фільтр буде `start`, решта `end`.
+  let query = "";
+  let empty: { dispose: () => void } | null = null;
 
-Рядок може нести `badge` і `subtitle`. Так само, як пікер GitHub показує репо або `head → base`.
+  const list = mountList(listRoot, {
+    items: [],
+    onSelect: (id) => {
+      const task = tasks.find((item) => item.id === id);
+      if (task) void host.attach({ providerId: "acme-hello", id, title: task.title, url: task.url });
+    },
+  });
 
-`hasMore` / `onMore` вантажить наступну віддалену сторінку. `toggle` — один чекбокс. Сенс гість кладе в `attach.text`. `session` — другий чекбокс, як Create in worktree. Якщо він увімкнений, викличте `host.startSession({ worktree: true })` замість `attach`. `action` — кнопка на сторінці.
+  const paint = () => {
+    const rows = tasks
+      .filter((task) => task.title.toLowerCase().includes(query.toLowerCase()))
+      .map((task) => ({ id: task.id, leading: task.key, title: task.title, meta: task.updated }));
+    list.update({ items: rows });
+    empty?.dispose();
+    empty = rows.length === 0
+      ? mountEmpty(listRoot, { title: "No tasks match", body: "Try a shorter search." })
+      : null;
+  };
 
-Хост не шукає і не зберігає гостьові фільтри.
+  mountSearchField(searchRoot, {
+    value: query,
+    placeholder: "Search tasks",
+    onChange: (next) => {
+      query = next;
+      paint();
+    },
+  });
+  paint();
+});
+```
 
-## Пов'язане
+`update` приймає лише ті налаштування, що змінилися. Список зберігає виділений рядок між оновленнями, поки цей рядок є на місці.
 
-- [Зібрати гостьову панель](/uk/sdk/) — тека, бандл і маніфест
-- [API хоста](/uk/sdk/host/) — `connectHost`, attach і помилки
+## Посилання з тексту провайдера
+
+Ваша сторінка працює в пісочниці і не може сама відкрити нову вкладку. Коли використовуєте `mountText`, передайте `onOpenUrl` і віддайте посилання OpenChamber:
+
+```ts
+mountText(root, {
+  text: comment.body,
+  onOpenUrl: (url) => void host.openUrl(url),
+});
+```
+
+## Дивіться також
+
+- [Зробити розширення](/sdk/): тека, маніфест і встановлення
+- [Host API](/sdk/host/): `connectHost`, прикріплення і коди помилок

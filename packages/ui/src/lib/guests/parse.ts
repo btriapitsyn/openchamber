@@ -1,3 +1,4 @@
+import { GUEST_CAPABILITIES } from '@openchamber/sdk';
 import { z } from 'zod';
 
 import type { InstalledGuest } from './types.ts';
@@ -8,6 +9,10 @@ const publicIntegrationSchema = z.object({
   name: z.string().trim().min(1),
   description: z.string().trim().min(1),
   auth: z.enum(['oauth', 'token', 'host']).default('oauth'),
+  token: z.object({
+    scheme: z.enum(['raw', 'bearer', 'basic']),
+    usernameLabel: z.string().trim().min(1).optional(),
+  }).optional(),
   settings: z.array(z.object({
     id: z.string().regex(PANEL_ID),
     label: z.string().trim().min(1),
@@ -21,7 +26,7 @@ const publicSocketBindingSchema = z.object({
   override: z.string().nullable(),
 });
 
-const publicAgentSchema = z.object({
+const publicServiceSchema = z.object({
   runtime: z.literal('host'),
   granted: z.boolean(),
   permissions: z.object({
@@ -39,7 +44,11 @@ const installedGuestSchema = z.object({
   version: z.string().trim().min(1).max(64).optional(),
   attach: z.union([z.boolean(), z.enum(['panel', 'dialog'])]).optional(),
   integration: publicIntegrationSchema.optional(),
-  agent: publicAgentSchema.optional(),
+  service: publicServiceSchema.optional(),
+  capabilities: z.object({
+    requested: z.array(z.enum(GUEST_CAPABILITIES)),
+    granted: z.array(z.enum(GUEST_CAPABILITIES)),
+  }),
   source: z.enum(['bundled', 'path', 'zip', 'git']).optional(),
   path: z.string().nullable().optional(),
   enabled: z.boolean().optional(),

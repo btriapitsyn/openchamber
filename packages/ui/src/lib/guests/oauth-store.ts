@@ -6,6 +6,7 @@ type GuestOauthState = {
   byId: Record<string, GuestOauthStatus>;
   setStatus: (guestId: string, status: GuestOauthStatus) => void;
   refresh: (guestId: string) => Promise<GuestOauthStatus | null>;
+  resetForRuntimeSwitch: () => void;
 };
 
 export const useGuestOauthStore = create<GuestOauthState>((set) => ({
@@ -19,5 +20,8 @@ export const useGuestOauthStore = create<GuestOauthState>((set) => ({
       set((state) => ({ byId: { ...state.byId, [guestId]: status } }));
     }
     return status;
+  },
+  resetForRuntimeSwitch: () => {
+    set({ byId: {} });
   },
 }));

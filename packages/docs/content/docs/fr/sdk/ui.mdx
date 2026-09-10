@@ -1,65 +1,106 @@
 ---
 title: Kit UI
-description: Dessiner une liste, une carte, un sélecteur attach ou une fenêtre pull avec @openchamber/sdk/ui.
+description: Boutons, champs, listes déroulantes, onglets, listes et autres composants de @openchamber/sdk/ui pour qu'une extension ressemble au reste d'OpenChamber.
 ---
 
 # Kit UI
 
-Importe `@openchamber/sdk/ui` si tu veux que le panneau ressemble aux trackers du host. Le kit peint du DOM avec les tokens du host. Il ne parle pas au fournisseur. Tu appelles toujours `host.request` et `host.attach`.
+`@openchamber/sdk/ui` est un ensemble de contrôles prêts à l'emploi qui utilisent les couleurs, polices et espacements de l'application, pour que votre extension ressemble au reste d'OpenChamber sans copier ses styles. Chaque contrôle est une fonction : vous lui donnez un élément qui vous appartient et ses réglages, il se dessine dedans et renvoie `{ update, dispose }`. Vous assemblez les contrôles en un écran et vous gardez la main sur les données. Le kit n'appelle jamais votre fournisseur ni OpenChamber ; c'est toujours vous qui appelez `host.request`, `host.attach` et le reste. Vous pouvez aussi vous passer du kit et écrire votre propre HTML et CSS.
 
-Tu peux ignorer le kit et dessiner ton propre DOM.
+## Appelez `applyHostReady` en premier
 
-Appelle `applyHostReady` avant tout montage.
+Les contrôles lisent leurs couleurs dans des variables CSS que `applyHostReady` écrit sur la page. Appelez-le dans `host.onReady` avant le premier montage, et les couleurs suivront le thème de l'application quand l'utilisateur en change.
 
 ```ts
-import { applyHostReady, mountIssuePage } from "@openchamber/sdk/ui";
+import { applyHostReady } from "@openchamber/sdk/ui";
 
 host.onReady((ctx) => {
   applyHostReady(ctx, document.documentElement);
-  mountIssuePage(document.querySelector("#root")!, {
-    items: tasks,
-    filters,
-    onSelect: (item) => {
-      void host.attach({
-        providerId: "acme-hello",
-        id: item.id,
-        title: item.title,
-        url: item.url ?? "",
-      });
-    },
-  });
+  // mount things here
 });
 ```
 
-## Quoi monter
+## Ce que vous pouvez monter
 
-| Appel | Où ça va |
+| Fonction | Ce qu'elle dessine |
 | --- | --- |
-| `mountIssuePage` | liste sur la barre. Filtres compacts, recherche en icône, lignes identifiant plus titre. |
-| `mountIssueCard` | ticket après un clic de ligne. Retour, statut, métadonnées, description, commentaires, bouton de pied. |
-| `mountAttachIssues` | sélecteur du menu +. La recherche reste ouverte. Après le choix, `host.attach` puis `host.close`. |
-| `mountPullRequest` | fenêtre pull ou merge request. Onglets Overview, Checks et Comments. |
-| `mountButton` | bouton de connexion partagé |
-| `mountTextField` | champ de connexion partagé |
-| `mountEmpty` | état vide partagé |
+| `mountButton` | Un bouton. `variant` est `default`, `secondary`, `outline`, `ghost` ou `destructive` ; `size` est `default`, `sm` ou `xs`. `loading` affiche un spinner et bloque les clics. |
+| `mountTextField` | Un champ avec libellé, ou un textarea avec `multiline`. Texte `helper` ou `error` optionnel, masquage `password`, et `mono` pour les tokens et les ids. |
+| `mountSearchField` | Une zone de recherche avec une loupe et un bouton d'effacement. Échap la vide. |
+| `mountSelect` | Une liste déroulante. `searchable` ajoute un filtre en haut de la liste. Les flèches déplacent, Entrée choisit, Échap ferme. |
+| `mountCheckbox`, `mountSwitch` | Une case à cocher ou un interrupteur avec un libellé et une `description` optionnelle. |
+| `mountTabs` | Des onglets en forme de pilule, chacun avec un compteur optionnel. Les flèches gauche et droite passent de l'un à l'autre. |
+| `mountBadge` | Une petite pilule. `tone` est `neutral`, `primary`, `success`, `warning`, `error` ou `info`. |
+| `mountList` | Une liste utilisable au clavier. Chaque ligne peut avoir une clé en tête, un titre, un sous-titre, un texte méta aligné à droite et un badge. |
+| `mountEmpty` | Un état vide centré avec un titre, une ligne de texte et un bouton optionnel. |
+| `mountSpinner` | Un anneau de chargement avec un libellé optionnel. |
+| `mountBanner` | Une notice colorée avec un titre, un texte et une action optionnelle. |
+| `mountSeparator` | Une ligne fine, avec un libellé au milieu si besoin. |
+| `mountProgress` | Une barre de progression de 0 à 100. |
+| `mountMenu` | Un bouton qui ouvre une liste d'actions. Les éléments peuvent être destructifs, désactivés, ou un séparateur. |
+| `mountText` | Du texte venant de votre fournisseur. Les images et liens `http(s)` au format Markdown deviennent de vraies images et de vrais liens ; tout le reste reste du texte brut, donc un contenu non fiable peut être affiché sans risque. |
 
-Description et commentaires restent du texte brut. Le kit relève `![alt](https://…)` et `[label](https://…)` en médias. Les URL d’avatar restent hors du payload attach.
+Trois helpers simples sont livrés à côté des contrôles. `filterSelectOptions(options, query)` est la correspondance qu'utilise `mountSelect`. `splitTextMedia(text)` est ce que fait `mountText` avant de dessiner. `moveListSelection` est le pas clavier partagé par la liste, le select et le menu, au cas où vous construiriez votre propre liste.
 
-`mountPullRequest` prend `mode: "view"` avec un record, des checks et des commentaires, ou `mode: "create"` avec un handler submit. Les callbacks de pied sont attach, nouvelle session, nouveau worktree, ready et merge. Le kit peint. Git reste sur le host.
+## Une liste avec recherche
 
-## Filtres et lignes
+```ts
+import { applyHostReady, mountEmpty, mountList, mountSearchField } from "@openchamber/sdk/ui";
 
-`value` sur un filtre est le choix de départ. Ensuite le composant garde les choix de l’utilisateur quand tu `update` avec une nouvelle liste `items`. Repasse `value` seulement au remontage.
+host.onReady((ctx) => {
+  applyHostReady(ctx, document.documentElement);
+  const root = document.querySelector("#root")!;
+  const searchRoot = root.appendChild(document.createElement("div"));
+  const listRoot = root.appendChild(document.createElement("div"));
 
-`slot` place un filtre. `start` grandit à gauche et garde son libellé. `end` se tasse à droite et devient une icône sous 520px. Sans `slot`, le premier filtre est `start`, le reste `end`.
+  let query = "";
+  let empty: { dispose: () => void } | null = null;
 
-Une ligne peut porter `badge` et `subtitle`. Comme le sélecteur GitHub montre un repo ou `head → base`.
+  const list = mountList(listRoot, {
+    items: [],
+    onSelect: (id) => {
+      const task = tasks.find((item) => item.id === id);
+      if (task) void host.attach({ providerId: "acme-hello", id, title: task.title, url: task.url });
+    },
+  });
 
-`hasMore` / `onMore` charge la page distante suivante. `toggle` est une case. L’invité met le sens dans `attach.text`. `session` est une seconde case, comme Create in worktree. Si elle est cochée, appelle `host.startSession({ worktree: true })` au lieu d’`attach`. `action` est un bouton de page.
+  const paint = () => {
+    const rows = tasks
+      .filter((task) => task.title.toLowerCase().includes(query.toLowerCase()))
+      .map((task) => ({ id: task.id, leading: task.key, title: task.title, meta: task.updated }));
+    list.update({ items: rows });
+    empty?.dispose();
+    empty = rows.length === 0
+      ? mountEmpty(listRoot, { title: "No tasks match", body: "Try a shorter search." })
+      : null;
+  };
 
-Le host ne cherche pas et ne persiste pas les filtres invités.
+  mountSearchField(searchRoot, {
+    value: query,
+    placeholder: "Search tasks",
+    onChange: (next) => {
+      query = next;
+      paint();
+    },
+  });
+  paint();
+});
+```
+
+`update` ne prend que les réglages qui ont changé. La liste conserve sa ligne surlignée d'une mise à jour à l'autre tant que cette ligne existe encore.
+
+## Liens dans le texte du fournisseur
+
+Votre page tourne dans un sandbox et ne peut pas ouvrir un nouvel onglet toute seule. Quand vous utilisez `mountText`, passez `onOpenUrl` et confiez le lien à OpenChamber :
+
+```ts
+mountText(root, {
+  text: comment.body,
+  onOpenUrl: (url) => void host.openUrl(url),
+});
+```
 
 ## Voir aussi
 
-- [Créer un panneau invité](/fr/sdk/) — dossier, bundle et manifeste
-- [API host](/fr/sdk/host/) — `connectHost`, attach et erreurs
+- [Créer une extension](/sdk/) pour le dossier, le manifeste et l'installation
+- [API hôte](/sdk/host/) pour `connectHost`, attach et les codes d'erreur

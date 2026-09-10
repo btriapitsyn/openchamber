@@ -3,7 +3,7 @@
   "ignore": [
     "packages/mobile/android/app/src/main/assets/public/**",
     "packages/mobile/ios/App/App/public/**",
-    "examples/**"
+    "packages/sdk/examples/**",
   ],
   "workspaces": {
     ".": {
@@ -73,6 +73,7 @@
       "entry": [
         "src/index.ts",
         "src/ui/index.ts",
+        "src/schemas.ts",
         "scripts/bundle-guest.ts",
         "src/**/*.{test,spec}.ts",
         "scripts/**/*.{test,spec}.ts"

@@ -49,7 +49,7 @@ import {
   type EmbeddedSessionChatURLCacheEntry,
   type EmbeddedSessionRuntimeBootstrap,
 } from './contextPanelEmbeddedChat';
-import { PluginPane } from './PluginPane';
+const PluginPane = React.lazy(() => import('./PluginPane').then((module) => ({ default: module.PluginPane })));
 import { useGuestsStore } from '@/lib/guests/store';
 import { isPluginContextPanelMode, pluginIdFromMode } from '@/lib/surfaces/modes';
 import { getContextSurfaceWidthFraction } from '@/lib/surfaces/registry';
@@ -1329,7 +1329,9 @@ export const ContextPanel: React.FC = () => {
               key={tab.id}
               className={cn('absolute inset-0', activeTab?.id === tab.id ? 'block' : 'hidden')}
             >
-              <PluginPane mode={tab.mode} />
+              <React.Suspense fallback={null}>
+                <PluginPane mode={tab.mode} />
+              </React.Suspense>
             </div>
           );
         })}

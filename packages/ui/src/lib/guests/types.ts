@@ -1,4 +1,4 @@
-import type { AttachContribution, PublicAgent, PublicIntegration } from '@openchamber/sdk';
+import type { AttachContribution, PublicService, PublicGuestCapabilities, PublicIntegration } from '@openchamber/sdk';
 
 export type GuestSource = 'bundled' | 'path' | 'zip' | 'git';
 
@@ -11,7 +11,9 @@ export type InstalledGuest = {
   version?: string;
   attach?: AttachContribution;
   integration?: PublicIntegration;
-  agent?: PublicAgent;
+  service?: PublicService;
+  /** What the package asks for and what the user approved at install. */
+  capabilities: PublicGuestCapabilities;
   source?: GuestSource;
   path?: string | null;
   /** False when the user disabled the extension. Omitted/true means enabled. */

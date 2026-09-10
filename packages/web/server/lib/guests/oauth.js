@@ -57,24 +57,22 @@ const rememberPending = (state, entry) => {
   pendingByGuestId.set(entry.guestId, { ...entry, state });
 };
 
+// `state` is the only thing that ties a callback to the click that started
+// it. Accepting a callback without it would let any link visited during the
+// pending window attach a stranger's account, so a missing state is a refusal.
 const takePending = (guestId, state) => {
   const trimmed = readTrimmedString(state);
-  if (trimmed) {
-    const pending = pendingByState.get(trimmed);
-    if (!pending || pending.guestId !== guestId) {
-      return null;
-    }
-    pendingByState.delete(trimmed);
-    if (pendingByGuestId.get(guestId)?.state === trimmed) {
-      pendingByGuestId.delete(guestId);
-    }
-    return pending;
-  }
-  const pending = pendingByGuestId.get(guestId);
-  if (!pending) {
+  if (!trimmed) {
     return null;
   }
-  dropPendingForGuest(guestId);
+  const pending = pendingByState.get(trimmed);
+  if (!pending || pending.guestId !== guestId) {
+    return null;
+  }
+  pendingByState.delete(trimmed);
+  if (pendingByGuestId.get(guestId)?.state === trimmed) {
+    pendingByGuestId.delete(guestId);
+  }
   return pending;
 };
 
@@ -165,9 +163,19 @@ const exchangeAuthorizationCode = async (tokenUrl, formBody, jsonBody) => {
   }
 };
 
-export const guestAuthorizationHeader = (token, authorization) => (
-  authorization === 'bearer' ? `Bearer ${token}` : token
-);
+export const guestAuthorizationHeader = (token, authorization) => {
+  if (authorization === 'bearer') {
+    return `Bearer ${token}`;
+  }
+  if (authorization === 'basic') {
+    // `basic` stores the already-encoded `username:token` pair; see saveGuestAccessToken.
+    return `Basic ${token}`;
+  }
+  return token;
+};
+
+/** Encodes `username:token` for a `basic` integration. Stored as the access token so requests need no username. */
+export const encodeBasicCredential = (username, token) => Buffer.from(`${username}:${token}`, 'utf8').toString('base64');
 
 export const guestRedirectUri = (origin, guestId) => `${origin.replace(/\/+$/, '')}/api/guests/${guestId}/oauth/callback`;
 
@@ -217,28 +225,36 @@ const fetchAccountLabel = async (api, accessToken) => {
   return { ok: true, account: readAccountLabel(payload, api.account.name) };
 };
 
-export const saveGuestAccessToken = async ({ guest, persistPath, token }) => {
+export const saveGuestAccessToken = async ({ guest, persistPath, token, username }) => {
   if (resolveIntegrationAuth(guest.integration ?? {}) !== 'token') {
     throw new GuestOAuthError('This guest does not accept a pasted token.', 'NO_TOKEN_AUTH');
   }
   const api = resolveIntegrationApi(guest.integration);
-  const accessToken = readTrimmedString(token);
-  if (!api || !accessToken) {
+  const pastedToken = readTrimmedString(token);
+  if (!api || !pastedToken) {
     throw new GuestOAuthError('API token is missing.', 'TOKEN_MISSING');
   }
+  const pastedUsername = readTrimmedString(username);
+  if (api.authorization === 'basic' && !pastedUsername) {
+    throw new GuestOAuthError('Username is missing.', 'USERNAME_MISSING');
+  }
+  const accessToken = api.authorization === 'basic'
+    ? encodeBasicCredential(pastedUsername, pastedToken)
+    : pastedToken;
   const probed = await fetchAccountLabel(api, accessToken);
   if (api.account && !probed.ok) {
     throw new GuestOAuthError('That API token was refused.', 'TOKEN_INVALID');
   }
+  const account = probed.account || (api.authorization === 'basic' ? pastedUsername.slice(0, GUEST_ACCOUNT_MAX) : '');
   await patchGuestAuth(guest.id, {
     accessToken,
     refreshToken: null,
     tokenType: api.authorization,
     expiresAt: null,
-    account: probed.account,
+    account,
     authorizedAt: Date.now(),
   }, persistPath);
-  return { connected: true, account: probed.account };
+  return { connected: true, account };
 };
 
 export const startGuestAuthorization = async ({ guest, persistPath, origin }) => {

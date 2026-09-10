@@ -7,6 +7,9 @@ import {
   clampStartSessionRequest,
   GUEST_ATTACH_TITLE_MAX,
   GUEST_COMPOSE_TEXT_MAX,
+  readHostMessage,
+} from './contract.ts';
+import {
   guestMessageSchema,
   hostMessageSchema,
   parseGuestMessage,
@@ -28,6 +31,16 @@ const readyPayload = {
       focus: '#4af',
       primary: '#4af',
       font: 'SF Pro Text, sans-serif',
+      mutedSurface: '#f4f4f5',
+      elevatedForeground: '#111111',
+      active: '#e5e5e5',
+      selectionForeground: '#111111',
+      primaryForeground: '#ffffff',
+      success: '#16a34a',
+      warning: '#d97706',
+      error: '#dc2626',
+      info: '#2563eb',
+      mono: 'Menlo, monospace',
       radius: '0.5625rem',
     },
   },
@@ -578,5 +591,44 @@ describe('parseGuestMessage', () => {
       id: 'oc-3',
       payload: { text: 'x'.repeat(GUEST_COMPOSE_TEXT_MAX + 1) },
     }).success).toBe(false);
+  });
+});
+
+describe('readHostMessage', () => {
+  test('accepts a host push and a result on the envelope alone', () => {
+    const ready = parseHostMessage({
+      channel: OPENCHAMBER_SDK_CHANNEL,
+      v: OPENCHAMBER_SDK_API_VERSION,
+      type: 'directory',
+      payload: { directory: '/repo' },
+    });
+    expect(readHostMessage(ready)).toEqual(ready);
+    const failed = readHostMessage({
+      channel: OPENCHAMBER_SDK_CHANNEL,
+      v: OPENCHAMBER_SDK_API_VERSION,
+      type: 'result',
+      id: 'oc-1',
+      ok: false,
+      error: 'nope',
+      code: 'made-up',
+    });
+    expect(failed).toEqual({
+      channel: OPENCHAMBER_SDK_CHANNEL,
+      v: OPENCHAMBER_SDK_API_VERSION,
+      type: 'result',
+      id: 'oc-1',
+      ok: false,
+      error: 'nope',
+      code: 'HOST_REJECTED',
+    });
+  });
+
+  test('drops junk, wrong channels, and results without an id or error', () => {
+    expect(readHostMessage(null)).toBeNull();
+    expect(readHostMessage('hello')).toBeNull();
+    expect(readHostMessage({ channel: 'other', v: 1, type: 'directory', payload: {} })).toBeNull();
+    expect(readHostMessage({ channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION, type: 'nope', payload: {} })).toBeNull();
+    expect(readHostMessage({ channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION, type: 'result', ok: true })).toBeNull();
+    expect(readHostMessage({ channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION, type: 'result', id: 'x', ok: false })).toBeNull();
   });
 });

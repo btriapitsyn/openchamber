@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { OPENCHAMBER_SDK_API_VERSION, OPENCHAMBER_SDK_CHANNEL } from './api-version.ts';
 import { connectHost, HostRequestError, type HostFrame } from './host.ts';
-import { GUEST_ATTACH_TITLE_MAX, type GuestMessage, type HostMessage } from './protocol.ts';
+import { GUEST_ATTACH_TITLE_MAX, type GuestMessage, type HostMessage } from './contract.ts';
 
 type Listener = (event: Event) => void;
 
@@ -47,6 +47,16 @@ const ready: HostMessage = {
         focus: '#4af',
         primary: '#4af',
         font: 'SF Pro Text, sans-serif',
+        mutedSurface: '#f4f4f5',
+        elevatedForeground: '#111111',
+        active: '#e5e5e5',
+        selectionForeground: '#111111',
+        primaryForeground: '#ffffff',
+        success: '#16a34a',
+        warning: '#d97706',
+        error: '#dc2626',
+        info: '#2563eb',
+        mono: 'Menlo, monospace',
         radius: '0.5625rem',
       },
     },

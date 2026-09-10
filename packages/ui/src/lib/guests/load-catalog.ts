@@ -13,7 +13,19 @@ const alignCatalogRuntime = (runtimeKey: string): void => {
   }
 };
 
-export const loadGuestCatalog = async (): Promise<void> => {
+let inFlight: Promise<void> | null = null;
+
+/** One request at a time: the rail, the composer, and the dialogs all ask on mount. */
+export const loadGuestCatalog = (): Promise<void> => {
+  if (inFlight) return inFlight;
+  const request = loadGuestCatalogOnce().finally(() => {
+    if (inFlight === request) inFlight = null;
+  });
+  inFlight = request;
+  return request;
+};
+
+const loadGuestCatalogOnce = async (): Promise<void> => {
   const runtimeKey = getRuntimeKey();
   alignCatalogRuntime(runtimeKey);
 

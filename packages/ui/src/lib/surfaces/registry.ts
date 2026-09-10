@@ -161,7 +161,6 @@ export const CONTEXT_SURFACES: readonly ContextSurfaceDescriptor[] = [
   },
 ];
 
-const SURFACE_BY_ID = new Map(CONTEXT_SURFACES.map((surface) => [surface.id, surface]));
 const FRACTION_BY_MODE = new Map(CONTEXT_SURFACES.map((surface) => [surface.mode, surface.defaultWidthFraction]));
 
 // Tablet width and up: below this the walkthrough cannot show a stop and its

@@ -1,50 +1,54 @@
 ---
-title: 构建访客面板
-description: 做一块跑在 OpenChamber 栏上的 HTML 面板，通过 connectHost 和宿主对话。
+title: 构建扩展
+description: 用 @openchamber/sdk 为 OpenChamber 添加你自己的面板，从文件夹或 git 地址安装，并通过 connectHost 与应用交互。
 ---
 
-# 构建访客面板
+# 构建扩展
 
-`@openchamber/sdk` 把第三方面板放到 OpenChamber 栏上。面板是 iframe 里的 HTML。它通过 `connectHost()` 和 OpenChamber 说话。
+使用 `@openchamber/sdk` 为 OpenChamber 添加你自己的面板。扩展是一个小型网页，OpenChamber 会把它显示在右侧栏。它通过 `connectHost()` 与应用交互：可以读取当前项目和会话、显示提示消息、把文本放进聊天框、把任务附加到会话，并在用户批准后创建会话和发送提示词。
 
-这只在网页和桌面端运行。VS Code 和移动端会把目录标成 unsupported。它们不加载 iframe。
+扩展可以在 OpenChamber 的网页版和桌面版中运行。VS Code 和移动端暂不加载扩展。
 
-## 你要交付什么
+## 扩展是什么
 
-一个文件夹，里面有三样东西：
+一个包含三个文件的文件夹：
 
-- 带 `openchamber` 块的 `package.json`
-- `panel/index.html`
-- `panel/main.js`，经典 IIFE。iframe 加载不了 ESM。
+- `package.json`，其中带有 `openchamber` 块（清单）
+- `panel/index.html`，OpenChamber 显示的页面
+- `panel/main.js`，你的脚本，需构建为单个经典文件（IIFE，而不是 ES 模块，因为页面加载在沙箱化的 iframe 中）
 
-`oc-dev` 在提供 `panel/main.js` 时仍会编译 `panel/main.ts`。打包后的 OpenChamber 和 `openchamber serve` 不会。请交付 IIFE。
+OpenChamber 从不编译你的代码。请直接发布构建好的 `.js` 文件。SDK 附带一个打包命令；任何能输出 IIFE 的打包器也都可以。
 
 ```bash
-bun run --filter @openchamber/sdk bundle -- panel/main.ts panel/main.js
+npm install @openchamber/sdk
+bunx openchamber-guest-bundle panel/main.ts panel/main.js
 ```
 
-在 HTML 里指向这个文件。
+打包命令依赖 Bun 运行。没有 Bun 时，可以用 esbuild 或其他打包器，并加上 `--format=iife --platform=browser`。
 
-## 开发时怎么装
+一个完整可运行的扩展（全部三个文件）在[示例](/sdk/example/)页面。复制它，然后改成你自己的 API 和列表。
 
-1. 在网页或桌面端启动 OpenChamber。
-2. 打开 **Settings → Extensions**。
-3. 加上文件夹路径、本地 `.zip`，或 https 的 git / zip URL。
+在 `index.html` 中用普通的 `<script src="main.js"></script>` 引用 `main.js`。
 
-栏上应出现你的图标。点一下就会加载你的 HTML。两个面板不能用同一个 `id`。
+## 开发时安装
 
+1. 在网页版或桌面版运行 OpenChamber。
+2. 打开 设置 → 扩展。
+3. 粘贴你的文件夹的绝对路径，然后点击添加。
 
-**文件夹**安装会把路径留在 `extensions.json`。卸载只去掉目录行。
+OpenChamber 会读取清单，并弹出一个对话框列出扩展所请求的内容（见[能力](#能力)）。批准后，你的图标会出现在侧栏。点击它，你的页面就会加载。
 
-**zip**（或 https zip / git URL）会复制到 OpenChamber data dir 的 `extensions/{id}`。主机解压、校验清单，再从该副本运行。卸载会删除副本。zip 里放 `package.json`、`panel/index.html`、`panel/main.js` 以及声明的 `icon.svg` / `agent/main.js`。不要放 `node_modules` 或 TypeScript。
+你也可以添加本地 `.zip` 文件，或指向 git 仓库或 zip 文件的 https 链接。这些会被复制到 OpenChamber 的数据文件夹，并从该副本运行，因此请发布构建好的文件，而不是 `node_modules` 或 TypeScript 源码。移除扩展时会删除该副本。从文件夹安装则直接从你的文件夹运行，你可以编辑、重新构建、再重新加载。
 
 ## 清单
 
 ```json
 {
-  "name": "@acme/hello-panel",
+  "name": "@acme/hello",
+  "version": "1.0.0",
   "openchamber": {
     "apiVersion": 1,
+    "engines": { "openchamber": ">=1.24.0" },
     "contributes": {
       "panel": {
         "id": "acme-hello",
@@ -53,13 +57,14 @@ bun run --filter @openchamber/sdk bundle -- panel/main.ts panel/main.js
         "entry": "panel/index.html"
       },
       "attach": "dialog",
+      "capabilities": ["prompt", "sessions"],
       "integration": {
         "name": "Acme",
         "description": "Tasks from Acme",
-        "oauth": {
-          "authorizeUrl": "https://acme.example/oauth/authorize",
-          "tokenUrl": "https://acme.example/oauth/token",
-          "apiOrigin": "https://api.acme.example"
+        "token": {
+          "apiOrigin": "https://api.acme.example",
+          "account": { "path": "/me", "name": "login" },
+          "scheme": "bearer"
         },
         "settings": [{ "id": "list-id", "label": "List ID" }]
       }
@@ -68,30 +73,61 @@ bun run --filter @openchamber/sdk bundle -- panel/main.ts panel/main.js
 }
 ```
 
-`apiVersion` 是 `1`。其他值会被拒绝。
+`version` 是必填项，且必须是 semver 格式。设置 → 扩展 会在卡片上显示它。
 
-`engines.openchamber` 可选。使用 `1.22.0` 或 `>=1.22.0`。若当前 OpenChamber 更旧，安装会被拒绝。
+`apiVersion` 为 `1`。OpenChamber 拒绝任何其他值。
 
-`contributes.agent` 可选。它声明由宿主启动的本地进程（Docker socket 等）。面板调用 `agentRequest`，进程归宿主所有。见包内 `GUEST_AGENTS.md`。
+`engines.openchamber` 可选。填写你的扩展支持的最低 OpenChamber 版本，写成 `1.24.0` 或 `>=1.24.0`。更旧的版本会拒绝安装，而不是之后才出错。
 
-`id` 用 kebab-case。`icon` 是栏上同款 kebab-case 的 Remixicon 名：`RiWindowLine` 变成 `window`。也可以放包内 SVG 路径，例如 `icon.svg`。URL 和绝对路径会解析失败。`entry` 必须留在包内。`../` 和绝对路径会解析失败。
+`contributes.panel` 描述侧栏入口。`id` 使用 kebab-case，且在已安装扩展中必须唯一。`icon` 是 Remixicon 图标名（`RiWindowLine` 写成 `window`），或者你文件夹内的 SVG 文件，如 `icon.svg`。`entry` 是你文件夹内的 HTML 文件。
 
-`attach` 可选。
+`contributes.attach` 可选。它会把你的扩展加入聊天框旁的 + 菜单，用户可以从中挑选一个任务并附加到会话。
 
-- `true` 或 `"panel"` 会在 + 菜单加一行，打开栏
-- `"dialog"` 用宿主窗口包住同一个 iframe
-- 省略或设为 `false`，面板就不会出现在那些菜单里
+- `"dialog"` 在一个窗口中打开你的页面
+- `true` 或 `"panel"` 改为打开侧栏面板
+- 省略它，扩展就不会出现在该菜单中
 
-`ready.surface` 是 `panel` 或 `dialog`，所以你可以在栏上画列表，在窗口里画选择器。
+你的页面可以通过 `ctx.surface`（`panel` 或 `dialog`）判断自己在哪里，因此可以在侧栏显示列表，在窗口中显示选择器。
 
-`integration` 可选。宿主会在 **Settings → Integrations** 画一张卡片。OAuth 访客在那里粘贴 client id。Token 访客粘贴 API token。`host: { "provider": "linear" }` 复用 OpenChamber 的官方 Linear 连接，不会要 client id。访客看不到 token。
+`contributes.integration` 可选。它会在 设置 → 集成 中添加一张卡片，用户在那里连接账户。见[账户与网络](#账户与网络)。
 
-`request`、OAuth、attach 和错误见 [宿主 API](/zh-cn/sdk/host/)。
+`contributes.service` 可选。它声明一个由 OpenChamber 在扩展旁启动的本地进程，用于网页无法访问的东西，比如 Docker socket。见包内文件 `GUEST_SERVICES.md`。
 
-## 面板里的前几行
+## 能力
+
+绘制面板和读取当前会话无需任何权限。凡是代表用户执行操作的，都需要。把它们列在 `contributes.capabilities` 中：
+
+| 能力 | 允许的操作 |
+| --- | --- |
+| `prompt` | 向用户的会话发送消息（`prompt({ send: true })`、带 `text` 的 `startSession`） |
+| `sessions` | 创建会话和 worktree（`startSession`） |
+
+另有两项会自动为你加上：声明了 `integration` 时加上 `network`，声明了 `service` 时加上 `service`。
+
+用户在安装扩展时会看到完整列表一次，然后批准或移除扩展。如果新版本请求更多权限，对话框会再次出现。调用需要用户尚未批准的能力时，会以 `NOT_GRANTED` 失败。
+
+## 账户与网络
+
+你的页面运行在沙箱中，无法直接访问互联网。声明一个 `integration`，OpenChamber 就会通过 `host.request` 替你发起调用，并附上用户的令牌。令牌永远不会到达你的页面。
+
+- `token`：用户在 设置 → 集成 的卡片上粘贴 API 令牌。`apiOrigin` 是 `request` 唯一可以调用的源。`account` 可选：一个 GET 路径和一个字段名，让卡片能显示已连接的是谁。`scheme` 决定令牌如何发送,见下表。请查看提供方的 API 文档,确认它期望哪种请求头。
+- `oauth`：用户粘贴 client id，由 OpenChamber 执行授权流程。需要 `authorizeUrl`、`tokenUrl` 和 `apiOrigin`。
+- `host: { "provider": "linear" }`：复用 OpenChamber 中已连接的 Linear 账户。无需 client id。
+
+每种 `scheme` 发送的内容:
+
+| `scheme` | OpenChamber 发送的请求头 | 何时使用 |
+| --- | --- | --- |
+| 省略 | `Authorization: <token>` | API 文档中要求在请求头里放不带前缀的令牌 |
+| `"bearer"` | `Authorization: Bearer <token>` | API 文档中要求 bearer 令牌或 personal access token |
+| `"basic"` | `Authorization: Basic base64(username:token)` | API 文档中要求使用用户名(通常是邮箱)加 API 令牌的 HTTP Basic 认证;卡片会要求填写两者,`usernameLabel` 指定第一个字段的名称 |
+
+`settings` 会在卡片上添加纯文本字段。它们的值会通过 `ctx.settings` 传给你。
+
+## 面板里的前几行代码
 
 ```ts
-import { connectHost, HostRequestError } from "@openchamber/sdk";
+import { connectHost } from "@openchamber/sdk";
 
 const host = connectHost();
 
@@ -101,11 +137,12 @@ host.onReady((ctx) => {
 });
 ```
 
-脚本不在 iframe 里时，`connectHost` 会拒绝。
+`connectHost` 只在 OpenChamber 内部可用。作为普通文件打开时，每次调用都会以 `HOST_UNAVAILABLE` 拒绝。
 
-需要任务列表、卡片或 attach 选择器时，从 `@openchamber/sdk/ui` 引入绘图套件。也可以跳过套件，自己画 DOM。见 [UI 套件](/zh-cn/sdk/ui/)。
+要让面板看起来和应用的其余部分一致，使用 `@openchamber/sdk/ui` 提供的构件：按钮、输入框、下拉框、标签页、列表等，都采用应用的颜色和字体。见 [UI 套件](/sdk/ui/)。你也可以自己编写 HTML 和 CSS。
 
-## 相关
+## 相关页面
 
-- [宿主 API](/zh-cn/sdk/host/) — `connectHost` 方法、限制和错误码
-- [UI 套件](/zh-cn/sdk/ui/) — 列表、卡片、attach 选择器和 pull 窗口
+- [Host API](/sdk/host/)：每个 `connectHost` 方法、其限制和错误码
+- [UI 套件](/sdk/ui/)：构件
+- [示例](/sdk/example/)：一个可直接复制的完整三文件扩展

@@ -78,7 +78,6 @@ High-value anchors:
 - Electron: `packages/electron/README.md`
 - Mobile: `packages/mobile/README.md`
 - SDK: `packages/sdk/DOCUMENTATION.md`
-- SDK: `packages/sdk/DOCUMENTATION.md`
 
 ## Project Skills
 

@@ -9,6 +9,7 @@ const hello: InstalledGuest = {
   icon: 'window',
   entry: 'panel/index.html',
   source: 'path',
+  capabilities: { requested: [], granted: [] },
 };
 
 const resetStore = () => {

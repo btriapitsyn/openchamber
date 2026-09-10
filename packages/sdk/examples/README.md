@@ -1,0 +1,31 @@
+# Example extensions
+
+Four small extensions that exercise the SDK contract end to end. They are built
+and checked in so they install as-is; edit `main.ts` and rebuild with the command
+below when you change one.
+
+| Folder | Capabilities it asks for | What it shows |
+| --- | --- | --- |
+| `hello-kit` | none | Every UI kit control, the pushes from the app (session, directory, theme), toast, clipboard, open URL, compose into the chat box. No approval dialog. |
+| `tasks-demo` | `prompt`, `sessions` | A fake task list. Attach a task as a chip, link it to the current session, start a session (optionally on a worktree), send a prompt. Appears in the composer + menu as a dialog. Exercises the approval dialog and `NOT_GRANTED` when you decline. |
+| `service-echo` | `service` | A local service process (Node HTTP server on loopback). The panel calls it through `host.serviceRequest` and shows status. Exercises the service approval and spawn/stop lifecycle. |
+| `github-token` | `network` | A token integration against `https://api.github.com`. Paste a GitHub token in Settings → Integrations, then the panel lists your repositories through `host.request`. Exercises the OAuth/token store and the request proxy. |
+
+## Install
+
+1. Run the app: `bun run dev` from the repo root, open the URL it prints.
+2. Settings → Extensions → paste the absolute path of a folder below → Add:
+   - `<repo>/packages/sdk/examples/hello-kit`
+   - `<repo>/packages/sdk/examples/tasks-demo`
+   - `<repo>/packages/sdk/examples/service-echo`
+   - `<repo>/packages/sdk/examples/github-token`
+3. Approve what the dialog lists (or Remove to see the refusal path). The icon appears on the context rail.
+
+## Rebuild after editing
+
+From the repo root:
+
+```bash
+bun packages/sdk/scripts/bundle-guest.ts packages/sdk/examples/hello-kit/panel/main.ts packages/sdk/examples/hello-kit/panel/main.js
+bun packages/sdk/scripts/bundle-guest.ts --node packages/sdk/examples/service-echo/service/main.ts packages/sdk/examples/service-echo/service/main.js
+```

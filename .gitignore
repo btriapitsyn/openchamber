@@ -69,9 +69,6 @@ workspaces/
 *.pid
 .worktrees/
 
-# Local guest scratch. Not part of the repo.
-examples/
-
 # OpenChamber app runtime state (sessions db, screenshots)
 .openchamber/screenshots/
 

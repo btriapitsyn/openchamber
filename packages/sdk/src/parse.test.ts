@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 
 import { OPENCHAMBER_SDK_API_VERSION } from './api-version.ts';
-import { parseManifest, parseManifestJson, resolveAttachMode } from './parse.ts';
+import { resolveAttachMode, resolveIntegrationApi, toPublicIntegration } from './manifest.ts';
+import { parseManifest, parseManifestJson } from './parse.ts';
 
 const validBlock = {
   apiVersion: OPENCHAMBER_SDK_API_VERSION,
@@ -116,13 +117,13 @@ describe('parseManifest', () => {
     expect(result).toMatchObject({ ok: false, code: 'unsupported-api-version' });
   });
 
-  test('accepts an agent on apiVersion 1', () => {
+  test('accepts a service on apiVersion 1', () => {
     const result = parseManifest({
       apiVersion: 1,
       contributes: {
         panel: validBlock.contributes.panel,
-        agent: {
-          entry: 'agent/main.js',
+        service: {
+          entry: 'service/main.js',
           runtime: 'host',
           permissions: {
             sockets: ['/var/run/docker.sock'],
@@ -133,8 +134,8 @@ describe('parseManifest', () => {
     });
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.manifest.contributes.agent).toEqual({
-        entry: 'agent/main.js',
+      expect(result.manifest.contributes.service).toEqual({
+        entry: 'service/main.js',
         runtime: 'host',
         permissions: {
           sockets: [{
@@ -156,8 +157,8 @@ describe('parseManifest', () => {
       apiVersion: 1,
       contributes: {
         panel: validBlock.contributes.panel,
-        agent: {
-          entry: 'agent/main.js',
+        service: {
+          entry: 'service/main.js',
           runtime: 'host',
           permissions: {
             sockets: [{
@@ -174,7 +175,7 @@ describe('parseManifest', () => {
     });
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.manifest.contributes.agent?.permissions?.sockets).toEqual([{
+      expect(result.manifest.contributes.service?.permissions?.sockets).toEqual([{
         id: 'docker',
         candidatesByPlatform: {
           linux: ['/var/run/docker.sock'],
@@ -190,8 +191,8 @@ describe('parseManifest', () => {
       apiVersion: 1,
       contributes: {
         panel: validBlock.contributes.panel,
-        agent: {
-          entry: 'agent/main.js',
+        service: {
+          entry: 'service/main.js',
           runtime: 'host',
           permissions: {
             sockets: [{ id: 'docker' }],
@@ -199,7 +200,7 @@ describe('parseManifest', () => {
         },
       },
     });
-    expect(result).toMatchObject({ ok: false, code: 'invalid-agent' });
+    expect(result).toMatchObject({ ok: false, code: 'invalid-service' });
   });
 
   test('rejects apiVersion 2', () => {
@@ -352,6 +353,35 @@ describe('parseManifest', () => {
         },
         settings: [{ id: 'list-id', label: 'List ID' }],
       });
+    }
+  });
+
+  test('keeps a basic token scheme with its username label', () => {
+    const result = parseManifest({
+      ...validBlock,
+      contributes: {
+        ...validBlock.contributes,
+        integration: {
+          name: 'Jira',
+          description: 'Issues from Jira Cloud',
+          token: {
+            apiOrigin: 'https://acme.atlassian.net',
+            scheme: 'basic',
+            usernameLabel: 'Atlassian email',
+          },
+        },
+      },
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const integration = result.manifest.contributes.integration;
+      expect(integration?.token).toEqual({
+        apiOrigin: 'https://acme.atlassian.net',
+        scheme: 'basic',
+        usernameLabel: 'Atlassian email',
+      });
+      expect(resolveIntegrationApi(integration!)?.authorization).toBe('basic');
+      expect(toPublicIntegration(integration!).token).toEqual({ scheme: 'basic', usernameLabel: 'Atlassian email' });
     }
   });
 

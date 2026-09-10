@@ -1,65 +1,106 @@
 ---
 title: UI kiti
-description: @openchamber/sdk/ui ile görev listesi, kart, attach seçici veya pull penceresi çizin.
+description: @openchamber/sdk/ui içindeki düğmeler, alanlar, açılır listeler, sekmeler, listeler ve diğer yapı taşları; bir eklentiyi OpenChamber'ın geri kalanı gibi gösterir.
 ---
 
 # UI kiti
 
-Panelin host takipçilerine benzemesini istiyorsanız `@openchamber/sdk/ui` içe aktarın. Kit, host token’larından DOM çizer. Sağlayıcıyla konuşmaz. `host.request` ve `host.attach` sizin çağrınız olarak kalır.
+`@openchamber/sdk/ui`, uygulamanın renklerini, yazı tiplerini ve boşluklarını kullanan hazır kontroller kümesidir; böylece eklentiniz stilleri kopyalamadan OpenChamber'ın geri kalanı gibi görünür. Her kontrol bir fonksiyondur: ona size ait bir öğe ve ayarlarını verirsiniz, kendini oraya çizer ve `{ update, dispose }` döndürür. Kontrolleri bir ekrana siz yerleştirir, veriyi siz tutarsınız. Kit sağlayıcınızı ya da OpenChamber'ı asla çağırmaz; `host.request`, `host.attach` ve diğerlerini yine kendiniz çağırırsınız. Kiti atlayıp kendi HTML ve CSS'inizi de yazabilirsiniz.
 
-Kiti atlayıp kendi DOM’unuzu da çizebilirsiniz.
+## Önce `applyHostReady` çağırın
 
-Herhangi bir mount’tan önce `applyHostReady` çağırın.
+Kontroller renklerini `applyHostReady` fonksiyonunun sayfaya yazdığı CSS değişkenlerinden okur. Bunu `host.onReady` içinde, ilk bağlamadan önce çağırın; kullanıcı temayı değiştirdiğinde renkler uygulamanın temasını izler.
 
 ```ts
-import { applyHostReady, mountIssuePage } from "@openchamber/sdk/ui";
+import { applyHostReady } from "@openchamber/sdk/ui";
 
 host.onReady((ctx) => {
   applyHostReady(ctx, document.documentElement);
-  mountIssuePage(document.querySelector("#root")!, {
-    items: tasks,
-    filters,
-    onSelect: (item) => {
-      void host.attach({
-        providerId: "acme-hello",
-        id: item.id,
-        title: item.title,
-        url: item.url ?? "",
-      });
-    },
-  });
+  // mount things here
 });
 ```
 
-## Neyi mount edersiniz
+## Neleri bağlayabilirsiniz
 
-| Çağrı | Nereye gider |
+| Fonksiyon | Ne çizer |
 | --- | --- |
-| `mountIssuePage` | ray listesi. Sıkı süzgeçler, ikon arama, tanımlayıcı artı başlık satırları. |
-| `mountIssueCard` | satır tıklamasından sonra görev. Geri, durum, meta, açıklama, yorumlar, altlık düğmesi. |
-| `mountAttachIssues` | + menü seçicisi. Arama açık kalır. Seçince `host.attach` ve `host.close`. |
-| `mountPullRequest` | pull veya birleştirme isteği penceresi. Sekmeler Overview, Checks ve Comments. |
-| `mountButton` | ortak bağlan düğmesi |
-| `mountTextField` | ortak bağlan alanı |
-| `mountEmpty` | ortak boş durum |
+| `mountButton` | Bir düğme. `variant` değeri `default`, `secondary`, `outline`, `ghost` veya `destructive`; `size` değeri `default`, `sm` veya `xs`. `loading` bir dönen simge gösterir ve tıklamaları engeller. |
+| `mountTextField` | Etiketli bir giriş alanı ya da `multiline` ile çok satırlı metin alanı. İsteğe bağlı `helper` veya `error` metni, `password` maskeleme ve token ile id'ler için `mono`. |
+| `mountSearchField` | Büyüteç ve temizleme düğmeli bir arama kutusu. Escape temizler. |
+| `mountSelect` | Bir açılır liste. `searchable` listenin üstüne bir filtre kutusu ekler. Ok tuşları gezer, Enter seçer, Escape kapatır. |
+| `mountCheckbox`, `mountSwitch` | Etiketli ve isteğe bağlı `description` içeren bir onay kutusu ya da anahtar. |
+| `mountTabs` | Her biri isteğe bağlı sayaç taşıyan hap biçimli sekmeler. Sol ve sağ oklar aralarında gezer. |
+| `mountBadge` | Küçük bir hap. `tone` değeri `neutral`, `primary`, `success`, `warning`, `error` veya `info`. |
+| `mountList` | Klavyeyle kullanımı kolay bir liste. Her satırda öncü bir anahtar, başlık, alt başlık, sağa hizalı meta metin ve bir rozet olabilir. |
+| `mountEmpty` | Ortalanmış boş durum; başlık, bir satır gövde ve isteğe bağlı düğme. |
+| `mountSpinner` | İsteğe bağlı etiketli bir yükleme halkası. |
+| `mountBanner` | Tonlu bir uyarı; başlık, gövde ve isteğe bağlı eylem. |
+| `mountSeparator` | İnce bir çizgi, isteğe bağlı olarak ortasında etiket. |
+| `mountProgress` | 0'dan 100'e ilerleme çubuğu. |
+| `mountMenu` | Eylem listesi açan bir düğme. Öğeler yıkıcı, devre dışı ya da ayırıcı olabilir. |
+| `mountText` | Sağlayıcınızdan gelen metin. Markdown tarzı görseller ve `http(s)` bağlantıları gerçek görsel ve bağlantıya dönüşür; geri kalan her şey düz metin kalır, bu yüzden güvenilmeyen içerik güvenle gösterilebilir. |
 
-Açıklama ve yorumlar düz metin kalır. Kit `![alt](https://…)` ve `[label](https://…)` öğelerini medyaya kaldırır. Avatar URL’leri attach yüküne girmez.
+Kontrollerin yanında üç düz yardımcı da gelir. `filterSelectOptions(options, query)`, `mountSelect` fonksiyonunun kullandığı eşleştirmedir. `splitTextMedia(text)`, `mountText` fonksiyonunun çizmeden önce yaptığı şeydir. `moveListSelection`, liste, açılır liste ve menünün paylaştığı klavye adımıdır; kendi listenizi kurarsanız işinize yarar.
 
-`mountPullRequest` kayıt, kontroller ve yorumlarla `mode: "view"` veya bir submit işleyicisiyle `mode: "create"` alır. Altlık geri çağrıları attach, yeni oturum, yeni worktree, ready ve merge’dir. Kit çizer. Git host’ta kalır.
+## Aramalı bir liste
 
-## Süzgeçler ve satırlar
+```ts
+import { applyHostReady, mountEmpty, mountList, mountSearchField } from "@openchamber/sdk/ui";
 
-Bir süzgeçteki `value` başlangıç seçimidir. Bundan sonra yeni bir `items` listesiyle `update` ettiğinizde bileşen kullanıcının seçimlerini tutar. `value`’yu yalnızca yeniden mount ederken tekrar verin.
+host.onReady((ctx) => {
+  applyHostReady(ctx, document.documentElement);
+  const root = document.querySelector("#root")!;
+  const searchRoot = root.appendChild(document.createElement("div"));
+  const listRoot = root.appendChild(document.createElement("div"));
 
-`slot` bir süzgeci yerleştirir. `start` solda büyür ve etiketini tutar. `end` sağa paketlenir ve panel 520px altındayken ikona döner. `slot` yoksa ilk süzgeç `start`, geri kalanı `end` olur.
+  let query = "";
+  let empty: { dispose: () => void } | null = null;
 
-Bir satır `badge` ve `subtitle` taşıyabilir. GitHub seçicisinin bir repo veya `head → base` göstermesi gibi.
+  const list = mountList(listRoot, {
+    items: [],
+    onSelect: (id) => {
+      const task = tasks.find((item) => item.id === id);
+      if (task) void host.attach({ providerId: "acme-hello", id, title: task.title, url: task.url });
+    },
+  });
 
-`hasMore` / `onMore` sonraki uzak sayfayı yükler. `toggle` bir onay kutusudur. Anlamı konuk `attach.text`’e koyar. `session` ikinci bir onay kutusudur, Create in worktree gibi. İşaretliyse `attach` yerine `host.startSession({ worktree: true })` çağırın. `action` bir sayfa düğmesidir.
+  const paint = () => {
+    const rows = tasks
+      .filter((task) => task.title.toLowerCase().includes(query.toLowerCase()))
+      .map((task) => ({ id: task.id, leading: task.key, title: task.title, meta: task.updated }));
+    list.update({ items: rows });
+    empty?.dispose();
+    empty = rows.length === 0
+      ? mountEmpty(listRoot, { title: "No tasks match", body: "Try a shorter search." })
+      : null;
+  };
 
-Host aramaz ve konuk süzgeçlerini saklamaz.
+  mountSearchField(searchRoot, {
+    value: query,
+    placeholder: "Search tasks",
+    onChange: (next) => {
+      query = next;
+      paint();
+    },
+  });
+  paint();
+});
+```
 
-## İlgili
+`update` yalnızca değişen ayarları alır. Vurgulu satır hâlâ oradaysa liste güncellemeler arasında onu korur.
 
-- [Konuk panel oluştur](/tr/sdk/) — klasör, paket ve manifest
-- [Host API](/tr/sdk/host/) — `connectHost`, attach ve hatalar
+## Sağlayıcı metnindeki bağlantılar
+
+Sayfanız bir sandbox içinde çalışır ve kendi başına yeni sekme açamaz. `mountText` kullanırken `onOpenUrl` verin ve bağlantıyı OpenChamber'a bırakın:
+
+```ts
+mountText(root, {
+  text: comment.body,
+  onOpenUrl: (url) => void host.openUrl(url),
+});
+```
+
+## İlgili sayfalar
+
+- [Eklenti oluşturma](/sdk/): klasör, manifest ve kurulum
+- [Host API](/sdk/host/): `connectHost`, attach ve hata kodları
