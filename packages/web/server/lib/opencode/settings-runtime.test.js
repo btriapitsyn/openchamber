@@ -1,10 +1,93 @@
 import { describe, expect, it } from 'vitest';
 import crypto from 'crypto';
 import fsPromises from 'fs/promises';
+import { realpathSync } from 'fs';
 import os from 'os';
 import path from 'path';
 import { createProjectIdFromPath } from '../projects/project-id.js';
 import { createSettingsRuntime } from './settings-runtime.js';
+import { createSettingsHelpers } from './settings-helpers.js';
+import { createSettingsNormalizationRuntime } from './settings-normalization-runtime.js';
+
+describe('FunASR production settings persistence', () => {
+  const cases = ['python', 'cpp-2pass', 'cpp-offline'].flatMap((protocol) => [
+    { protocol, legacy: false },
+    { protocol, legacy: true },
+  ]);
+  for (const { protocol, legacy } of cases) {
+    it(`keeps ${protocol} instance-wide from ${legacy ? 'legacy settings' : 'a fresh install'} while dictation preferences remain in the profile`, async () => {
+      const tempRoot = await fsPromises.mkdtemp(path.join(os.tmpdir(), 'oc-funasr-settings-'));
+      const settingsFilePath = path.join(tempRoot, 'settings.json');
+      const preferencesFilePath = path.join(tempRoot, 'preferences.json');
+      const normalizers = createSettingsNormalizationRuntime({
+        os, path, processLike: process, realpathSync,
+        tunnelBootstrapTtlDefaultMs: 600000,
+        tunnelBootstrapTtlMinMs: 60000,
+        tunnelBootstrapTtlMaxMs: 3600000,
+        tunnelSessionTtlDefaultMs: 86400000,
+        tunnelSessionTtlMinMs: 3600000,
+        tunnelSessionTtlMaxMs: 604800000,
+      });
+      const helpers = createSettingsHelpers(normalizers);
+      const freshRuntime = () => createSettingsRuntime({
+        ...normalizers,
+        ...helpers,
+        fsPromises, path, crypto,
+        SETTINGS_FILE_PATH: settingsFilePath,
+      });
+      try {
+        if (legacy) {
+          const seed = {
+            sttProvider: 'funasr-websocket', sttFunasrProtocol: protocol, dictationEnabled: true,
+          };
+          await fsPromises.writeFile(settingsFilePath, JSON.stringify(seed), 'utf8');
+          const loaded = await freshRuntime().readSettingsFromDisk();
+          expect(loaded).toMatchObject(seed);
+          const seededPreferences = JSON.parse(await fsPromises.readFile(preferencesFilePath, 'utf8'));
+          expect(seededPreferences.fields.dictationEnabled.value).toBe(true);
+          for (const key of ['sttProvider', 'sttFunasrProtocol']) {
+            expect(seededPreferences.fields).not.toHaveProperty(key);
+          }
+          expect(JSON.parse(await fsPromises.readFile(settingsFilePath, 'utf8'))).toEqual(seed);
+          expect(helpers.formatSettingsResponse(loaded)).toMatchObject(seed);
+        }
+        const saved = await freshRuntime().persistSettings({
+          sttProvider: 'funasr-websocket',
+          sttFunasrProtocol: protocol,
+          dictationEnabled: true,
+          sttApiKey: 'test-only-credential',
+        }, { surface: 'mobile' });
+        expect(saved).toMatchObject({
+          sttProvider: 'funasr-websocket', sttFunasrProtocol: protocol, dictationEnabled: true,
+        });
+        expect(saved).not.toHaveProperty('sttApiKey');
+        const instance = JSON.parse(await fsPromises.readFile(settingsFilePath, 'utf8'));
+        expect(instance).toMatchObject({ sttProvider: 'funasr-websocket', sttFunasrProtocol: protocol });
+        expect(instance).not.toHaveProperty('sttApiKey');
+        const preferences = JSON.parse(await fsPromises.readFile(preferencesFilePath, 'utf8'));
+        expect(preferences.fields.dictationEnabled.value).toBe(true);
+        for (const key of ['sttProvider', 'sttFunasrProtocol', 'sttApiKey']) {
+          expect(preferences.fields).not.toHaveProperty(key);
+        }
+
+        // A fresh runtime must reconstruct the contract from disk, not a cached response.
+        await freshRuntime().persistSettings({ dictationEnabled: false }, { surface: 'desktop' });
+        for (const surface of ['web', 'desktop', 'vscode', 'mobile']) {
+          const loaded = await freshRuntime().readSettingsFromDisk({ surface });
+          expect(helpers.formatSettingsResponse(loaded)).toMatchObject({
+            sttProvider: 'funasr-websocket', sttFunasrProtocol: protocol, dictationEnabled: false,
+          });
+          expect(loaded).not.toHaveProperty('sttApiKey');
+        }
+        const updatedPreferences = JSON.parse(await fsPromises.readFile(preferencesFilePath, 'utf8'));
+        expect(updatedPreferences.fields.dictationEnabled.value).toBe(false);
+        expect(JSON.parse(await fsPromises.readFile(settingsFilePath, 'utf8')).sttFunasrProtocol).toBe(protocol);
+      } finally {
+        await fsPromises.rm(tempRoot, { recursive: true, force: true });
+      }
+    });
+  }
+});
 
 const createRuntime = async ({ mergePersistedSettings = (_current, changes) => changes } = {}) => {
   const tempRoot = await fsPromises.mkdtemp(path.join(os.tmpdir(), 'oc-settings-runtime-'));

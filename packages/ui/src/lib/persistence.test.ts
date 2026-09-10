@@ -12,6 +12,8 @@ import { useInputHistoryStore } from '@/stores/useInputHistoryStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useMessageQueueStore } from '@/stores/messageQueueStore';
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
+import { useConfigStore } from '@/stores/useConfigStore';
+import { parseSettingsDocument } from '@/lib/settings/registry';
 import {
   applyPersistedHomeDirectoryToWindow,
   getRuntimeSettingsMirrorStorageKey,
@@ -170,6 +172,72 @@ describe('applyPersistedHomeDirectoryToWindow', () => {
 });
 
 describe('updateDesktopSettings', () => {
+  test('saves the protocol selected by the config-store action without persisting the API key', async () => {
+    let saved: Partial<SettingsPayload> = {};
+    registerSettingsSave(async (changes) => { saved = changes; return changes; });
+    useConfigStore.setState({ sttApiKey: 'fixture-local-key' });
+    useConfigStore.getState().setSttFunasrProtocol('cpp-offline');
+    await updateDesktopSettings({});
+    expect(saved.sttFunasrProtocol).toBe('cpp-offline');
+    expect(Object.keys(saved)).not.toContain('sttApiKey');
+    expect(localStorage.getItem('sttFunasrProtocol')).toBe('cpp-offline');
+    useConfigStore.setState({ sttApiKey: '' });
+  });
+
+  test('round-trips FunASR protocols and retains them when a runtime omits the setting', async () => {
+    getWindow();
+    const previousStore = window.__zustand_config_store__;
+    window.__zustand_config_store__ = useConfigStore;
+    invalidateSettingsCache();
+    let saved: SettingsPayload = {};
+    let saveCalls = 0;
+    registerSettingsApi(async (changes) => {
+      saveCalls += 1;
+      saved = { ...saved, ...changes };
+      return saved;
+    }, async () => ({ settings: saved, source: 'web' }));
+
+    try {
+      for (const protocol of ['python', 'cpp-2pass', 'cpp-offline'] as const) {
+        await updateDesktopSettings({ sttProvider: 'funasr-websocket', sttFunasrProtocol: protocol });
+        expect(saved.sttFunasrProtocol).toBe(protocol);
+        useConfigStore.setState({ sttFunasrProtocol: 'python' });
+        invalidateSettingsCache();
+        await syncDesktopSettings();
+        expect(useConfigStore.getState().sttFunasrProtocol).toBe(protocol);
+        expect(localStorage.getItem('sttFunasrProtocol')).toBe(protocol);
+        registerSettingsSave(async () => ({ terminalShell: 'bash' }));
+        await updateDesktopSettings({ terminalShell: 'bash' });
+        expect(useConfigStore.getState().sttFunasrProtocol).toBe(protocol);
+        registerSettingsApi(async (changes) => {
+          saveCalls += 1;
+          saved = { ...saved, ...changes };
+          return saved;
+        }, async () => ({ settings: saved, source: 'web' }));
+      }
+
+      switchRuntimeEndpoint({ apiBaseUrl: 'https://funasr-default.example', runtimeKey: 'funasr-default' });
+      const savesBeforeAdoption = saveCalls;
+      saved = {};
+      invalidateSettingsCache();
+      await syncDesktopSettings();
+      expect(useConfigStore.getState().sttFunasrProtocol).toBe('cpp-offline');
+      expect(localStorage.getItem('sttFunasrProtocol')).toBeNull();
+      saved = parseSettingsDocument({ sttFunasrProtocol: 'auto' }) ?? {};
+      useConfigStore.setState({ sttFunasrProtocol: 'cpp-offline' });
+      invalidateSettingsCache();
+      await syncDesktopSettings();
+      expect(useConfigStore.getState().sttFunasrProtocol).toBe('cpp-offline');
+      saved = { sttFunasrProtocol: 'python' };
+      invalidateSettingsCache();
+      await syncDesktopSettings();
+      expect(useConfigStore.getState().sttFunasrProtocol).toBe('python');
+      expect(saveCalls).toBe(savesBeforeAdoption);
+    } finally {
+      window.__zustand_config_store__ = previousStore;
+    }
+  });
+
   beforeEach(() => {
     getWindow();
     isolateRuntime();

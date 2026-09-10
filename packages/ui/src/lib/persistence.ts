@@ -182,11 +182,12 @@ const persistToLocalStorage = (settings: DesktopSettings) => {
   } else {
     localStorage.removeItem('dictationEnabled');
   }
-  if (settings.sttProvider === 'local' || settings.sttProvider === 'openai-compatible') {
+  if (settings.sttProvider === 'local' || settings.sttProvider === 'openai-compatible' || settings.sttProvider === 'funasr-websocket') {
     localStorage.setItem('sttProvider', settings.sttProvider);
   } else {
     localStorage.removeItem('sttProvider');
   }
+  setOrRemoveLocalStorage('sttFunasrProtocol', settings.sttFunasrProtocol ?? null);
   setOrRemoveLocalStorage('sttServerUrl', typeof settings.sttServerUrl === 'string' ? settings.sttServerUrl : null);
   setOrRemoveLocalStorage('sttModel', typeof settings.sttModel === 'string' ? settings.sttModel : null);
   setOrRemoveLocalStorage('sttLocalModel', typeof settings.sttLocalModel === 'string' ? settings.sttLocalModel : null);

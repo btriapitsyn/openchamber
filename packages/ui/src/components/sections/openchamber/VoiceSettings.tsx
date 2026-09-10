@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { funasrProtocolSchema } from '@/lib/dictation/funasr-protocol';
 import { useDeviceInfo } from '@/lib/device';
 
 import {
@@ -522,6 +523,8 @@ export const VoiceSettings: React.FC = () => {
     const setTtsInputMode = useConfigStore((state) => state.setTtsInputMode);
     // STT settings
     const sttProvider = useConfigStore((state) => state.sttProvider);
+    const sttFunasrProtocol = useConfigStore((state) => state.sttFunasrProtocol);
+    const setSttFunasrProtocol = useConfigStore((state) => state.setSttFunasrProtocol);
     const setSttProvider = useConfigStore((state) => state.setSttProvider);
     const sttServerUrl = useConfigStore((state) => state.sttServerUrl);
     const setSttServerUrl = useConfigStore((state) => state.setSttServerUrl);
@@ -1200,9 +1203,35 @@ export const VoiceSettings: React.FC = () => {
                                 options={[
                                     { value: 'local', label: t('settings.voice.page.provider.local') },
                                     { value: 'openai-compatible', label: t('settings.voice.page.provider.server') },
+                                    { value: 'funasr-websocket', label: t('settings.voice.page.provider.funasr') },
                                 ]}
                             />
                         </SettingsControlGroup>
+
+                        {sttProvider === 'funasr-websocket' && (
+                            <SettingsFieldRow
+                                settingsItem="voice.funasr-protocol"
+                                label={t('settings.voice.page.field.funasrProtocol')}
+                                info={t('settings.voice.page.field.funasrProtocolHint')}
+                            >
+                                <Select value={sttFunasrProtocol} onValueChange={(value) => setSttFunasrProtocol(funasrProtocolSchema.parse(value))}>
+                                    <SelectTrigger size={SETTINGS_SELECT_SIZE} className={SETTINGS_SELECT_ROW_TRIGGER_CLASS} aria-label={t('settings.voice.page.field.funasrProtocol')}>
+                                        <SelectValue>
+                                            {t(sttFunasrProtocol === 'python'
+                                                ? 'settings.voice.page.protocol.python'
+                                                : sttFunasrProtocol === 'cpp-2pass'
+                                                    ? 'settings.voice.page.protocol.cpp2pass'
+                                                    : 'settings.voice.page.protocol.cppOffline')}
+                                        </SelectValue>
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="python">{t('settings.voice.page.protocol.python')}</SelectItem>
+                                        <SelectItem value="cpp-2pass">{t('settings.voice.page.protocol.cpp2pass')}</SelectItem>
+                                        <SelectItem value="cpp-offline">{t('settings.voice.page.protocol.cppOffline')}</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </SettingsFieldRow>
+                        )}
 
                         {sttProvider === 'local' && (
                             <div className="space-y-1.5">
@@ -1211,7 +1240,7 @@ export const VoiceSettings: React.FC = () => {
                             </div>
                         )}
 
-                        {sttProvider === 'openai-compatible' && (
+                        {(sttProvider === 'openai-compatible' || sttProvider === 'funasr-websocket') && (
                             <div className="space-y-3">
                                 <div className="space-y-1.5">
                                     <span className="flex items-center gap-1.5">
@@ -1225,7 +1254,7 @@ export const VoiceSettings: React.FC = () => {
                                             type="text"
                                             value={sttServerUrl}
                                             onChange={(e) => setSttServerUrl(e.target.value)}
-                                            placeholder="http://localhost:8001/v1"
+                                            placeholder={sttProvider === 'funasr-websocket' ? 'ws://localhost:10095' : 'http://localhost:8001/v1'}
                                             className="w-full h-7 rounded-lg border border-input bg-transparent px-2 typography-ui-label text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/70"
                                         />
                                         {sttServerUrl && (
@@ -1263,6 +1292,7 @@ export const VoiceSettings: React.FC = () => {
                                         )}
                                     </div>
                                 </div>
+                                {sttProvider === 'openai-compatible' && <>
                                 <div className="space-y-1.5">
                                     <span className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.voice.page.field.model')}</span>
                                     <div className={cn('relative', SETTINGS_CONTROL_CLUSTER_CLASS)}>
@@ -1290,6 +1320,7 @@ export const VoiceSettings: React.FC = () => {
                                         />
                                     </div>
                                 </div>
+                                </>}
                             </div>
                         )}
                     </>

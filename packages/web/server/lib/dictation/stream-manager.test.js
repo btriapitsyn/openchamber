@@ -249,4 +249,59 @@ describe('DictationStreamManager', () => {
     expect(session.commits).toBe(0);
     expect(session.clears).toBe(1);
   });
+
+  it('finishes immediately after clearing a silence-only segment with a partial', async () => {
+    const session = new FakeSttSession();
+    const { manager, messages } = createManager(session);
+
+    try {
+      await manager.handleStart('d1', FORMAT, {});
+      manager.handleChunk({ dictationId: 'd1', seq: 0, audioBase64: silentChunkBase64(30 * 16000) });
+      session.emit('transcript', {
+        segmentId: 'cleared-silence', transcript: 'discard this partial', isFinal: false,
+      });
+      expect(messages.some((m) => m.type === 'partial' && m.payload.text === 'discard this partial')).toBe(true);
+      manager.handleChunk({ dictationId: 'd1', seq: 1, audioBase64: silentChunkBase64(30 * 16000) });
+      expect(session.clears).toBe(1);
+      expect(session.commits).toBe(0);
+
+      manager.handleFinish('d1', 1);
+      await waitFor(() => messages.some((m) => m.type === 'final'));
+
+      expect(messages.filter((m) => m.type === 'final').map((m) => m.payload.text)).toEqual(['']);
+      expect(messages.filter((m) => m.type === 'error')).toEqual([]);
+      expect(session.closed).toBe(true);
+    } finally {
+      manager.cleanupAll();
+    }
+  });
+
+  it('finishes subsequent committed speech after clearing a silence-only partial', async () => {
+    const session = new FakeSttSession({ transcriptBySegment: () => 'keep this speech' });
+    const { manager, messages } = createManager(session);
+
+    try {
+      await manager.handleStart('d1', FORMAT, {});
+      manager.handleChunk({ dictationId: 'd1', seq: 0, audioBase64: silentChunkBase64(30 * 16000) });
+      session.emit('transcript', {
+        segmentId: 'cleared-silence', transcript: 'discard this partial', isFinal: false,
+      });
+      expect(messages.some((m) => m.type === 'partial' && m.payload.text === 'discard this partial')).toBe(true);
+      manager.handleChunk({ dictationId: 'd1', seq: 1, audioBase64: silentChunkBase64(30 * 16000) });
+      expect(session.clears).toBe(1);
+
+      manager.handleChunk({ dictationId: 'd1', seq: 2, audioBase64: loudChunkBase64(60 * 16000) });
+      manager.handleChunk({ dictationId: 'd1', seq: 3, audioBase64: silentChunkBase64() });
+      expect(session.commits).toBe(1);
+      await waitFor(() => messages.some((m) => m.type === 'partial' && m.payload.text === 'keep this speech'));
+      manager.handleFinish('d1', 3);
+      await waitFor(() => messages.some((m) => m.type === 'final'));
+
+      expect(messages.filter((m) => m.type === 'final').map((m) => m.payload.text)).toEqual(['keep this speech']);
+      expect(messages.filter((m) => m.type === 'error')).toEqual([]);
+      expect(session.closed).toBe(true);
+    } finally {
+      manager.cleanupAll();
+    }
+  });
 });

@@ -10,15 +10,21 @@ import { getRuntimeUrlResolver } from '@/lib/runtime-url';
 import { refreshRuntimeUrlAuthToken } from '@/lib/runtime-auth';
 import { openRuntimeWebSocket } from '@/lib/relay/runtime-socket';
 import { type RelayTunnelWebSocket } from '@/lib/relay/tunnel-client';
+import type { FunasrProtocol } from './funasr-protocol';
 
 export interface DictationStartOptions {
-    provider?: 'local' | 'openai-compatible';
+    provider?: 'local' | 'openai-compatible' | 'funasr-websocket';
     language?: string;
     localModel?: string;
     openaiCompatible?: {
         baseUrl?: string;
         model?: string;
         apiKey?: string;
+    };
+    funasrWebsocket?: {
+        url?: string;
+        apiKey?: string;
+        protocol?: FunasrProtocol;
     };
 }
 

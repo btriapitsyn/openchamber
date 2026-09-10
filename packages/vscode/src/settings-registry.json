@@ -154,6 +154,9 @@
     "sttProvider": {
       "scope": "instance"
     },
+    "sttFunasrProtocol": {
+      "scope": "instance"
+    },
     "sttServerUrl": {
       "scope": "instance"
     },

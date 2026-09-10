@@ -21,6 +21,7 @@ import { markStartupTrace, measureStartupTrace } from "@/lib/startupTrace";
 import { normalizePath } from "@/lib/pathNormalization";
 import { getSyncConfig, subscribeToSyncConfigChanges } from "@/sync/sync-refs";
 import { getRuntimeKey } from "@/lib/runtime-switch";
+import { funasrProtocolSchema, type FunasrProtocol } from '@/lib/dictation/funasr-protocol';
 
 const MODELS_DEV_API_URL = "https://models.dev/api.json";
 const MODELS_DEV_PROXY_URL = "/api/openchamber/models-metadata";
@@ -44,7 +45,8 @@ interface OpenChamberDefaults {
     defaultFileViewerPreview?: boolean;
     zenModel?: string;
     messageStreamTransport?: 'auto' | 'ws' | 'sse';
-    sttProvider?: 'local' | 'openai-compatible';
+    sttProvider?: 'local' | 'openai-compatible' | 'funasr-websocket';
+    sttFunasrProtocol?: FunasrProtocol;
     sttServerUrl?: string;
     sttModel?: string;
     sttLocalModel?: string;
@@ -103,6 +105,7 @@ const requestOpenChamberDefaults = async (): Promise<OpenChamberDefaults> => {
             zenModel: zenModel.length > 0 ? zenModel : undefined,
             messageStreamTransport: data.messageStreamTransport,
             sttProvider: data.sttProvider,
+            sttFunasrProtocol: data.sttFunasrProtocol,
             sttServerUrl: data.sttServerUrl,
             sttModel: data.sttModel,
             sttLocalModel: data.sttLocalModel,
@@ -1020,7 +1023,8 @@ interface ConfigStore {
     openaiCompatibleTtsModel: string;
     // STT (dictation) settings
     dictationEnabled: boolean;
-    sttProvider: 'local' | 'openai-compatible';
+    sttProvider: 'local' | 'openai-compatible' | 'funasr-websocket';
+    sttFunasrProtocol: FunasrProtocol;
     sttServerUrl: string;
     sttApiKey: string;
     sttModel: string;
@@ -1048,7 +1052,8 @@ interface ConfigStore {
     setOpenaiCompatibleVoice: (voice: string) => void;
     setOpenaiCompatibleTtsModel: (model: string) => void;
     setDictationEnabled: (enabled: boolean) => void;
-    setSttProvider: (provider: 'local' | 'openai-compatible') => void;
+    setSttProvider: (provider: 'local' | 'openai-compatible' | 'funasr-websocket') => void;
+    setSttFunasrProtocol: (protocol: FunasrProtocol) => void;
     setSttServerUrl: (url: string) => void;
     setSttApiKey: (apiKey: string) => void;
     setSttModel: (model: string) => void;
@@ -1303,16 +1308,20 @@ export const useConfigStore = create<ConfigStore>()(
                     }
                     return true;
                 })(),
-                // STT provider: 'local' (server-side sherpa-onnx) or 'openai-compatible'
+                // STT provider: local, OpenAI-compatible HTTP, or FunASR WebSocket.
                 sttProvider: (() => {
                     if (typeof window !== 'undefined') {
                         const saved = localStorage.getItem('sttProvider');
-                        if (saved === 'local' || saved === 'openai-compatible') return saved;
+                        if (saved === 'local' || saved === 'openai-compatible' || saved === 'funasr-websocket') return saved;
                         // Migrate legacy providers: 'server' used an OpenAI-compatible
                         // endpoint; 'browser' and 'wasm' map to the local default.
                         if (saved === 'server') return 'openai-compatible' as const;
                     }
                     return 'local' as const;
+                })(),
+                sttFunasrProtocol: (() => {
+                    if (!globalThis.window) return 'python';
+                    return funasrProtocolSchema.safeParse(localStorage.getItem('sttFunasrProtocol')).data ?? 'python';
                 })(),
                 sttServerUrl: (() => {
                     if (typeof window !== 'undefined') {
@@ -2111,6 +2120,7 @@ export const useConfigStore = create<ConfigStore>()(
                                     settingsZenModel: resolvedZenModel,
                                     settingsMessageStreamTransport: openChamberDefaults.messageStreamTransport ?? state.settingsMessageStreamTransport ?? 'auto',
                                     sttProvider: openChamberDefaults.sttProvider ?? state.sttProvider,
+                                    sttFunasrProtocol: openChamberDefaults.sttFunasrProtocol ?? state.sttFunasrProtocol,
                                     sttServerUrl: openChamberDefaults.sttServerUrl ?? state.sttServerUrl,
                                     sttModel: openChamberDefaults.sttModel ?? state.sttModel,
                                     sttLocalModel: openChamberDefaults.sttLocalModel ?? state.sttLocalModel,
@@ -3027,12 +3037,20 @@ export const useConfigStore = create<ConfigStore>()(
                     updateDesktopSettings({ dictationEnabled: enabled }).catch(() => {});
                 },
 
-                setSttProvider: (provider: 'local' | 'openai-compatible') => {
+                setSttProvider: (provider: 'local' | 'openai-compatible' | 'funasr-websocket') => {
                     set({ sttProvider: provider });
                     if (typeof window !== 'undefined') {
                         localStorage.setItem('sttProvider', provider);
                     }
                     updateDesktopSettings({ sttProvider: provider }).catch(() => {});
+                },
+
+                setSttFunasrProtocol: (protocol) => {
+                    set({ sttFunasrProtocol: protocol });
+                    if (globalThis.window) {
+                        localStorage.setItem('sttFunasrProtocol', protocol);
+                    }
+                    updateDesktopSettings({ sttFunasrProtocol: protocol }).catch(() => {});
                 },
 
                 setSttServerUrl: (url: string) => {

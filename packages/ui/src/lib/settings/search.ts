@@ -1,5 +1,6 @@
 import type { I18nKey } from '@/lib/i18n/store';
 import { useUIStore } from '@/stores/useUIStore';
+import { useConfigStore } from '@/stores/useConfigStore';
 import type { SettingsPageSlug, SettingsRuntimeContext } from './metadata';
 import { getSettingsPageMeta } from './metadata';
 
@@ -964,7 +965,15 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     id: 'voice.speech-recognition',
     page: 'voice',
     titleKey: 'settings.voice.page.section.speechRecognition',
-    keywords: ['stt', 'dictation', 'voice input', 'transcribe', 'whisper', 'parakeet', 'microphone'],
+    keywords: ['stt', 'dictation', 'voice input', 'transcribe', 'whisper', 'parakeet', 'funasr', 'websocket', 'microphone'],
+  },
+  {
+    id: 'voice.funasr-protocol',
+    page: 'voice',
+    titleKey: 'settings.voice.page.field.funasrProtocol',
+    descriptionKey: 'settings.voice.page.field.funasrProtocolHint',
+    keywords: ['funasr', 'websocket', 'python', 'cpp', '2pass', 'offline', 'protocol'],
+    isAvailable: () => useConfigStore.getState().dictationEnabled && useConfigStore.getState().sttProvider === 'funasr-websocket',
   },
   {
     id: 'tunnel.provider',

@@ -377,7 +377,7 @@ export const parseFollowUpBehavior: SettingsParser<'steer' | 'queue'> = (value, 
 
 /** Legacy provider names: 'server' was the OpenAI-compatible endpoint; 'browser'/'wasm' the local one. */
 export const parseSttProvider = fromSchema(
-  trimmed.pipe(z.enum(['local', 'openai-compatible', 'server', 'browser', 'wasm'])).transform((provider): 'local' | 'openai-compatible' => {
+  trimmed.pipe(z.enum(['local', 'openai-compatible', 'funasr-websocket', 'server', 'browser', 'wasm'])).transform((provider): 'local' | 'openai-compatible' | 'funasr-websocket' => {
     if (provider === 'server') return 'openai-compatible';
     if (provider === 'browser' || provider === 'wasm') return 'local';
     return provider;

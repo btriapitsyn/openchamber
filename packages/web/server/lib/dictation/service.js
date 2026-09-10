@@ -8,12 +8,14 @@ import { detectTextLanguage } from '../tts/language-detect.js';
  *   Models auto-download in the background on first use.
  * - 'openai-compatible': any OpenAI-compatible /v1/audio/transcriptions
  *   endpoint (faster-whisper, whisper.cpp, OpenAI).
+ * - 'funasr-websocket': a FunASR realtime WebSocket endpoint with partials.
  */
 
 import { rm } from 'fs/promises';
 
 import { DictationWorkerClient, WorkerBackedTranscriptionSession } from './local/worker-client.js';
 import { OpenAICompatibleTranscriptionSession } from './openai-compatible-session.js';
+import { FunASRWebSocketTranscriptionSession } from './funasr-websocket-session.js';
 import {
   DEFAULT_LOCAL_STT_MODEL,
   DEFAULT_LOCAL_TTS_MODEL,
@@ -84,10 +86,13 @@ export function createDictationService({ modelsDir }) {
    * the provider is not ready.
    *
    * @param {{ provider?: string, language?: string, localModel?: string,
-   *           openaiCompatible?: { baseUrl?: string, model?: string, apiKey?: string } }} options
+   *           openaiCompatible?: { baseUrl?: string, model?: string, apiKey?: string },
+   *           funasrWebsocket?: { url?: string, apiKey?: string, protocol?: 'python' | 'cpp-2pass' | 'cpp-offline' } }} options
    */
   const createSttSession = async (options = {}) => {
-    const provider = options.provider === 'openai-compatible' ? 'openai-compatible' : 'local';
+    const provider = options.provider === 'funasr-websocket'
+      ? 'funasr-websocket'
+      : options.provider === 'openai-compatible' ? 'openai-compatible' : 'local';
 
     if (provider === 'openai-compatible') {
       const config = options.openaiCompatible || {};
@@ -107,6 +112,25 @@ export function createDictationService({ modelsDir }) {
         };
       }
       return { session };
+    }
+
+    if (provider === 'funasr-websocket') {
+      const config = options.funasrWebsocket || {};
+      try {
+        const session = new FunASRWebSocketTranscriptionSession({
+          url: config.url,
+          apiKey: config.apiKey || undefined,
+          protocol: config.protocol,
+        });
+        await session.connect();
+        return { session };
+      } catch (error) {
+        return {
+          error: error?.message || String(error),
+          retryable: false,
+          reasonCode: 'stt_not_configured',
+        };
+      }
     }
 
     const modelId = resolveLocalModelId(options.localModel);
@@ -162,7 +186,9 @@ export function createDictationService({ modelsDir }) {
    * @param {{ provider?: string, localModel?: string }} [options]
    */
   const getStatus = async (options = {}) => {
-    const provider = options.provider === 'openai-compatible' ? 'openai-compatible' : 'local';
+    const provider = options.provider === 'funasr-websocket'
+      ? 'funasr-websocket'
+      : options.provider === 'openai-compatible' ? 'openai-compatible' : 'local';
     const modelId = resolveLocalModelId(options.localModel);
 
     const describeModel = async (id, catalog) => ({
@@ -181,7 +207,7 @@ export function createDictationService({ modelsDir }) {
       LOCAL_TTS_MODEL_IDS.map((id) => describeModel(id, LOCAL_TTS_MODEL_CATALOG)),
     );
 
-    if (provider === 'openai-compatible') {
+    if (provider === 'openai-compatible' || provider === 'funasr-websocket') {
       return { provider, available: true, models, ttsModels };
     }
 

@@ -18,6 +18,7 @@
  *   only ever lived in the local store are in `LOCAL_DEVICE_KEYS`.
  */
 import type { ProjectEntry, TerminalShell } from '@/lib/api/types';
+import { funasrProtocolSchema } from '@/lib/dictation/funasr-protocol';
 import type { DesktopWindowControlsPosition, DesktopWindowControlsStyle } from '@/lib/desktop';
 import { getDirectoryShowHidden, setDirectoryShowHidden } from '@/lib/directoryShowHidden';
 import type { DraftStarterRef } from '@/lib/draftStarters';
@@ -263,6 +264,7 @@ export const SETTINGS_REGISTRY = {
   openInAppId: field({ scope: 'instance', parse: parseNonEmptyTrimmedString }),
   dictationEnabled: field({ scope: 'profile', parse: parseBoolean, ui: configField('dictationEnabled') }),
   sttProvider: field({ scope: 'instance', parse: parseSttProvider, ui: configField('sttProvider') }),
+  sttFunasrProtocol: field({ scope: 'instance', parse: fromSchema(funasrProtocolSchema), ui: configField('sttFunasrProtocol') }),
   sttServerUrl: field({ scope: 'instance', parse: parseTrimmedStringUpTo(2048), ui: configField('sttServerUrl') }),
   sttModel: field({ scope: 'instance', parse: parseTrimmedStringUpTo(256), ui: configField('sttModel') }),
   sttLocalModel: field({ scope: 'instance', parse: parseTrimmedStringUpTo(256), ui: configField('sttLocalModel') }),

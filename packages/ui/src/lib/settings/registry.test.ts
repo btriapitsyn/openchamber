@@ -21,6 +21,31 @@ import { renderSettingsRegistrySnapshot, SETTINGS_REGISTRY_SNAPSHOT_PATHS } from
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', '..');
 
 describe('settings registry', () => {
+  test('parses FunASR protocols and preserves legacy provider migrations', () => {
+    for (const protocol of ['python', 'cpp-2pass', 'cpp-offline']) {
+      expect(parseSettingsDocument({ sttProvider: 'funasr-websocket', sttFunasrProtocol: protocol })).toEqual({
+        sttProvider: 'funasr-websocket', sttFunasrProtocol: protocol,
+      });
+    }
+    expect(parseSettingsDocument({ sttProvider: 'server' })).toEqual({ sttProvider: 'openai-compatible' });
+    for (const provider of ['browser', 'wasm']) {
+      expect(parseSettingsDocument({ sttProvider: provider })).toEqual({ sttProvider: 'local' });
+    }
+  });
+
+  test('rejects invalid protocols without manufacturing a default or sharing credentials', () => {
+    for (const protocol of [undefined, null, '', 'auto', ' python ', 12]) {
+      expect(parseSettingsDocument({ sttFunasrProtocol: protocol, sttApiKey: 'fixture-local-key' })).toEqual({});
+    }
+  });
+
+  test('keeps the endpoint protocol in instance settings with explicit writes', () => {
+    expect(buildSettingsRegistrySnapshot().fields.sttFunasrProtocol).toEqual({ scope: 'instance' });
+    expect(MIRRORED_KEYS.map(String)).toContain('sttFunasrProtocol');
+    expect(AUTO_SAVE_KEYS.map(String)).not.toContain('sttFunasrProtocol');
+    expect(SETTINGS_KEYS.map(String)).not.toContain('sttApiKey');
+  });
+
   test('every key lives in exactly one table', () => {
     const all = [...SETTINGS_KEYS, ...LOCAL_DEVICE_KEYS, ...DESKTOP_SHELL_KEYS];
     expect(new Set(all).size).toBe(all.length);

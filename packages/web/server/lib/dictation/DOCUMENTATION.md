@@ -2,14 +2,14 @@
 
 Server-authoritative speech-to-text for the chat composer, plus local
 text-to-speech. The client streams 16 kHz mono PCM16 chunks (base64) over a
-WebSocket while the user speaks; the server buffers them and transcribes each
-segment exactly once, when the segment is committed.
+WebSocket while the user speaks. Local and OpenAI-compatible providers buffer
+each segment and transcribe it on commit. FunASR streams PCM upstream and
+returns provisional text while recording, followed by corrected sentences.
 
-Transcription is deliberately not incremental. Parakeet is an offline model
-trained on whole utterances, so re-decoding the growing buffer to animate a
-live transcript costs O(n^2) work for a result the final decode replaces. The
-composer shows no text while recording and inserts the full transcript on
-stop.
+Parakeet is an offline model trained on whole utterances. Its buffered path
+avoids repeatedly decoding a growing recording. FunASR's incremental path
+uses the server's streaming model instead of repeatedly submitting that buffer.
+The composer inserts the completed dictation on stop.
 
 Local TTS (Kokoro and Piper/VITS via sherpa-onnx OfflineTts) runs in the same
 worker process and is exposed as `POST /api/dictation/tts/speak` (JSON
@@ -51,6 +51,13 @@ response carries `X-Speech-Model` and `X-Speech-Language`.
   - `openai-compatible`: buffered per-segment transcription against any
     OpenAI-compatible `/v1/audio/transcriptions` endpoint
     (`openai-compatible-session.js`, reuses `../tts/stt.js`).
+  - `funasr-websocket`: real-time FunASR over `ws://` or `wss://`
+    (`funasr-websocket-session.js`). It negotiates the FunASR `binary`
+    subprotocol, streams raw 16 kHz PCM16, and forwards `2pass-online`
+    partials plus `2pass-offline` finals. An optional API key is sent in an
+    Authorization header, never embedded in the endpoint URL.
+    One upstream connection belongs to one client segment. Cleared segments
+    retire their own connection without discarding earlier committed work.
 - `local/` — worker process + client (IPC, idle shutdown TTL), sherpa
   recognizer engine and segment session (one decode per committed segment),
   model catalog and downloader. The native `sherpa-onnx-node` addon is only
@@ -69,8 +76,18 @@ Server → client: `ready`, `ack {ackSeq}`, `partial {text}`,
 `error {error, retryable, reasonCode?}`, `pong`.
 
 `options` in `start` carries the client-selected provider config:
-`{ provider: 'local' | 'openai-compatible', language?, localModel?,
-openaiCompatible?: { baseUrl, model, apiKey } }`.
+`{ provider: 'local' | 'openai-compatible' | 'funasr-websocket', language?,
+localModel?, openaiCompatible?: { baseUrl, model, apiKey },
+funasrWebsocket?: { url, apiKey, protocol?: 'python' | 'cpp-2pass' | 'cpp-offline' } }`.
+
+The Voice settings protocol selector must match the running FunASR server;
+it does not change or detect the upstream implementation. The non-secret
+`sttFunasrProtocol` instance setting follows the registry-owned save/load and
+runtime-switch paths. The store starts with `python`; a snapshot that omits
+or rejects the field leaves the current selection unchanged, including when
+switching to a server that does not expose it. The protocol stays beside the
+endpoint in `settings.json`, not per-surface profile preferences. The API key stays
+in client-local storage and is sent only with the dictation start options.
 
 ## Segmentation
 
@@ -89,12 +106,53 @@ user is still speaking, so only the tail is left to transcribe on stop.
 ## Invariants
 
 - Never load `sherpa-onnx-node` in the main server process.
-- Transcription happens on commit only; sessions never emit non-final
-  transcripts. The `partial` messages a client receives are the concatenation
-  of already-committed segments, and exist so a dictation that fails partway
-  can be salvaged instead of losing minutes of speech.
+- Local and OpenAI-compatible sessions transcribe on commit and emit final
+  segment text. FunASR also emits non-final text for the current segment.
+  The manager concatenates segment text in recording order, including when
+  completed segments arrive out of order.
 - The stream manager acks only the highest contiguous seq; the client is
   expected to retain unacked segments for retry/replay.
 - Silence-only segments (peak < 300) are cleared, never committed, so
   Whisper-style providers do not hallucinate on silence.
 - Model files live under `~/.config/openchamber/speech-models`.
+
+## FunASR upstream completion
+
+The session adapter accepts an explicit server protocol. These profiles are
+not interchangeable, and the adapter does not guess from a first response.
+
+- `python` is the default. It requires the maintained Python server's
+  `is_end: true` acknowledgement after the client sends
+  `is_speaking: false, is_end: true`. A VAD sentence with `is_final: true`
+  is not the end of the client segment. Older servers without the end ACK
+  are not supported by this profile.
+- `cpp-2pass` uses `is_final: true` as the flush boundary. A
+  `2pass-offline` result with `is_final: false` is a corrected sentence,
+  not completion.
+- `cpp-offline` requests `mode: offline` and accepts the one-shot
+  `mode: offline` response, including `is_final: false`. The inspected C++
+  service can also return empty text after some internal failures, which
+  the adapter cannot distinguish from a successful empty transcription.
+
+Online text is appended as deltas without trimming each fragment. Offline
+text replaces the current provisional tail and appends to the corrected
+sentences. An empty correction clears that tail; a textless terminal ACK
+preserves corrected text. Empty terminal results still complete a segment.
+An explicit error or failed Python ACK fails the dictation instead of
+reporting empty success.
+
+Every handler captures its connection's segment ID. A missing `wav_name`
+can only refer to that connection; an explicit different ID is ignored.
+Clear closes the active connection and drops its in-flight messages. It does
+not cancel already-running model computation. Prior committed connections
+keep draining independently, and duplicate terminal messages cannot consume
+another segment.
+
+At most eight active, draining or closing connections are retained. PCM
+queued during a handshake and WebSocket send buffering are each capped at
+320,000 bytes, ten seconds of 16 kHz mono PCM16. A connection attempt has a
+ten-second deadline; committed work has a five-minute upper bound, in
+addition to the manager's adaptive timeout. Closing connections have a
+one-second grace before termination. Limit, connection and parsing failures
+close the session and produce an error; the adapter does not retry or infer
+missing text. The client may start a new dictation after the error.

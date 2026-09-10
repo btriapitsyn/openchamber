@@ -917,7 +917,7 @@ export const createSettingsHelpers = (dependencies) => {
     }
     if (typeof candidate.sttProvider === 'string') {
       const provider = candidate.sttProvider.trim();
-      if (provider === 'local' || provider === 'openai-compatible') {
+      if (provider === 'local' || provider === 'openai-compatible' || provider === 'funasr-websocket') {
         result.sttProvider = provider;
       } else if (provider === 'server') {
         // Legacy provider migration: 'server' was the OpenAI-compatible endpoint.
@@ -925,6 +925,9 @@ export const createSettingsHelpers = (dependencies) => {
       } else if (provider === 'browser' || provider === 'wasm') {
         result.sttProvider = 'local';
       }
+    }
+    if (candidate.sttFunasrProtocol === 'python' || candidate.sttFunasrProtocol === 'cpp-2pass' || candidate.sttFunasrProtocol === 'cpp-offline') {
+      result.sttFunasrProtocol = candidate.sttFunasrProtocol;
     }
     if (typeof candidate.sttServerUrl === 'string') {
       const trimmed = candidate.sttServerUrl.trim();

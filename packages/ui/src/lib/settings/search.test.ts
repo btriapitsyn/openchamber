@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import type { I18nKey } from '@/lib/i18n/store';
 import { buildSettingsSearchResults } from './search';
+import { useConfigStore } from '@/stores/useConfigStore';
 
 const t = (key: I18nKey): string => key;
 
@@ -17,6 +18,23 @@ const runtimeCtx = {
 };
 
 describe('settings search', () => {
+  test('only indexes the FunASR protocol when its control is visible', () => {
+    const previous = useConfigStore.getState();
+    const hasProtocol = () => buildSettingsSearchResults({
+      query: 'funasr', runtimeCtx, t, getPageTitle: (page) => page,
+    }).some((result) => result.id === 'voice.funasr-protocol');
+    try {
+      useConfigStore.setState({ dictationEnabled: true, sttProvider: 'funasr-websocket' });
+      expect(hasProtocol()).toBe(true);
+      useConfigStore.setState({ sttProvider: 'local' });
+      expect(hasProtocol()).toBe(false);
+      useConfigStore.setState({ sttProvider: 'funasr-websocket', dictationEnabled: false });
+      expect(hasProtocol()).toBe(false);
+    } finally {
+      useConfigStore.setState({ dictationEnabled: previous.dictationEnabled, sttProvider: previous.sttProvider });
+    }
+  });
+
   test('finds the scrollbar preference on every surface', () => {
     for (const context of [runtimeCtx, { ...runtimeCtx, isDesktop: true }, { ...runtimeCtx, isVSCode: true }, { ...runtimeCtx, isMobile: true }]) {
       const results = buildSettingsSearchResults({

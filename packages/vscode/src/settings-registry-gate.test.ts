@@ -28,6 +28,24 @@ describe('withoutSecretSettings', () => {
 });
 
 describe('filterPersistableSettingsChanges', () => {
+  for (const protocol of ['python', 'cpp-2pass', 'cpp-offline']) {
+    test(`the real snapshot forwards FunASR ${protocol} without persisting its API key`, () => {
+      assert.deepEqual(filterPersistableSettingsChanges({
+        sttProvider: 'funasr-websocket',
+        sttFunasrProtocol: protocol,
+        dictationEnabled: true,
+        sttApiKey: 'test-only-credential',
+      }), {
+        sttProvider: 'funasr-websocket',
+        sttFunasrProtocol: protocol,
+        dictationEnabled: true,
+      });
+      assert.equal(SETTINGS_REGISTRY_FIELDS.sttProvider.scope, 'instance');
+      assert.equal(SETTINGS_REGISTRY_FIELDS.sttFunasrProtocol.scope, 'instance');
+      assert.equal(SETTINGS_REGISTRY_FIELDS.dictationEnabled.scope, 'profile');
+    });
+  }
+
   test('keeps stored shared fields and preserves their values as sent', () => {
     const result = filterPersistableSettingsChanges(
       { themeId: 'nord', smallModelOverride: '', unrelated: 1 },

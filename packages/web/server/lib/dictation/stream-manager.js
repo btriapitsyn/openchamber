@@ -381,6 +381,7 @@ export class DictationStreamManager {
       state.bytesSinceCommit = 0;
       state.peakSinceCommit = 0;
       state.lastChunkPeak = 0;
+      this.dropUncommittedNonFinalTranscripts(state);
       return;
     }
 

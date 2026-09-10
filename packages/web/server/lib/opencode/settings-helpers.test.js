@@ -1,4 +1,7 @@
 import { execFileSync } from 'node:child_process';
+import crypto from 'node:crypto';
+import fsPromises from 'node:fs/promises';
+import path from 'node:path';
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -10,6 +13,7 @@ import {
 } from './input-history-scope.js';
 import { createSettingsHelpers } from './settings-helpers.js';
 import { createSettingsNormalizationRuntime } from './settings-normalization-runtime.js';
+import { createSettingsRuntime } from './settings-runtime.js';
 
 const testFilePath = fileURLToPath(import.meta.url);
 const packagesWebDir = join(dirname(testFilePath), '..', '..', '..');
@@ -69,6 +73,48 @@ const createTestHelpersWithRealSanitizers = () => {
 };
 
 describe('settings helpers', () => {
+  it('persists FunASR protocols on disk without losing them on unrelated updates', async () => {
+    const tempRoot = await fsPromises.mkdtemp(join(tmpdir(), 'funasr-settings-'));
+    const settingsFilePath = join(tempRoot, 'settings.json');
+    const helpers = createTestHelpers();
+    const createDiskRuntime = () => createSettingsRuntime({
+      ...helpers,
+      fsPromises, path, crypto,
+      SETTINGS_FILE_PATH: settingsFilePath,
+      normalizeSettingsPaths: (settings) => ({ settings, changed: false }),
+      sanitizeProjects: () => [],
+      normalizeStringArray: (values) => values ?? [],
+      resolveDirectoryCandidate: (value) => value,
+    });
+    try {
+      for (const protocol of ['python', 'cpp-2pass', 'cpp-offline']) {
+        await createDiskRuntime().persistSettings({ sttFunasrProtocol: protocol });
+        expect(JSON.parse(await fsPromises.readFile(settingsFilePath, 'utf8')).sttFunasrProtocol).toBe(protocol);
+        const freshRuntime = createDiskRuntime();
+        const settings = await freshRuntime.readSettingsFromDisk();
+        expect(helpers.formatSettingsResponse(settings).sttFunasrProtocol).toBe(protocol);
+        await freshRuntime.persistSettings({ dictationEnabled: true });
+        await freshRuntime.persistSettings({ sttFunasrProtocol: 'auto' });
+        expect((await createDiskRuntime().readSettingsFromDisk()).sttFunasrProtocol).toBe(protocol);
+      }
+    } finally {
+      await fsPromises.rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('preserves every supported FunASR protocol through a settings response', () => {
+    const helpers = createTestHelpers();
+    for (const protocol of ['python', 'cpp-2pass', 'cpp-offline']) {
+      const update = helpers.sanitizeSettingsUpdate({ sttFunasrProtocol: protocol });
+      expect(update).toEqual({ sttFunasrProtocol: protocol });
+      expect(helpers.formatSettingsResponse(update).sttFunasrProtocol).toBe(protocol);
+    }
+    for (const protocol of ['auto', '', null, 42]) {
+      expect(helpers.sanitizeSettingsUpdate({ sttFunasrProtocol: protocol })).toEqual({});
+    }
+    expect(helpers.sanitizeSettingsUpdate({ sttProvider: 'server' }).sttProvider).toBe('openai-compatible');
+  });
+
   it('round-trips telemetry opt-in with the hidden list and preserves it across unrelated writes', () => {
     const helpers = createTestHelpers();
     const legacy = helpers.sanitizeSettingsUpdate({ workStatusHiddenSections: [] });
@@ -747,7 +793,7 @@ describe('settings registry gate', () => {
     defaultGitIdentityId: 'global', permissionAutoAccept: { sessions: { s: true }, revision: 1 },
     agentControlToolEnabled: true, agentWebToolEnabled: true, agentMemoryToolEnabled: true, openCodeUpdateToastDismissedVersion: '1.0.0',
     autoDeleteEnabled: true, autoDeleteAfterDays: 30, sessionRetentionAction: 'archive', terminalShell: 'zsh', terminalLoginShells: ['zsh'],
-    openInAppId: 'vscode', dictationEnabled: true, sttProvider: 'local', sttServerUrl: 'http://localhost:8001/v1', sttModel: 'm', sttLocalModel: 'm', sttLanguage: 'en',
+    openInAppId: 'vscode', dictationEnabled: true, sttProvider: 'local', sttFunasrProtocol: 'python', sttServerUrl: 'http://localhost:8001/v1', sttModel: 'm', sttLocalModel: 'm', sttLanguage: 'en',
     tunnelProvider: 'cloudflare', tunnelMode: 'quick', tunnelBootstrapTtlMs: 600000, tunnelSessionTtlMs: 86400000, managedLocalTunnelConfigPath: '/tmp/x',
     managedRemoteTunnelHostname: 'x.example', managedRemoteTunnelToken: 'token', managedRemoteTunnelPresets: [{ id: 'a', name: 'A', hostname: 'a.example' }],
     managedRemoteTunnelSelectedPresetId: 'a', managedRemoteTunnelPresetTokens: { a: 'token' },
