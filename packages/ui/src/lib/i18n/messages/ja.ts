@@ -1542,6 +1542,7 @@ export const dict: Record<I18nKey, string> = {
   'filesView.diagram.closeDiagramView': 'ダイアグラムビューを閉じる',
   'filesView.diagram.saveDiagram': 'ダイアグラムを保存',
   'contextUsage.aria.label': 'コンテキスト使用量',
+  'contextUsage.aria.value': '{tokens}、コンテキストの{percentage}を使用',
   'contextUsage.mobile.title': 'コンテキスト使用量',
   'contextUsage.mobile.usedTokens': '使用トークン',
   'contextUsage.mobile.contextLimit': 'コンテキスト制限',
