@@ -34,11 +34,15 @@ export const SessionRetentionSettings: React.FC = () => {
   const setAutoDeleteAfterDays = useUIStore((state) => state.setAutoDeleteAfterDays);
   const setSessionRetentionAction = useUIStore((state) => state.setSessionRetentionAction);
 
-  const { candidates, isRunning, runCleanup, action } = useSessionAutoCleanup({ autoRun: false });
+  const { candidates, isRunning, runCleanup, action, status } = useSessionAutoCleanup({ autoRun: false });
   const pendingCount = candidates.length;
 
   const handleRunCleanup = React.useCallback(async () => {
-    const result = await runCleanup({ force: true });
+    const result = await runCleanup({ force: true }).catch(() => {
+      toast.error(t('sessions.sidebar.group.empty.loadFailed'));
+      return null;
+    });
+    if (!result || (result.skippedReason && result.skippedReason !== 'no-candidates')) return;
 
     if (result.completedIds.length === 0 && result.failedIds.length === 0) {
       toast.message(
@@ -137,7 +141,11 @@ export const SessionRetentionSettings: React.FC = () => {
           </Button>
         </SettingsFieldRow>
         <p className="typography-meta text-muted-foreground">
-          {action === 'archive'
+          {status === 'error'
+            ? t('sessions.sidebar.group.empty.loadFailed')
+            : status !== 'ready'
+            ? t('sessions.sidebar.group.empty.loadingSessions')
+            : action === 'archive'
             ? t('settings.openchamber.sessionRetention.manualCleanup.eligibleArchiveNow', { count: pendingCount })
             : t('settings.openchamber.sessionRetention.manualCleanup.eligibleDeleteNow', { count: pendingCount })}
         </p>

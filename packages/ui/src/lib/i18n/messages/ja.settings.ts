@@ -989,7 +989,7 @@ export const settingsDict = {
   'settings.openchamber.passkeys.toast.removeFailed': 'パスキーを削除できませんでした。',
   'settings.openchamber.passkeys.toast.clearAuthFailed': '保存された認証情報をクリアできませんでした。',
   'settings.openchamber.sessionRetention.title': 'Session 保持',
-  'settings.openchamber.sessionRetention.tooltip': '最終アクティビティに基づいて非アクティブな Session を自動的にアーカイブまたは削除します。最新5件の Session は保持されます。',
+  'settings.openchamber.sessionRetention.tooltip': '最終アクティビティに基づいて未アーカイブのセッションをアーカイブまたは削除します。最新5件、開いているセッション、実行中および共有中のセッションは保持されます。アーカイブ済みのセッションも保持されます。保護された子セッションまで削除される場合、親セッションは削除されません。',
   'settings.openchamber.sessionRetention.field.enableAutoCleanupAria': '自動クリーンアップを有効化',
   'settings.openchamber.sessionRetention.field.enableAutoCleanup': '自動クリーンアップを有効化',
   'settings.openchamber.sessionRetention.field.retentionPeriod': '保持期間',

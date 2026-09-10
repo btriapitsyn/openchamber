@@ -956,7 +956,7 @@ export const settingsDict = {
   "settings.openchamber.passkeys.toast.removeFailed": "Não foi possível excluir a chave de acesso.",
   "settings.openchamber.passkeys.toast.clearAuthFailed": "Não foi possível limpar a autenticação salva.",
   "settings.openchamber.sessionRetention.title": "Retenção de sessões",
-  "settings.openchamber.sessionRetention.tooltip": "Arquivar ou excluir automaticamente sessões inativas conforme a última atividade. Mantém as 5 sessões mais recentes.",
+  "settings.openchamber.sessionRetention.tooltip": "Arquiva ou exclui sessões não arquivadas com base na última atividade. Mantém as 5 sessões mais recentes, a sessão aberta, as sessões em execução e as compartilhadas. As sessões arquivadas são mantidas. Uma sessão principal é mantida se sua exclusão também excluir uma sessão filha protegida.",
   "settings.openchamber.sessionRetention.field.enableAutoCleanupAria": "Ativar limpeza automática",
   "settings.openchamber.sessionRetention.field.enableAutoCleanup": "Ativar limpeza automática",
   "settings.openchamber.sessionRetention.field.retentionPeriod": "Período de retenção",

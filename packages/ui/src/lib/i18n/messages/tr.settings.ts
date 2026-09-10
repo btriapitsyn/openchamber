@@ -984,7 +984,7 @@ export const settingsDict = {
   'settings.openchamber.passkeys.toast.removeFailed': 'Passkey kaldırılamadı.',
   'settings.openchamber.passkeys.toast.clearAuthFailed': 'Kaydedilmiş kimlik doğrulama bilgileri temizlenemedi.',
   'settings.openchamber.sessionRetention.title': 'Session Saklama',
-  'settings.openchamber.sessionRetention.tooltip': 'Etkin olmayan session\'ları son etkinliğe göre otomatik olarak arşivler veya siler. En son 5 session\'ı saklar.',
+  'settings.openchamber.sessionRetention.tooltip': 'Arşivlenmemiş oturumları son etkinliğe göre arşivler veya siler. En yeni 5 oturumu, açık oturumu, çalışan ve paylaşılan oturumları korur. Arşivlenmiş oturumlar korunur. Bir üst oturumun silinmesi korunan bir alt oturumu da silecekse üst oturum korunur.',
   'settings.openchamber.sessionRetention.field.enableAutoCleanupAria': 'Otomatik temizlemeyi etkinleştir',
   'settings.openchamber.sessionRetention.field.enableAutoCleanup': 'Otomatik Temizlemeyi Etkinleştir',
   'settings.openchamber.sessionRetention.field.retentionPeriod': 'Saklama Süresi',

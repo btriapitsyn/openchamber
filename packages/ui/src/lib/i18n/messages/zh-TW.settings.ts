@@ -953,7 +953,7 @@ export const settingsDict = {
   'settings.openchamber.passkeys.toast.removeFailed': '無法移除 passkey。',
   'settings.openchamber.passkeys.toast.clearAuthFailed': '無法清除已儲存的驗證資訊。',
   'settings.openchamber.sessionRetention.title': '工作階段保留',
-  'settings.openchamber.sessionRetention.tooltip': '根據最後活動時間自動封存或刪除閒置工作階段。會保留最近 5 個工作階段。',
+  'settings.openchamber.sessionRetention.tooltip': '根據最後活動時間封存或刪除未封存的工作階段。保留最近 5 個工作階段、目前開啟的工作階段、執行中的工作階段及已分享的工作階段。已封存的工作階段會保留。如果刪除父工作階段會同時刪除受保護的子工作階段，則保留父工作階段。',
   'settings.openchamber.sessionRetention.field.enableAutoCleanupAria': '啟用自動清理',
   'settings.openchamber.sessionRetention.field.enableAutoCleanup': '啟用自動清理',
   'settings.openchamber.sessionRetention.field.retentionPeriod': '保留時長',

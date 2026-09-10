@@ -956,7 +956,7 @@ export const settingsDict = {
   "settings.openchamber.passkeys.toast.removeFailed": "Не вдалося видалити ключ доступу.",
   "settings.openchamber.passkeys.toast.clearAuthFailed": "Не вдалося очистити збережену автентифікацію.",
   "settings.openchamber.sessionRetention.title": "Зберігання сесій",
-  "settings.openchamber.sessionRetention.tooltip": "Автоматично архівуйте або видаляйте неактивні сесії на основі останньої активності. Останні 5 сесій завжди зберігаються.",
+  "settings.openchamber.sessionRetention.tooltip": "Архівує або видаляє неархівовані сесії за часом останньої активності. Зберігає 5 найновіших сесій, відкриту сесію, сесії в роботі та сесії з публічним посиланням. Архівні сесії зберігаються. Батьківська сесія залишається, якщо її видалення зачепить захищену дочірню.",
   "settings.openchamber.sessionRetention.field.enableAutoCleanupAria": "Увімкнути автоматичне очищення",
   "settings.openchamber.sessionRetention.field.enableAutoCleanup": "Увімкнути автоматичне очищення",
   "settings.openchamber.sessionRetention.field.retentionPeriod": "Період зберігання",

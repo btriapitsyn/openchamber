@@ -934,7 +934,7 @@ export const settingsDict = {
   'settings.openchamber.passkeys.toast.removeFailed': 'Konnte Passkey nicht entfernen.',
   'settings.openchamber.passkeys.toast.clearAuthFailed': 'Konnte gespeicherte Authentifizierung nicht löschen.',
   'settings.openchamber.sessionRetention.title': 'Sitzungsaufbewahrung',
-  'settings.openchamber.sessionRetention.tooltip': 'Automatisches Archivieren oder Löschen inaktiver Sitzungen basierend auf letzter Aktivität. Behält die 5 neuesten Sitzungen bei.',
+  'settings.openchamber.sessionRetention.tooltip': 'Archiviert oder löscht nicht archivierte Sitzungen anhand ihrer letzten Aktivität. Behält die 5 neuesten Sitzungen, die geöffnete Sitzung sowie laufende und geteilte Sitzungen. Archivierte Sitzungen bleiben erhalten. Eine übergeordnete Sitzung bleibt erhalten, wenn ihre Löschung auch eine geschützte untergeordnete Sitzung löschen würde.',
   'settings.openchamber.sessionRetention.field.enableAutoCleanupAria': 'Automatische Bereinigung aktivieren',
   'settings.openchamber.sessionRetention.field.enableAutoCleanup': 'Automatische Bereinigung aktivieren',
   'settings.openchamber.sessionRetention.field.retentionPeriod': 'Aufbewahrungszeitraum',

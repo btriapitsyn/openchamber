@@ -944,7 +944,7 @@ export const settingsDict = {
   'settings.openchamber.sessionRetention.toast.failedDeleteCount': 'Nie udało się usunąć {count} sesji',
   'settings.openchamber.sessionRetention.toast.noneEligibleArchive': 'Brak sesji kwalifikujących się do archiwizacji',
   'settings.openchamber.sessionRetention.toast.noneEligibleDelete': 'Brak sesji kwalifikujących się do usunięcia',
-  'settings.openchamber.sessionRetention.tooltip': 'Automatycznie archiwizuje lub usuwa nieaktywne sesje na podstawie ostatniej aktywności. Zachowuje 5 najnowszych sesji.',
+  'settings.openchamber.sessionRetention.tooltip': 'Archiwizuje lub usuwa niezarchiwizowane sesje na podstawie ostatniej aktywności. Zachowuje 5 najnowszych sesji, otwartą sesję oraz sesje działające i udostępnione. Sesje zarchiwizowane pozostają zachowane. Sesja nadrzędna pozostaje, jeśli jej usunięcie usunęłoby też chronioną sesję podrzędną.',
   'settings.openchamber.tunnel.actions.browseConfigFileAria': 'Przeglądaj plik konfiguracyjny',
   'settings.openchamber.tunnel.actions.clearConfigFileAria': 'Wyczyść plik konfiguracyjny',
   'settings.openchamber.tunnel.actions.copied': 'Skopiowano',

@@ -956,7 +956,7 @@ export const settingsDict = {
   "settings.openchamber.passkeys.toast.removeFailed": "No se pudo eliminar la clave de paso.",
   "settings.openchamber.passkeys.toast.clearAuthFailed": "No se pudo limpiar la autenticación guardada.",
   "settings.openchamber.sessionRetention.title": "Retención de sesiones",
-  "settings.openchamber.sessionRetention.tooltip": "Archivar o eliminar automáticamente sesiones inactivas según la última actividad. Mantiene las 5 sesiones más recientes.",
+  "settings.openchamber.sessionRetention.tooltip": "Archiva o elimina sesiones no archivadas según su última actividad. Conserva las 5 sesiones más recientes, la sesión abierta, las sesiones en ejecución y las compartidas. Las sesiones archivadas se conservan. Una sesión principal se conserva si eliminarla también eliminaría una sesión secundaria protegida.",
   "settings.openchamber.sessionRetention.field.enableAutoCleanupAria": "Habilitar limpieza automática",
   "settings.openchamber.sessionRetention.field.enableAutoCleanup": "Habilitar limpieza automática",
   "settings.openchamber.sessionRetention.field.retentionPeriod": "Periodo de retención",
