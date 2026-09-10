@@ -15,6 +15,7 @@ import { WorkerHighlightedCode } from '@/components/code/WorkerHighlightedCode';
 import { isEmptyTextPart, extractTextContent } from './partUtils';
 import { FadeInOnReveal } from './FadeInOnReveal';
 import { Button } from '@/components/ui/button';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { SaveProjectPlanDialog } from '@/components/session/SaveProjectPlanDialog';
 import { ForkSessionDialog, type ForkSessionExecution } from '@/components/session/ForkSessionDialog';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -151,9 +152,46 @@ const InteractiveTurnChangedFilePills = React.memo(({ files }: { files: TurnChan
 });
 
 const TurnChangedFilePills = React.memo(({ files, isInteractive }: { files?: TurnChangedFile[]; isInteractive: boolean }) => {
+    const { t } = useI18n();
+    const [expanded, setExpanded] = React.useState(false);
+    const triggerRef = React.useRef<HTMLButtonElement>(null);
+    React.useLayoutEffect(() => {
+        const trigger = triggerRef.current;
+        if (!expanded && trigger && trigger.ownerDocument.activeElement === trigger) {
+            // Keep the focused control visible after a long list shrinks.
+            trigger.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        }
+    }, [expanded]);
     if (!files || files.length === 0) return null;
 
-    return isInteractive ? <InteractiveTurnChangedFilePills files={files} /> : <StaticTurnChangedFilePills files={files} />;
+    const Pills = isInteractive ? InteractiveTurnChangedFilePills : StaticTurnChangedFilePills;
+    const visibleLimit = 4;
+    if (files.length <= visibleLimit) return <Pills files={files} />;
+
+    return (
+        <Collapsible
+            className="contents"
+            open={expanded}
+            onOpenChange={(open) => {
+                if (!open) triggerRef.current?.focus({ preventScroll: true });
+                setExpanded(open);
+            }}
+        >
+            <Pills files={files.slice(0, visibleLimit)} />
+            <CollapsibleContent className={expanded ? 'contents transition-none' : 'hidden transition-none'}>
+                {expanded && <Pills files={files.slice(visibleLimit)} />}
+            </CollapsibleContent>
+            <CollapsibleTrigger
+                ref={triggerRef}
+                render={<Button variant="ghost" size="sm" />}
+                className="w-auto text-muted-foreground"
+            >
+                {expanded
+                    ? t('chat.changedFiles.actions.collapse')
+                    : t('chat.changedFiles.actions.showMore', { count: files.length - visibleLimit })}
+            </CollapsibleTrigger>
+        </Collapsible>
+    );
 });
 
 type SubtaskPartLike = Part & {
