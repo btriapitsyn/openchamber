@@ -38,14 +38,15 @@ export const projectPathFromId = (projectId) => {
 };
 
 /**
- * The stem of the file (`<projectsDir>/<stem>.json`) that holds a project's
- * per-user config. It is the id itself while that fits a file name. A
- * `path_<base64url>` id grows with the checkout path, so a deeply nested
- * project would otherwise get a name the filesystem rejects (ENAMETOOLONG);
- * such an id maps to a fixed-length digest instead. The digest keeps the
- * `path_` prefix so the orphan recovery in `opencode/settings-runtime.js`
- * never mistakes the file for a leftover of the random-id era. The VS Code
- * extension host applies the same rule
+ * The stem of everything a project owns in the projects dir: the per-user
+ * config file `<projectsDir>/<stem>.json` and the sibling folder
+ * `<projectsDir>/<stem>/` (context, plans, memory). It is the id itself while
+ * that fits a file name. A `path_<base64url>` id grows with the checkout path,
+ * so a deeply nested project would otherwise get a name the filesystem
+ * rejects (ENAMETOOLONG); such an id maps to a fixed-length digest instead.
+ * The digest keeps the `path_` prefix so the orphan recovery in
+ * `opencode/settings-runtime.js` never mistakes the file for a leftover of the
+ * random-id era. The VS Code extension host applies the same rule
  * (`packages/vscode/src/bridge-project-setup-runtime.ts`); keep the two in sync.
  */
 export const projectConfigFileStemOf = (projectId) => {

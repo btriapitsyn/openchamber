@@ -230,6 +230,98 @@ describe('settings runtime', () => {
     }
   });
 
+  it('moves project storage into the bounded folder when the canonical id is too long for a folder name', async () => {
+    const { runtime, settingsFilePath, tempRoot, cleanup } = await createRuntime();
+    try {
+      const projectPath = path.join(tempRoot, `${'segment-'.repeat(18)}`, 'demo-repo');
+      const oldProjectId = 'legacy-project-id';
+      const newProjectId = createProjectIdFromPath(projectPath);
+      const stem = projectConfigFileStemOf(newProjectId);
+      expect(newProjectId.length).toBeGreaterThan(240);
+      expect(stem).not.toBe(newProjectId);
+      const projectsRoot = path.join(path.dirname(settingsFilePath), 'projects');
+      const oldStorageDir = path.join(projectsRoot, oldProjectId);
+      const newStorageDir = path.join(projectsRoot, stem);
+
+      await fsPromises.mkdir(projectPath, { recursive: true });
+      await fsPromises.mkdir(path.join(oldStorageDir, 'plans'), { recursive: true });
+      await fsPromises.writeFile(path.join(oldStorageDir, 'context.json'), JSON.stringify({ version: 2, notes: [], todos: [{ id: 't1', text: 'keep', completed: false, createdAt: 1 }], plans: [] }), 'utf8');
+      await fsPromises.writeFile(path.join(oldStorageDir, 'plans', 'inside.md'), '# Inside\n', 'utf8');
+      await fsPromises.writeFile(path.join(oldStorageDir, 'memory.json'), JSON.stringify({ version: 1, entries: [] }), 'utf8');
+      await fsPromises.writeFile(
+        settingsFilePath,
+        JSON.stringify({
+          projects: [{ id: oldProjectId, path: projectPath, addedAt: 1, lastOpenedAt: 1 }],
+          activeProjectId: oldProjectId,
+        }, null, 2),
+        'utf8',
+      );
+      await fsPromises.writeFile(
+        path.join(projectsRoot, `${oldProjectId}.json`),
+        JSON.stringify({ projectPlanFiles: [{ id: 'inside', path: path.join(oldStorageDir, 'plans', 'inside.md') }] }, null, 2),
+        'utf8',
+      );
+
+      const settings = await runtime.readSettingsFromDiskMigrated();
+
+      expect(settings.projects.map((project) => project.id)).toEqual([newProjectId]);
+      const migratedConfig = JSON.parse(await fsPromises.readFile(path.join(projectsRoot, `${stem}.json`), 'utf8'));
+      expect(migratedConfig.projectPlanFiles).toEqual([{ id: 'inside', path: path.join(newStorageDir, 'plans', 'inside.md') }]);
+      expect(JSON.parse(await fsPromises.readFile(path.join(newStorageDir, 'context.json'), 'utf8')).todos).toHaveLength(1);
+      await fsPromises.access(path.join(newStorageDir, 'plans', 'inside.md'));
+      await fsPromises.access(path.join(newStorageDir, 'memory.json'));
+      expect((await fsPromises.readdir(projectsRoot)).sort()).toEqual([stem, `${stem}.json`]);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it('moves a folder an older build created under a raw id that still fit a folder name into the bounded folder', async () => {
+    const { runtime, settingsFilePath, tempRoot, cleanup } = await createRuntime();
+    try {
+      // Long enough for the bounded name, short enough that an older build
+      // could still have created `<id>/` on this filesystem.
+      const projectPath = path.join(tempRoot, `${'segment-'.repeat(12)}`, 'demo-repo');
+      const projectId = createProjectIdFromPath(projectPath);
+      const stem = projectConfigFileStemOf(projectId);
+      expect(projectId.length).toBeGreaterThan(200);
+      expect(projectId.length).toBeLessThanOrEqual(255);
+      expect(stem).not.toBe(projectId);
+      const projectsRoot = path.join(path.dirname(settingsFilePath), 'projects');
+      const rawStorageDir = path.join(projectsRoot, projectId);
+      const boundedStorageDir = path.join(projectsRoot, stem);
+
+      await fsPromises.mkdir(projectPath, { recursive: true });
+      await fsPromises.mkdir(path.join(rawStorageDir, 'plans'), { recursive: true });
+      await fsPromises.writeFile(path.join(rawStorageDir, 'context.json'), JSON.stringify({ version: 2, notes: [{ id: 'n1', body: 'old note', createdAt: 1, updatedAt: 1 }], todos: [], plans: [] }), 'utf8');
+      await fsPromises.writeFile(path.join(rawStorageDir, 'plans', 'old.md'), '# Old\n', 'utf8');
+      await fsPromises.writeFile(path.join(rawStorageDir, 'memory.json'), JSON.stringify({ version: 1, entries: [{ id: 'm1', title: 'Old memory', body: 'x', type: 'fact', createdAt: 1, updatedAt: 1 }] }), 'utf8');
+      // The bounded folder already holds newer context: both sides survive.
+      await fsPromises.mkdir(boundedStorageDir, { recursive: true });
+      await fsPromises.writeFile(path.join(boundedStorageDir, 'context.json'), JSON.stringify({ version: 2, notes: [{ id: 'n2', body: 'new note', createdAt: 2, updatedAt: 2 }], todos: [], plans: [] }), 'utf8');
+      await fsPromises.writeFile(
+        settingsFilePath,
+        JSON.stringify({ projects: [{ id: projectId, path: projectPath, addedAt: 1, lastOpenedAt: 1 }], activeProjectId: projectId }, null, 2),
+        'utf8',
+      );
+
+      const settings = await runtime.readSettingsFromDiskMigrated();
+
+      expect(settings.projects.map((project) => project.id)).toEqual([projectId]);
+      const context = JSON.parse(await fsPromises.readFile(path.join(boundedStorageDir, 'context.json'), 'utf8'));
+      expect(context.notes.map((note) => note.id).sort()).toEqual(['n1', 'n2']);
+      await fsPromises.access(path.join(boundedStorageDir, 'plans', 'old.md'));
+      expect(JSON.parse(await fsPromises.readFile(path.join(boundedStorageDir, 'memory.json'), 'utf8')).entries).toHaveLength(1);
+      await expect(fsPromises.access(rawStorageDir)).rejects.toMatchObject({ code: 'ENOENT' });
+
+      // A second startup finds nothing left to move.
+      await runtime.readSettingsFromDiskMigrated();
+      expect(JSON.parse(await fsPromises.readFile(path.join(boundedStorageDir, 'context.json'), 'utf8')).notes).toHaveLength(2);
+    } finally {
+      await cleanup();
+    }
+  });
+
   it('cleans up orphaned settings.json.tmp files during startup migration', async () => {
     const { runtime, settingsFilePath, tempRoot, cleanup } = await createRuntime();
     try {
