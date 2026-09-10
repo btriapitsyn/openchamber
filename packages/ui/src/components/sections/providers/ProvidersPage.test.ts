@@ -1,10 +1,16 @@
 import { describe, expect, test } from 'bun:test';
+import { rankByQuery } from '../../../lib/search/fuzzySearch';
+import {
+  FREEINFERENCE_PROVIDER_ID,
+  FREEINFERENCE_NAME,
+  getPresetSearchKeywords,
+} from './freeinference-preset';
 import { requiresProviderAuth, shouldLoadAvailableProviders } from './providerAvailability';
 import {
   getOAuthAuthMethods,
   normalizeAuthType,
   parseAuthPayload,
-requiresOpenCodeRestartAfterOAuth,
+  requiresOpenCodeRestartAfterOAuth,
   providerHasCredentials,
   shouldAutoOpenAuthPanel,
   shouldShowApiKeyAuth,
@@ -219,4 +225,46 @@ describe('provider credential state helpers', () => {
       hasCredentials: false,
     })).toBe(true);
   });
+
+  test('FreeInference provider displays models when credentials are present', () => {
+    const creds = providerHasCredentials({
+      key: 'fi_test_key_123',
+      authSourceExists: true,
+    });
+    expect(creds).toBe(true);
+    expect(shouldShowModelsSection({
+      modelCount: 3,
+      sourcesLoaded: true,
+      hasCredentials: creds,
+    })).toBe(true);
+  });
 });
+
+describe('provider preset search discoverability', () => {
+  const sampleProviders = [
+    { id: 'anthropic', name: 'Anthropic' },
+    { id: 'openai', name: 'OpenAI' },
+    { id: FREEINFERENCE_PROVIDER_ID, name: FREEINFERENCE_NAME },
+    { id: 'google', name: 'Google' },
+  ];
+
+  const search = (query: string) =>
+    rankByQuery(sampleProviders, query, (p) => [
+      p.name || p.id,
+      p.id,
+      ...getPresetSearchKeywords(p.id),
+    ]);
+
+  test('finds FreeInference using exact and spaced terms', () => {
+    expect(search('freeinference')[0]?.id).toBe(FREEINFERENCE_PROVIDER_ID);
+    expect(search('free inference')[0]?.id).toBe(FREEINFERENCE_PROVIDER_ID);
+    expect(search('free-inference')[0]?.id).toBe(FREEINFERENCE_PROVIDER_ID);
+  });
+
+  test('finds FreeInference using harvard and madsys terms', () => {
+    expect(search('harvard')[0]?.id).toBe(FREEINFERENCE_PROVIDER_ID);
+    expect(search('madsys')[0]?.id).toBe(FREEINFERENCE_PROVIDER_ID);
+    expect(search('harvard madsys')[0]?.id).toBe(FREEINFERENCE_PROVIDER_ID);
+  });
+});
+

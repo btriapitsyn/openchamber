@@ -1178,6 +1178,49 @@ const handleLocalApiRequest = async (input: RequestInfo | URL, url: URL, init: R
     }
   }
 
+  // Handle FreeInference models discovery: POST /api/provider/freeinference/models
+  if (pathname === '/api/provider/freeinference/models' && method === 'POST') {
+    try {
+      const body = await extractJsonBody(input, init, method);
+      const data = await sendBridgeMessage('api:provider/freeinference/models', body && typeof body === 'object' ? body : {});
+      if (data && typeof data === 'object' && 'success' in data && (data as { success?: boolean }).success === false) {
+        const message = (data as { error?: string }).error || 'Failed to fetch FreeInference models';
+        return new Response(JSON.stringify({ error: message }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+      }
+      return new Response(JSON.stringify((data as { data?: unknown })?.data ?? data), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return new Response(JSON.stringify({ error: message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    }
+  }
+
+  // Handle FreeInference sync models: POST /api/provider/freeinference/sync-models
+  if (pathname === '/api/provider/freeinference/sync-models' && method === 'POST') {
+    try {
+      const body = await extractJsonBody(input, init, method);
+      const queryDirectory = url.searchParams.get('directory') || undefined;
+      const data = await sendBridgeMessage('api:provider/freeinference/sync-models', {
+        ...(body && typeof body === 'object' ? body : {}),
+        directory: queryDirectory
+          ?? (body && typeof body === 'object' && typeof body.directory === 'string' ? body.directory : undefined),
+      });
+      if (data && typeof data === 'object' && 'success' in data && (data as { success?: boolean }).success === false) {
+        const message = (data as { error?: string }).error || 'Failed to sync FreeInference models';
+        return new Response(JSON.stringify({ error: message }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+      }
+      return new Response(JSON.stringify((data as { data?: unknown })?.data ?? data), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return new Response(JSON.stringify({ error: message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    }
+  }
+
   return null;
 };
 

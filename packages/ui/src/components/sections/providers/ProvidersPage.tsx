@@ -52,6 +52,14 @@ import {
   type CustomProviderPersistPlan,
   type ProviderConfigScope,
 } from './custom-provider-form';
+import {
+  FREEINFERENCE_PROVIDER_ID,
+  FREEINFERENCE_NAME,
+  PROVIDER_PRESETS,
+  getPresetSearchKeywords,
+  isFreeInferenceProvider,
+} from './freeinference-preset';
+import { FreeInferenceConnectForm } from './FreeInferenceConnectForm';
 
 /**
  * Providers whose credentials come from several env vars (Bedrock, Azure,
@@ -193,8 +201,11 @@ export const ProvidersPage: React.FC = () => {
   const [editingCustomScope, setEditingCustomScope] = React.useState<ProviderConfigScope | null>(null);
   const [customAuthFailureHint, setCustomAuthFailureHint] = React.useState<string | null>(null);
   const [lastCustomPersistId, setLastCustomPersistId] = React.useState<string | null>(null);
+  const [freeInferenceAuthFailureHint, setFreeInferenceAuthFailureHint] = React.useState<string | null>(null);
+  const [isSyncingFreeInference, setIsSyncingFreeInference] = React.useState(false);
   const isAddMode = selectedProviderId === ADD_PROVIDER_ID;
   const isCustomCreateMode = isAddMode && candidateProviderId === CUSTOM_PROVIDER_ID;
+  const isFreeInferenceCreateMode = isAddMode && candidateProviderId === FREEINFERENCE_PROVIDER_ID;
   const isCustomEditMode = Boolean(
     editingCustomProviderId
     && selectedProviderId
@@ -287,14 +298,21 @@ export const ProvidersPage: React.FC = () => {
   );
 
   const unconnectedProviders = React.useMemo(
-    () =>
-      availableProviders
+    () => {
+      const list = availableProviders
         .filter((provider) => !connectedProviderIds.has(provider.id))
-        .sort((a, b) => {
-          const labelA = (a.name || a.id).toLowerCase();
-          const labelB = (b.name || b.id).toLowerCase();
-          return labelA.localeCompare(labelB);
-        }),
+        .slice();
+      for (const preset of PROVIDER_PRESETS) {
+        if (!connectedProviderIds.has(preset.id)) {
+          list.push({ id: preset.id, name: preset.name });
+        }
+      }
+      return list.sort((a, b) => {
+        const labelA = (a.name || a.id).toLowerCase();
+        const labelB = (b.name || b.id).toLowerCase();
+        return labelA.localeCompare(labelB);
+      });
+    },
     [availableProviders, connectedProviderIds]
   );
 
@@ -306,6 +324,7 @@ export const ProvidersPage: React.FC = () => {
     if (
       candidateProviderId
       && candidateProviderId !== CUSTOM_PROVIDER_ID
+      && !PROVIDER_PRESETS.some((preset) => preset.id === candidateProviderId)
       && !unconnectedProviders.some((provider) => provider.id === candidateProviderId)
     ) {
       setCandidateProviderId('');
@@ -320,11 +339,15 @@ export const ProvidersPage: React.FC = () => {
       setEditingCustomFormInitial(null);
       setEditingCustomScope(null);
       setCustomAuthFailureHint(null);
+      setFreeInferenceAuthFailureHint(null);
+      setIsSyncingFreeInference(false);
       return;
     }
 
     setShowAuthPanel(false);
     setAuthPanelDismissedForId(null);
+    setFreeInferenceAuthFailureHint(null);
+    setIsSyncingFreeInference(false);
     if (editingCustomProviderId && editingCustomProviderId !== selectedProviderId) {
       setEditingCustomProviderId(null);
       setEditingCustomFormInitial(null);
@@ -482,6 +505,15 @@ export const ProvidersPage: React.FC = () => {
         throw new Error(t('settings.providers.page.toast.apiKeySaveFailed'));
       }
 
+      if (isFreeInferenceProvider(providerId)) {
+        const query = settingsDirectory ? `?directory=${encodeURIComponent(settingsDirectory)}` : '';
+        await runtimeFetch(`/api/provider/freeinference/sync-models${query}`, {
+          method: 'POST',
+          headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+          body: JSON.stringify({ apiKey, scope: resolveProviderConfigScope(providerSources[providerId]) }),
+        });
+      }
+
       toast.success(t('settings.providers.page.toast.apiKeySaved'));
       setApiKeyInputs((prev) => ({ ...prev, [providerId]: '' }));
       // Mutation succeeded: the auth key is on disk. The reload can fail with
@@ -622,6 +654,101 @@ export const ProvidersPage: React.FC = () => {
     setCandidateProviderId('');
   };
 
+  const handleConnectFreeInference = async (apiKey: string) => {
+    const busyKey = `freeinference:${FREEINFERENCE_PROVIDER_ID}`;
+    setAuthBusyKey(busyKey);
+    setFreeInferenceAuthFailureHint(null);
+
+    try {
+      const query = settingsDirectory ? `?directory=${encodeURIComponent(settingsDirectory)}` : '';
+
+      // 1. Validate API key and test connection by fetching models
+      const testResponse = await runtimeFetch(`/api/provider/freeinference/models${query}`, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ apiKey }),
+      });
+      const testPayload = await testResponse.json().catch(() => null);
+      if (!testResponse.ok) {
+        throw new Error(testPayload?.error || t('settings.providers.freeinference.refreshFailed'));
+      }
+
+      // 2. Set API key in OpenCode auth
+      const authResult = await opencodeClient.getSdkClient().auth.set({
+        providerID: FREEINFERENCE_PROVIDER_ID,
+        auth: { type: 'api', key: apiKey },
+      });
+      if (authResult.error) {
+        throw new Error(t('settings.providers.page.toast.apiKeySaveFailed'));
+      }
+
+      // 3. Sync models to write provider config to disk
+      const syncResponse = await runtimeFetch(`/api/provider/freeinference/sync-models${query}`, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ apiKey, scope: 'user' }),
+      });
+      const syncPayload = await syncResponse.json().catch(() => null);
+      if (!syncResponse.ok) {
+        setFreeInferenceAuthFailureHint(t('settings.providers.page.custom.authFailure.configAfterAuth'));
+        throw new Error(syncPayload?.error || t('settings.providers.freeinference.refreshFailed'));
+      }
+
+      toast.success(t('settings.providers.page.toast.customProviderSaved', { provider: FREEINFERENCE_NAME }));
+      setCandidateProviderId('');
+      setFreeInferenceAuthFailureHint(null);
+      await applyConfigReloadOrRecordDeferred('providers', FREEINFERENCE_PROVIDER_ID);
+      markAuthWriteSucceeded(FREEINFERENCE_PROVIDER_ID);
+    } catch (error) {
+      console.error('Failed to connect FreeInference:', error);
+      toast.error(
+        error instanceof Error && error.message
+          ? error.message
+          : t('settings.providers.freeinference.refreshFailed'),
+      );
+    } finally {
+      setAuthBusyKey(null);
+    }
+  };
+
+  const handleSyncFreeInferenceModels = async () => {
+    setIsSyncingFreeInference(true);
+    try {
+      const query = settingsDirectory ? `?directory=${encodeURIComponent(settingsDirectory)}` : '';
+      const response = await runtimeFetch(`/api/provider/freeinference/sync-models${query}`, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ scope: resolveProviderConfigScope(selectedSources) }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.error || t('settings.providers.freeinference.refreshFailed'));
+      }
+      const count = Array.isArray(payload?.models) ? payload.models.length : 0;
+      toast.success(t('settings.providers.freeinference.modelsRefreshed', { count }));
+      await applyConfigReloadOrRecordDeferred('providers', FREEINFERENCE_PROVIDER_ID);
+      refreshProviderSources();
+    } catch (error) {
+      console.error('Failed to sync FreeInference models:', error);
+      toast.error(
+        error instanceof Error && error.message
+          ? error.message
+          : t('settings.providers.freeinference.refreshFailed'),
+      );
+    } finally {
+      setIsSyncingFreeInference(false);
+    }
+  };
+
   if (!isAddMode && providers.length === 0) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -700,7 +827,11 @@ export const ProvidersPage: React.FC = () => {
                           {(() => {
                             const customLabel = t('settings.providers.page.custom.optionLabel');
                             const customMatches = matchesRankQuery([customLabel, 'other', 'custom'], providerSearchQuery);
-                            const filtered = rankByQuery(unconnectedProviders, providerSearchQuery, (p) => [p.name || p.id, p.id]);
+                            const filtered = rankByQuery(unconnectedProviders, providerSearchQuery, (p) => [
+                              p.name || p.id,
+                              p.id,
+                              ...getPresetSearchKeywords(p.id),
+                            ]);
                             if (filtered.length === 0 && !customMatches) {
                               return <p className="py-4 text-center typography-meta text-muted-foreground">{t('settings.providers.page.connect.noProvidersFound')}</p>;
                             }
@@ -771,6 +902,16 @@ export const ProvidersPage: React.FC = () => {
                   : undefined
               }
               onSubmit={handleSaveCustomProvider}
+            />
+          ) : isFreeInferenceCreateMode ? (
+            <FreeInferenceConnectForm
+              busy={authBusyKey?.startsWith('freeinference:') ?? false}
+              authFailureHint={freeInferenceAuthFailureHint}
+              onCancel={() => {
+                setCandidateProviderId('');
+                setFreeInferenceAuthFailureHint(null);
+              }}
+              onSubmit={handleConnectFreeInference}
             />
           ) : candidateProviderId ? (
             <SettingsSection
@@ -1065,6 +1206,19 @@ export const ProvidersPage: React.FC = () => {
         }
         headerAction={(
           <div className="flex items-center gap-1">
+            {selectedProvider.id === FREEINFERENCE_PROVIDER_ID ? (
+              <Button
+                variant="outline"
+                size="xs"
+                className="!font-normal"
+                onClick={handleSyncFreeInferenceModels}
+                disabled={isSyncingFreeInference}
+              >
+                {isSyncingFreeInference
+                  ? t('settings.providers.freeinference.syncing')
+                  : t('settings.providers.freeinference.syncModels')}
+              </Button>
+            ) : null}
             <Button
               variant="outline"
               size="xs"

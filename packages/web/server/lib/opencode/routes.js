@@ -8,6 +8,11 @@ import {
 import { getClaudeCliAuthStatus } from './claude-cli-auth.js';
 import { OPENCODE_CONFIG_DIR } from './shared.js';
 import { settingsSurfaceOf } from './settings-files.js';
+import {
+  FREEINFERENCE_PROVIDER_ID,
+  buildFreeInferenceProviderConfig,
+  fetchFreeInferenceModels as defaultFetchFreeInferenceModels,
+} from './freeinference.js';
 
 export const registerOpenCodeRoutes = (app, dependencies) => {
   const {
@@ -27,6 +32,7 @@ export const registerOpenCodeRoutes = (app, dependencies) => {
     refreshOpenCodeAfterConfigChange,
     buildOpenCodeUrl,
     getOpenCodeAuthHeaders,
+    fetchFreeInferenceModels = defaultFetchFreeInferenceModels,
     fsPromises = fs.promises,
   } = dependencies;
 
@@ -630,6 +636,89 @@ ${desktopReturn ? `<a class="return" href="openchamber://focus/mcp-auth">Return 
     } catch (error) {
       console.error('Failed to get provider sources:', error);
       return res.status(500).json({ error: error.message || 'Failed to get provider sources' });
+    }
+  });
+
+  app.post('/api/provider/freeinference/models', async (req, res) => {
+    try {
+      let apiKey = typeof req.body?.apiKey === 'string' ? req.body.apiKey.trim() : '';
+      if (!apiKey) {
+        const { getProviderAuth } = await getAuthLibrary();
+        const storedAuth = getProviderAuth(FREEINFERENCE_PROVIDER_ID);
+        if (storedAuth?.key) {
+          apiKey = storedAuth.key;
+        }
+      }
+
+      if (!apiKey) {
+        return res.status(400).json({ error: 'FreeInference API key is required' });
+      }
+
+      const models = await fetchFreeInferenceModels({ apiKey });
+      return res.json({ ok: true, models });
+    } catch (error) {
+      const status = typeof error?.statusCode === 'number' ? error.statusCode : 500;
+      return res.status(status).json({ error: error.message || 'Failed to fetch FreeInference models' });
+    }
+  });
+
+  app.post('/api/provider/freeinference/sync-models', async (req, res) => {
+    try {
+      let apiKey = typeof req.body?.apiKey === 'string' ? req.body.apiKey.trim() : '';
+      const { getProviderAuth } = await getAuthLibrary();
+      if (!apiKey) {
+        const storedAuth = getProviderAuth(FREEINFERENCE_PROVIDER_ID);
+        if (storedAuth?.key) {
+          apiKey = storedAuth.key;
+        }
+      }
+
+      if (!apiKey) {
+        return res.status(400).json({ error: 'FreeInference API key is required' });
+      }
+
+      const headerDirectory = typeof req.get === 'function' ? req.get('x-opencode-directory') : null;
+      const queryDirectory = Array.isArray(req.query?.directory)
+        ? req.query.directory[0]
+        : req.query?.directory;
+      const requestedDirectory = headerDirectory || queryDirectory || null;
+
+      let directory = null;
+      if (requestedDirectory) {
+        const resolved = await resolveProjectDirectory(req);
+        if (resolved.directory) {
+          directory = resolved.directory;
+        }
+      } else {
+        const resolved = await resolveProjectDirectory(req);
+        if (resolved.directory) {
+          directory = resolved.directory;
+        }
+      }
+
+      const models = await fetchFreeInferenceModels({ apiKey });
+      const config = buildFreeInferenceProviderConfig(models);
+      const scope = typeof req.body?.scope === 'string' ? req.body.scope : 'user';
+
+      const upsertResult = upsertProviderConfig(
+        FREEINFERENCE_PROVIDER_ID,
+        config,
+        directory,
+        scope,
+        { hasStoredAuth: true },
+      );
+
+      return res.json({
+        ...buildDeferredRestartResponse('FreeInference models updated. Restart OpenCode to apply.'),
+        providerId: FREEINFERENCE_PROVIDER_ID,
+        models,
+        path: upsertResult.path,
+        config: upsertResult.config,
+      });
+    } catch (error) {
+      const status = typeof error?.statusCode === 'number' ? error.statusCode : 500;
+      console.error('Failed to sync FreeInference models:', error);
+      return res.status(status).json({ error: error.message || 'Failed to sync FreeInference models' });
     }
   });
 

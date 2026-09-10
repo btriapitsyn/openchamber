@@ -7,6 +7,11 @@ import { removeProviderConfig, getProviderSources, upsertProviderConfig } from '
 import { getProviderAuth, removeProviderAuth } from './opencodeAuth';
 import { fetchQuotaForProvider, listConfiguredQuotaProviders } from './quotaProviders';
 import { credentialStatus, deleteCredential, importCursorCredential, normalizeCredential, readCredential, validateCredential, writeCredential, type ManagedProvider } from './quotaCredentials';
+import {
+  FREEINFERENCE_PROVIDER_ID,
+  buildFreeInferenceProviderConfig,
+  fetchFreeInferenceModels,
+} from './freeinference';
 import { getSessionActivitySnapshot } from './sessionActivityWatcher';
 import { getOpenCodeUpgradeStatus, upgradeManagedOpenCode } from './opencode-upgrade-runtime';
 import { buildDeferredRestartResponse } from './config-mutation-response';
@@ -530,6 +535,79 @@ export async function handleSystemBridgeMessage(
           data: {
             success: true,
             providerId: result.providerId,
+            path: result.path,
+            config: result.config,
+            requiresReload: true,
+            reloadDelayMs: deps.clientReloadDelayMs,
+          },
+        };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return { id, type, success: false, error: errorMessage };
+      }
+    }
+
+    case 'api:provider/freeinference/models': {
+      try {
+        const { apiKey: providedKey } = (payload || {}) as { apiKey?: string };
+        let apiKey = typeof providedKey === 'string' ? providedKey.trim() : '';
+        if (!apiKey) {
+          const storedAuth = getProviderAuth(FREEINFERENCE_PROVIDER_ID);
+          if (typeof storedAuth?.key === 'string' && storedAuth.key.trim()) {
+            apiKey = storedAuth.key.trim();
+          }
+        }
+        if (!apiKey) {
+          return { id, type, success: false, error: 'FreeInference API key is required' };
+        }
+        const models = await fetchFreeInferenceModels({ apiKey });
+        return { id, type, success: true, data: { ok: true, models } };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return { id, type, success: false, error: errorMessage };
+      }
+    }
+
+    case 'api:provider/freeinference/sync-models': {
+      try {
+        const { apiKey: providedKey, directory, scope } = (payload || {}) as {
+          apiKey?: string;
+          directory?: string;
+          scope?: string;
+        };
+        let apiKey = typeof providedKey === 'string' ? providedKey.trim() : '';
+        if (!apiKey) {
+          const storedAuth = getProviderAuth(FREEINFERENCE_PROVIDER_ID);
+          if (typeof storedAuth?.key === 'string' && storedAuth.key.trim()) {
+            apiKey = storedAuth.key.trim();
+          }
+        }
+        if (!apiKey) {
+          return { id, type, success: false, error: 'FreeInference API key is required' };
+        }
+        const normalizedScope: 'user' | 'project' | 'custom' =
+          scope === 'project' || scope === 'custom' ? scope : 'user';
+        const workingDirectory = typeof directory === 'string' && directory.trim().length > 0
+          ? directory.trim()
+          : ctx?.manager?.getWorkingDirectory();
+        const models = await fetchFreeInferenceModels({ apiKey });
+        const config = buildFreeInferenceProviderConfig(models);
+        const result = upsertProviderConfig(
+          FREEINFERENCE_PROVIDER_ID,
+          config,
+          workingDirectory,
+          normalizedScope,
+          { hasStoredAuth: true },
+        );
+        await ctx?.manager?.restart();
+        return {
+          id,
+          type,
+          success: true,
+          data: {
+            success: true,
+            providerId: result.providerId,
+            models,
             path: result.path,
             config: result.config,
             requiresReload: true,

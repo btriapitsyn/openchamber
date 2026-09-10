@@ -8,6 +8,12 @@ describe('provider logo fallbacks', () => {
     }
   });
 
+  test('uses a local ai-agent icon for FreeInference provider ID variants', () => {
+    for (const providerId of ['freeinference', 'free-inference', 'free_inference']) {
+      expect(getProviderLogoFallbackIcon(providerId)).toBe('ai-agent');
+    }
+  });
+
   test('does not replace providers with their own logo assets', () => {
     expect(getProviderLogoFallbackIcon('claude-code')).toBeNull();
     expect(getProviderLogoFallbackIcon('cursor')).toBeNull();
