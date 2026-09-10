@@ -110,6 +110,19 @@ afterEach(() => {
 });
 
 /**
+ * `createWorktree` returns once the worktree directory exists and finishes
+ * populate, hooks, upstream tracking and start scripts in a background task.
+ * A test that returns before the task settles leaves it writing into the temp
+ * repository that `afterEach` is deleting.
+ */
+const expectWorktreeBootstrapReady = async (worktreePath) => {
+  await expect.poll(
+    async () => (await getWorktreeBootstrapStatus(worktreePath)).status,
+    { timeout: 10_000 }
+  ).toBe('ready');
+};
+
+/**
  * Create a temp repo using simple-git (for tests that need its assertion API).
  * The dir is registered in tempDirs so afterEach handles cleanup automatically.
  */
@@ -1175,10 +1188,8 @@ describe('createWorktree', () => {
         setUpstream: true,
       });
 
-      await expect.poll(
-        () => readBranchConfig(created.path, 'openchamber/fallback-wt', 'merge'),
-        { timeout: 5_000 }
-      ).toBe('refs/heads/main');
+      await expectWorktreeBootstrapReady(created.path);
+      expect(readBranchConfig(created.path, 'openchamber/fallback-wt', 'merge')).toBe('refs/heads/main');
       expect(readBranchConfig(created.path, 'openchamber/fallback-wt', 'remote')).toBe('origin');
     } finally {
       if (previousXdgDataHome === undefined) {
@@ -1212,6 +1223,7 @@ describe('createWorktree', () => {
       expect(created.sourceFetchFailed).toBe(true);
       const expectedHead = runGit(repository, ['rev-parse', 'next']).trim();
       expect(runGit(created.path, ['rev-parse', 'HEAD']).trim()).toBe(expectedHead);
+      await expectWorktreeBootstrapReady(created.path);
     } finally {
       if (previousXdgDataHome === undefined) {
         delete process.env.XDG_DATA_HOME;
@@ -1314,12 +1326,10 @@ describe('createWorktree from a forked GitHub PR', () => {
 
       expect(created.branch).toBe('feature/login');
       expect(runGit(created.path, ['rev-parse', 'HEAD']).trim()).toBe(sha);
-      await expect.poll(() => fs.existsSync(path.join(created.path, 'FORK.md')), { timeout: 5_000 }).toBe(true);
+      await expectWorktreeBootstrapReady(created.path);
+      expect(fs.existsSync(path.join(created.path, 'FORK.md'))).toBe(true);
       expect(runGit(repository, ['remote', 'get-url', 'pr-alice']).trim()).toBe(fork);
-      await expect.poll(
-        () => getBranchTrackingRemote(created.path, 'feature/login') === 'pr-alice',
-        { timeout: 5_000 }
-      ).toBe(true);
+      expect(getBranchTrackingRemote(created.path, 'feature/login')).toBe('pr-alice');
     });
   }, 30_000);
 

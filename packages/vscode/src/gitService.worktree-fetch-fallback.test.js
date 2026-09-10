@@ -9,7 +9,7 @@ mock.module('vscode', () => ({
   Uri: { file: (fsPath) => ({ fsPath }) },
 }));
 
-const { createWorktree } = await import('./gitService.ts?worktree-fetch-fallback-test');
+const { createWorktree, getWorktreeBootstrapStatus } = await import('./gitService.ts?worktree-fetch-fallback-test');
 
 const tempDirs = [];
 
@@ -57,6 +57,23 @@ afterEach(() => {
   }
 });
 
+/**
+ * `createWorktree` returns once the worktree directory exists and finishes
+ * populate, hooks, upstream tracking and start scripts in a background task.
+ * A test that returns before the task settles leaves it writing into the temp
+ * repository that `afterEach` is deleting.
+ */
+const expectWorktreeBootstrapReady = async (worktreePath) => {
+  const deadline = Date.now() + 10_000;
+  let status = null;
+  while (Date.now() < deadline) {
+    ({ status } = await getWorktreeBootstrapStatus(worktreePath));
+    if (status === 'ready' || status === 'failed') break;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  expect(status).toBe('ready');
+};
+
 describe('VS Code worktree create from a remote start ref', () => {
   it('falls back to the tracked local branch when the source fetch fails', async () => {
     if (!canRunGit()) return;
@@ -80,6 +97,7 @@ describe('VS Code worktree create from a remote start ref', () => {
       expect(created.sourceFetchFailed).toBe(true);
       const expectedHead = runGit(repository, ['rev-parse', 'next']).trim();
       expect(runGit(created.path, ['rev-parse', 'HEAD']).trim()).toBe(expectedHead);
+      await expectWorktreeBootstrapReady(created.path);
     } finally {
       if (previousXdgDataHome === undefined) {
         delete process.env.XDG_DATA_HOME;
