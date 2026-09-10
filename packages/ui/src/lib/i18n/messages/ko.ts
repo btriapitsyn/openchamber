@@ -4,7 +4,14 @@ import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
 import { linearPanelI18n } from './linear-panel.i18n';
 
 export const dict: Record<I18nKey, string> = {
+  'sessions.aiRename.action': 'AI로 이름 변경',
+  'sessions.aiRename.generating': '세션 제목 생성 중...',
+  'sessions.aiRename.checking': '완료된 대화 확인 중...',
+  'sessions.aiRename.noCompletedTurns': '첫 번째 응답이 완료되면 사용할 수 있습니다.',
+  'sessions.aiRename.failed': '세션 이름을 변경하지 못했습니다. 소형 모델 설정을 확인하고 다시 시도해 주세요.',
+  'sessions.aiRename.unsupported': 'VS Code에서는 AI 이름 변경을 사용할 수 없습니다.',
   'commitComparison.mode': '커밋',
+  'pullRequestComparison.select': '풀 리퀘스트 선택',
   'commitComparison.select': '커밋 선택',
   'commitComparison.search': '커밋 검색...',
   'commitComparison.loadError': '커밋을 불러오지 못했습니다',
@@ -2227,6 +2234,8 @@ export const dict: Record<I18nKey, string> = {
   'chat.pendingChanges.changedInWorkspace': '워크스페이스에서 변경됨',
   'chat.changedFiles.title': '변경된 파일',
   'chat.changedFiles.actions.openFileTitle': '{path} 열기',
+  'chat.changedFiles.actions.showMore': '더 보기 ({count})',
+  'chat.changedFiles.actions.collapse': '접기',
   'chat.emptyState.opencodeUnreachable': 'OpenCode에 연결할 수 없음',
   'chat.emptyState.startNewChat': '새 채팅 시작',
   'chat.emptyState.draftTitle': 'What are we working on?',

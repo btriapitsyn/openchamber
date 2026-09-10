@@ -1602,7 +1602,11 @@ export const PullRequestSection: React.FC<{
                   className={cn('pr-actions__walkthrough-button h-7 shrink-0 gap-1.5 px-2', WALKTHROUGH_ACTION_CLASS)}
                   onClick={() => {
                     requestWalkthroughTarget(directory, {
-                      source: { kind: 'pr', number: pr.number },
+                      source: {
+                        kind: 'pr',
+                        number: pr.number,
+                        ...(statusProject ? { sourceRepo: { owner: statusProject.owner, repo: statusProject.name } } : {}),
+                      },
                       context: readContext,
                     });
                     openContextSurface(directory, 'walkthrough');

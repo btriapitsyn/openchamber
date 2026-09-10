@@ -160,6 +160,37 @@ const withoutSubtle = async <T>(run: () => Promise<T>): Promise<T> => {
   }
 };
 
+describe('managed push announcement', () => {
+  // Changes and walkthrough refresh a published pull request diff on this
+  // signal; the panel pushes through managed operations, not the HTTP adapter.
+  const announced: string[] = [];
+  let unsubscribe = () => {};
+  beforeEach(async () => {
+    announced.length = 0;
+    const { subscribeGitPush } = await import('@/lib/gitPushEvents');
+    unsubscribe = subscribeGitPush((scope) => { announced.push(scope); });
+  });
+  afterEach(() => unsubscribe());
+  const runSync = (execute: () => Promise<GitNetworkOperation>) => runBoundGitNetworkOperation({
+    action: 'sync', directory: '/repo', remoteName: 'upstream', status, targets,
+    sourceControl: { repositoryBinding: async () => boundRead }, runtimeKey: () => 'runtime-one',
+    git: { planNetworkOperation: async () => plan, executeNetworkOperation: execute, getNetworkOperation },
+  });
+
+  test('a confirmed sync announces its directory once, against the captured runtime', async () => {
+    const { gitPushScopeKey } = await import('@/lib/gitPushEvents');
+    await runSync(async () => ({ ...plan, state: 'succeeded', stepResults: successfulSteps }));
+    expect(announced).toEqual([gitPushScopeKey('/repo', 'runtime-one')]);
+  });
+
+  test('a sync that did not succeed announces nothing', async () => {
+    await expect(runSync(async () => ({
+      ...plan, state: 'failed', stepResults: [], error: { code: 'TRANSPORT_FAILED', message: 'rejected' },
+    }))).rejects.toThrow();
+    expect(announced).toEqual([]);
+  });
+});
+
 describe('structured Git operation recovery', () => {
   test('anonymous bindings permit reads but block publishing before a plan request', async () => {
     const anonymous: SourceControlBindingRead = { ...boundRead, binding: { ...boundRead.binding,

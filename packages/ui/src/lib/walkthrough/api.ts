@@ -139,7 +139,7 @@ const readContextFields = (context: Readonly<SourceControlReadContext>) => ({
   primaryRemote: context.primaryRemote,
 });
 
-const buildTargetQuery = (directory: string, target: WalkthroughTarget): WalkthroughQuery => {
+export const buildTargetQuery = (directory: string, target: WalkthroughTarget): WalkthroughQuery => {
   const query: WalkthroughQuery = { directory, source: JSON.stringify(target.source) };
   if (isPullRequestTarget(target)) {
     const context = readContextFields(target.context);

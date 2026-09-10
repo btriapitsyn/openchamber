@@ -13,6 +13,7 @@ import type {
 import { GitNetworkOperationRequestError } from '@/lib/api/types';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { gitOperationRecoveryOwner } from '@/lib/source-control/git-operation-recovery';
+import { notifyGitPush } from '@/lib/gitPushEvents';
 
 type BoundGitNetworkAction = 'fetch' | 'pull' | 'sync';
 
@@ -164,6 +165,12 @@ const executePlan = async (
   if (read.availability === 'unavailable' || read.operation.state !== 'succeeded') throw new GitOperationResultError(read);
   return read.operation;
 };
+
+// Changes and walkthrough refresh a published pull request diff on this signal.
+// The panel pushes through managed operations rather than the HTTP push adapter,
+// so the managed paths announce too, keeping that adapter's contract: only a
+// confirmed push, against the runtime captured before it started.
+const announcePush = (directory: string, capturedRuntime: string) => notifyGitPush(directory, capturedRuntime);
 
 type ConfirmSystemTransport = () => boolean | Promise<boolean>;
 
@@ -622,6 +629,7 @@ export const runPreparedGitPublish = async ({
   const completion = await executePlan(git, plan, runtimeKey, selection.runtime, onOperation);
   if (completion.target.operation !== selection.action) throw new BoundGitNetworkOperationError('invalid-terminal-state');
   if (selection.action === 'sync') interpretGitNetworkTerminalOperation(completion, 'sync');
+  announcePush(selection.directory, selection.runtime);
   return completion;
 };
 
@@ -689,6 +697,7 @@ export const runBoundGitNetworkOperation = async ({
 
   const completion = await executePlan(git, plan, runtimeKey, capturedRuntime, onOperation);
   interpretGitNetworkTerminalOperation(completion, action);
+  if (action === 'sync') announcePush(directory, capturedRuntime);
   return completion;
 };
 
@@ -758,6 +767,7 @@ export const runContributorPush = async ({
   onOperation?.({ runtimeKey: capturedRuntime, operation: plan, availability: 'available' });
   requireCurrentRuntime(runtimeKey, capturedRuntime);
   const completion = await executePlan(git, plan, runtimeKey, capturedRuntime, onOperation);
+  announcePush(directory, capturedRuntime);
   return completion;
 };
 
@@ -855,6 +865,7 @@ export const runContributorAwarePush = async ({
     );
     requireCurrentRuntime(runtimeKey, capturedRuntime);
     await executePlan(git, plan, runtimeKey, capturedRuntime, onOperation);
+    announcePush(directory, capturedRuntime);
     return;
   }
   await runContributorPush({

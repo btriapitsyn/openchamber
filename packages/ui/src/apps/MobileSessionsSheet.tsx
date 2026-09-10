@@ -73,6 +73,8 @@ import { useAllLiveSessions, useGlobalSessionStatus } from '@/sync/sync-context'
 import { useSessionUnseenCount } from '@/sync/notification-store';
 import { useHasSessionActivityDuration } from '@/sync/session-activity-timing';
 import { SessionActivityDuration } from '@/components/session/SessionActivityDuration';
+import { useSessionAiRenameAction } from '@/components/session/useSessionAiRenameAction';
+import { handleSessionRenameKeyDown } from '@/components/session/sessionRenameKeyboard';
 import type { WorktreeMetadata } from '@/types/worktree';
 
 import { MobileDeleteWorktreeDialog } from './MobileDeleteWorktreeDialog';
@@ -311,8 +313,8 @@ const NewSessionIconButton: React.FC<{
   </button>
 );
 
-// Width of the swipe-revealed action area (rename + archive + delete buttons).
-const ROW_ACTIONS_WIDTH = 144;
+// Four 48px action slots: delete, archive, manual rename and AI rename.
+const ROW_ACTIONS_WIDTH = 192;
 const ROW_SWIPE_SNAP_MS = 180;
 
 /** Generic swipe-right-to-reveal wrapper for drawer rows (projects, worktrees).
@@ -442,10 +444,7 @@ const SessionRenameForm: React.FC<{
         ref={focusRenameInput}
         value={value}
         onChange={(event) => setValue(event.target.value)}
-        onKeyDown={(event) => {
-          event.stopPropagation();
-          if (event.key === 'Escape') onCancel();
-        }}
+        onKeyDown={(event) => handleSessionRenameKeyDown(event, onCancel)}
         aria-label={t('sessions.sidebar.session.rename.save')}
         placeholder={t('sessions.sidebar.session.menu.rename')}
         // 16px prevents the iOS focus zoom; the bare input keeps the row height.
@@ -525,6 +524,7 @@ const SessionRow: React.FC<{
   const time = formatRelativeShort(getSessionTimestamp(session));
   const title = session.title?.trim() || t('mobile.sessions.untitled');
   const swipeEnabled = Boolean(onRevealedChange && onArchive);
+  const aiRename = useSessionAiRenameAction(session.id, session.directory, swipeEnabled && revealed);
   // Live indicators, same conventions as the desktop sidebar: busy/retry →
   // spinner; unseen activity on a non-active row → attention dot.
   const liveStatus = useGlobalSessionStatus(session.id);
@@ -644,6 +644,20 @@ const SessionRow: React.FC<{
           >
             <RiEdit2Line className="size-[18px]" />
           </button>
+          <Button
+            variant="ghost"
+            size="icon"
+            tabIndex={revealed ? 0 : -1}
+            className="flex-1 self-center text-muted-foreground"
+            disabled={aiRename.disabled}
+            aria-label={t('sessions.aiRename.action')}
+            aria-description={aiRename.hint}
+            title={aiRename.hint}
+            onClick={() => { aiRename.run(); onRevealedChange?.(false); }}
+            style={{ touchAction: 'manipulation' }}
+          >
+            <Icon name={aiRename.pending ? 'loader-4' : 'ai-generate-2'} className={aiRename.pending ? 'size-[18px] animate-spin' : 'size-[18px]'} />
+          </Button>
         </div>
       ) : null}
       <div
@@ -662,21 +676,25 @@ const SessionRow: React.FC<{
         {/* Left gutter slot: live activity indicator takes priority over the
             subsession chevron — same position, so rows never shift. When the
             row has children the slot still toggles them either way. */}
-        {isStreaming || showUnreadDot || (hasChildren && onToggleChildren) ? (
+        {aiRename.pending || isStreaming || showUnreadDot || (hasChildren && onToggleChildren) ? (
           <button
             type="button"
             className="absolute z-10 flex w-6 items-center justify-center rounded-md text-muted-foreground/70 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             style={{ left: Math.max(indent - 32, 2), top: 0, bottom: 0, touchAction: 'manipulation' }}
-            aria-label={expanded
-              ? t('sessions.sidebar.session.subsessions.collapse')
-              : t('sessions.sidebar.session.subsessions.expand')}
+            aria-label={aiRename.pending
+              ? t('sessions.aiRename.generating')
+              : expanded
+                ? t('sessions.sidebar.session.subsessions.collapse')
+                : t('sessions.sidebar.session.subsessions.expand')}
             disabled={!hasChildren || !onToggleChildren}
             onClick={(event) => {
               event.stopPropagation();
               onToggleChildren?.();
             }}
           >
-            {isStreaming || showUnreadDot ? (
+            {aiRename.pending ? (
+              <Icon name="loader-4" className="size-3 animate-spin text-primary" aria-label={t('sessions.aiRename.generating')} />
+            ) : isStreaming || showUnreadDot ? (
               <span
                 className={cn(
                   'size-1.5 rounded-full',

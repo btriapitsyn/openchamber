@@ -2257,7 +2257,7 @@ export function registerGitHubRoutes(app, options = {}) {
         } catch (error) {
           if (canonical || error?.status === 401) throw error;
           console.error('Failed to search GitHub PRs:', error);
-          return res.json({ connected: true, repo, prs: [], page: effectivePage, hasMore: false });
+          throw error;
         }
       }
 
@@ -2283,7 +2283,7 @@ export function registerGitHubRoutes(app, options = {}) {
           if (error?.status === 401) throw error;
           if (canonical) return { error, repoRef };
           console.warn(`Failed to list PRs for ${repoRef.owner}/${repoRef.repo}:`, error?.message || error);
-          return { prs: [], hasMore: false };
+          throw error;
         }
       };
 

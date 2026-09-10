@@ -37,6 +37,11 @@ describe('walkthrough routes', () => {
   let generateCalls = 0;
 
   const service = {
+    async getPullRequestDiff(directory, number, readContext, options) {
+      lastArgs = { directory, number, readContext, options };
+      if (number === 99) throw Object.assign(new Error('GitHub unavailable'), { statusCode: 503 });
+      return { patch: number === 1 ? '' : 'diff --git a/a.ts b/a.ts\n' };
+    },
     async getWalkthrough(args) {
       lastArgs = args;
       const result = {
@@ -131,6 +136,48 @@ describe('walkthrough routes', () => {
     const body = await (await pending).json();
 
     expect(body.walkthrough).toEqual({ title: 'DONE' });
+  });
+
+  const prDiff = (source, context = PR_CONTEXT) => fetch(`${base}/api/walkthrough/pr-diff?${new URLSearchParams({
+    directory: '/repo',
+    source: JSON.stringify(source),
+    ...Object.fromEntries(Object.entries(context).map(([key, value]) => [key, String(value)])),
+  })}`);
+
+  it('serves the published PR snapshot with its repository, without generating', async () => {
+    const source = { kind: 'pr', number: 42, sourceRepo: { owner: 'upstream', repo: 'project' } };
+    const before = generateCalls;
+    const response = await prDiff(source);
+    expect(response.headers.get('content-type')).toContain('text/plain');
+    expect(await response.text()).toBe('diff --git a/a.ts b/a.ts\n');
+    // The account and repository come from the validated binding context; the
+    // named repository travels only as something to check against it.
+    expect(lastArgs).toEqual({
+      directory: '/repo',
+      number: 42,
+      readContext: expect.objectContaining({ accountId: PR_CONTEXT.accountId, primaryRemote: PR_CONTEXT.primaryRemote }),
+      options: { allowEmpty: true, sourceRepo: source.sourceRepo },
+    });
+    expect(validateReadContext).toHaveBeenCalledWith(expect.objectContaining({ directory: '/repo', accountId: PR_CONTEXT.accountId }));
+    expect(generateCalls).toBe(before);
+  });
+
+  it('reads no pull request diff without a validated binding context', async () => {
+    validateReadContext.mockRejectedValue(Object.assign(new Error('Binding changed'), { code: 'INVALID_SOURCE_CONTROL_READ_CONTEXT' }));
+    const response = await prDiff({ kind: 'pr', number: 42 });
+    expect(response.status).toBe(400);
+    expect(lastArgs).toBeUndefined();
+  });
+
+  it('distinguishes empty PRs, upstream failure, and invalid sources', async () => {
+    const request = (source) => prDiff(source);
+    const empty = await request({ kind: 'pr', number: 1 });
+    expect(empty.status).toBe(200);
+    expect(await empty.text()).toBe('');
+    expect((await request({ kind: 'pr', number: 99 })).status).toBe(503);
+    for (const source of [{ kind: 'pr', number: -1 }, { kind: 'branch', baseRef: 'main', headRef: 'feature' }, { kind: 'pr', number: 1, sourceRepo: { owner: '../bad', repo: 'repo' } }]) {
+      expect((await request(source)).status).toBe(400);
+    }
   });
 
   it('delivers the result to a client that reconnected after a refresh', async () => {

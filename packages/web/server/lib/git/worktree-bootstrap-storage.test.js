@@ -103,7 +103,7 @@ describe('worktree bootstrap storage', () => {
     await expect(store.read(worktree)).resolves.toEqual(result);
   });
 
-  it('treats a missing durable record as a repair blocker for a populated checkout', async () => {
+  it('reads a populated checkout with no durable record as ready and writes nothing', async () => {
     if (!gitAvailable()) return;
     const dataDirectory = await temporaryDirectory('worktree-bootstrap-missing-');
     const repository = await temporaryDirectory('worktree-bootstrap-missing-repository-');
@@ -122,13 +122,8 @@ describe('worktree bootstrap storage', () => {
 
     const result = await getWorktreeBootstrapStatus(worktree, { bootstrapStore: store });
 
-    expect(result).toMatchObject({
-      status: 'failed',
-      phase: 'git-ready',
-      errorCode: 'UNKNOWN',
-      error: expect.stringContaining('repair'),
-    });
-    await expect(store.read(worktree)).resolves.toEqual(result);
+    expect(result).toMatchObject({ status: 'ready', phase: 'setup-ready' });
+    await expect(store.read(worktree)).resolves.toBeNull();
   });
 
   it('completes only hydration-owned failures and publishes the transition in memory', async () => {

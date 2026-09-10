@@ -2,6 +2,7 @@ import { getRuntimeUrlResolver } from './runtime-url';
 import { subscribeRuntimeEndpointChanged } from './runtime-switch';
 import { isVSCodeRuntime } from './desktop';
 import { messageQueueUpdatedEventSchema, type MessageQueueUpdatedEvent } from '@/stores/messageQueueStore';
+import { z } from 'zod';
 
 type ScheduledTaskRanEvent = {
   type: 'scheduled-task-ran';
@@ -20,6 +21,18 @@ type SessionCreatedEvent = {
   createdAt: number;
   promptDispatched: boolean;
   dispatchedAsCommand: boolean;
+};
+
+/**
+ * The set of linked worktrees of one repository changed: created or removed by
+ * this server, by an agent, or from a terminal. `directories` are the
+ * directories inside that repository the server has seen requests for, so a
+ * listener can map them onto its registered projects and refresh only those.
+ */
+type WorktreeChangedEvent = {
+  type: 'worktree-changed';
+  directories: string[];
+  changedAt: number;
 };
 
 /**
@@ -49,9 +62,15 @@ type OpenChamberEvent =
   | MessageQueueUpdatedEvent
   | ScheduledTaskRanEvent
   | SessionCreatedEvent
+  | WorktreeChangedEvent
   | BrowserControlRequestEvent
   | AgentMemoryChangedEvent;
 type Listener = (event: OpenChamberEvent) => void;
+
+const worktreeChangedPropertiesSchema = z.object({
+  directories: z.array(z.string().min(1)).min(1),
+  at: z.number().optional(),
+});
 
 let eventSource: EventSource | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -184,6 +203,18 @@ const dispatchFromEnvelope = (envelope: { type: string; properties: unknown }) =
     for (const listener of listeners) {
       listener(nextEvent);
     }
+    return;
+  }
+
+  if (envelope.type === 'openchamber:worktree-changed') {
+    const parsed = worktreeChangedPropertiesSchema.safeParse(envelope.properties);
+    if (!parsed.success) return;
+    const nextEvent: WorktreeChangedEvent = {
+      type: 'worktree-changed',
+      directories: parsed.data.directories,
+      changedAt: parsed.data.at ?? Date.now(),
+    };
+    for (const listener of listeners) listener(nextEvent);
     return;
   }
 

@@ -247,10 +247,12 @@ const setupClient = async (
   killWire: (code?: number) => void;
   sendTextToClient: (text: string) => void;
   clientBinaryCount: () => number;
+  connectionUrls: string[];
 }> => {
   const hostKeyPair = await generateEcdhKeyPair();
   const hostPubJwk = await exportPublicKeyJwk(hostKeyPair.publicKey);
   let count = 0;
+  const connectionUrls: string[] = [];
   let lastClientEndpoint: FakeEndpoint | null = null;
   let lastHostEndpoint: FakeEndpoint | null = null;
   const client = createRelayTunnelClient({
@@ -263,7 +265,8 @@ const setupClient = async (
     reconnectBaseDelayMs: 20,
     reconnectMaxDelayMs: 80,
     ...clientOverrides,
-    createWireSocket: () => {
+    createWireSocket: (url) => {
+      connectionUrls.push(url);
       count += 1;
       const clientEndpoint = new FakeEndpoint();
       const hostEndpoint = new FakeEndpoint();
@@ -278,6 +281,7 @@ const setupClient = async (
   });
   return {
     client,
+    connectionUrls,
     connectionCount: () => count,
     killWire: (code = 1006) => lastClientEndpoint?.close(code, 'killed'),
     sendTextToClient: (text: string) => lastHostEndpoint?.send(text),
@@ -297,6 +301,24 @@ const track = (client: RelayTunnelClient): RelayTunnelClient => {
 };
 
 describe('createRelayTunnelClient', () => {
+  test('reports client software on the initial connection and reconnect', async () => {
+    const { client, connectionUrls, killWire } = await setupClient();
+    track(client);
+    await client.fetch('/health');
+    killWire();
+    await wait(100);
+    await client.fetch('/health');
+    expect(connectionUrls.length).toBeGreaterThanOrEqual(2);
+    for (const url of connectionUrls) {
+      const params = new URL(url).searchParams;
+      expect(params.get('appId')).toBe('openchamber');
+      expect(/^\d+\.\d+\.\d+/.test(params.get('appVersion') ?? '')).toBe(true);
+      expect(params.get('platform')).toBe('web');
+      expect(params.get('role')).toBe('client');
+      expect(params.get('serverId')).toBe('server-1');
+    }
+  });
+
   test('performs concurrent fetches over one tunnel', async () => {
     const { client } = await setupClient();
     track(client);

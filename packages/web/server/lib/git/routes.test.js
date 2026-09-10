@@ -18,6 +18,8 @@ const gitLibraries = {
   getProfile: vi.fn(),
   setLocalIdentity: vi.fn(),
   clearLocalIdentity: vi.fn(),
+  observeWorktreeTopology: vi.fn(),
+  subscribeWorktreeTopologyChanges: vi.fn(),
 };
 
 vi.mock('./index.js', () => ({
@@ -38,6 +40,8 @@ vi.mock('./index.js', () => ({
   getProfile: gitLibraries.getProfile,
   setLocalIdentity: gitLibraries.setLocalIdentity,
   clearLocalIdentity: gitLibraries.clearLocalIdentity,
+  observeWorktreeTopology: gitLibraries.observeWorktreeTopology,
+  subscribeWorktreeTopologyChanges: gitLibraries.subscribeWorktreeTopologyChanges,
 }));
 
 const { registerGitRoutes } = await import('./routes.js');
@@ -549,6 +553,78 @@ describe('worktree provenance listing', () => {
         provenance: { kind: 'contributor-fork', revision: 3, trust: 'untrusted', push: 'destination-selection-required' },
       },
     ]);
+  });
+});
+
+describe('git worktree topology routes', () => {
+  beforeEach(() => {
+    gitLibraries.isGitRepository.mockReset();
+    gitLibraries.getStatus.mockReset();
+    gitLibraries.getWorktrees.mockReset();
+    gitLibraries.observeWorktreeTopology.mockReset();
+    gitLibraries.subscribeWorktreeTopologyChanges.mockReset();
+    gitLibraries.observeWorktreeTopology.mockResolvedValue(undefined);
+  });
+
+  it('observes the repository topology while serving status, never for non-repositories', async () => {
+    gitLibraries.isGitRepository.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    gitLibraries.getStatus.mockResolvedValue({ current: 'main' });
+    const { app, getRoute } = createRouteRegistry();
+    registerGitRoutes(app);
+    const route = getRoute('GET', '/api/git/status');
+
+    const repoResponse = createMockResponse();
+    await route({ query: { directory: '/repo' } }, repoResponse);
+    expect(repoResponse.body).toEqual({ current: 'main' });
+    expect(gitLibraries.observeWorktreeTopology).toHaveBeenCalledWith('/repo');
+
+    await route({ query: { directory: '/plain-folder' } }, createMockResponse());
+    expect(gitLibraries.observeWorktreeTopology).toHaveBeenCalledTimes(1);
+  });
+
+  it('observes topology after a repository listing and reports listing failures', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    gitLibraries.getWorktrees
+      .mockResolvedValueOnce([{ path: '/repo', branch: 'main' }])
+      .mockResolvedValueOnce([])
+      .mockRejectedValueOnce(new Error('git failed'));
+    const { app, getRoute } = createRouteRegistry();
+    registerGitRoutes(app);
+    const route = getRoute('GET', '/api/git/worktrees');
+
+    const listed = createMockResponse();
+    await route({ query: { directory: '/repo' } }, listed);
+    expect(listed.body).toEqual([{ path: '/repo', branch: 'main' }]);
+    expect(gitLibraries.observeWorktreeTopology).toHaveBeenCalledWith('/repo');
+
+    await route({ query: { directory: '/plain-folder' } }, createMockResponse());
+    expect(gitLibraries.observeWorktreeTopology).toHaveBeenCalledTimes(1);
+
+    const failed = createMockResponse();
+    await route({ query: { directory: '/repo' } }, failed);
+    expect(failed.statusCode).toBe(500);
+    expect(failed.body).toEqual({ error: 'git failed' });
+    errorSpy.mockRestore();
+  });
+
+  it('forwards topology changes to the control event emitter once', async () => {
+    let listener = null;
+    gitLibraries.subscribeWorktreeTopologyChanges.mockImplementation((next) => {
+      listener = next;
+      return () => undefined;
+    });
+    gitLibraries.getWorktrees.mockResolvedValue([]);
+    const emitWorktreeChanged = vi.fn();
+    const { app, getRoute } = createRouteRegistry();
+    registerGitRoutes(app, { emitWorktreeChanged });
+    const route = getRoute('GET', '/api/git/worktrees');
+
+    await route({ query: { directory: '/repo' } }, createMockResponse());
+    await route({ query: { directory: '/repo' } }, createMockResponse());
+    expect(gitLibraries.subscribeWorktreeTopologyChanges).toHaveBeenCalledTimes(1);
+
+    listener({ directories: ['/repo'], at: 123 });
+    expect(emitWorktreeChanged).toHaveBeenCalledWith({ directories: ['/repo'], at: 123 });
   });
 });
 

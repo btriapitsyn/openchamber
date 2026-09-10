@@ -4,7 +4,14 @@ import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
 import { linearPanelI18n } from './linear-panel.i18n';
 
 export const dict: Record<I18nKey, string> = {
+  'sessions.aiRename.action': 'Перейменувати за допомогою ШІ',
+  'sessions.aiRename.generating': 'Генеруємо назву сесії...',
+  'sessions.aiRename.checking': 'Перевіряємо завершені ходи...',
+  'sessions.aiRename.noCompletedTurns': 'Доступно після першої завершеної відповіді.',
+  'sessions.aiRename.failed': 'Не вдалося перейменувати сесію. Перевірте налаштування малої моделі та спробуйте ще раз.',
+  'sessions.aiRename.unsupported': 'Перейменування за допомогою ШІ недоступне у VS Code.',
   'commitComparison.mode': 'Коміт',
+  'pullRequestComparison.select': 'Виберіть пул-реквест',
   'commitComparison.select': 'Вибрати коміт',
   'commitComparison.search': 'Пошук комітів...',
   'commitComparison.loadError': 'Не вдалося завантажити коміти',
@@ -2193,6 +2200,8 @@ export const dict: Record<I18nKey, string> = {
   "chat.pendingChanges.changedInWorkspace": "змінено в гілці",
   "chat.changedFiles.title": "Змінені файли",
   "chat.changedFiles.actions.openFileTitle": "Відкрити {path}",
+  "chat.changedFiles.actions.showMore": "Показати ще ({count})",
+  "chat.changedFiles.actions.collapse": "Згорнути",
   "chat.emptyState.opencodeUnreachable": "OpenCode недоступний",
   "chat.emptyState.startNewChat": "Почніть новий чат",
   "chat.emptyState.draftTitle": "Над чим працюємо?",

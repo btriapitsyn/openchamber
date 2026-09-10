@@ -14,7 +14,7 @@ export type WalkthroughSource =
   | { kind: 'working-tree'; scope: WalkthroughWorkingTreeScope }
   | { kind: 'branch'; baseRef: string; headRef: string }
   | { kind: 'commit'; hash: string }
-  | { kind: 'pr'; number: number };
+  | { kind: 'pr'; number: number; sourceRepo?: { owner: string; repo: string } };
 
 type WalkthroughLocalSource = Exclude<WalkthroughSource, { kind: 'pr' }>;
 type WalkthroughPullRequestSource = Extract<WalkthroughSource, { kind: 'pr' }>;

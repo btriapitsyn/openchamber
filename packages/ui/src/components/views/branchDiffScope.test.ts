@@ -388,6 +388,45 @@ describe('useRangeKeyedCache', () => {
     });
 });
 
+describe('range cache visibility', () => {
+    test('pausing requested paths retains completed diffs and defers revision refresh until resume', async () => {
+        const dom = installMinimalDom();
+        const root = createRoot(dom.container);
+        const pending = deferred<string>();
+        const fetched: string[] = [];
+        let visible = true;
+        let revision = 'one';
+        const captured: { entries: ReadonlyMap<string, string> | null } = { entries: null };
+        const Harness = () => {
+            captured.entries = useRangeKeyedCache('range', visible ? 'a\0b' : '', async path => {
+                fetched.push(`${revision}:${path}`);
+                return path === 'b' && revision === 'one' ? pending.promise : `${revision}:${path}`;
+            }, 'loading', revision);
+            return null;
+        };
+        try {
+            await act(async () => root.render(React.createElement(Harness)));
+            expect(captured.entries?.get('a')).toBe('one:a');
+            visible = false;
+            revision = 'two';
+            await act(async () => root.render(React.createElement(Harness)));
+            await act(async () => pending.resolve('stale:b'));
+            expect(fetched).toEqual(['one:a', 'one:b']);
+            expect(captured.entries?.get('a')).toBe('one:a');
+            expect(captured.entries?.has('b')).toBe(false);
+            visible = true;
+            await act(async () => root.render(React.createElement(Harness)));
+            expect(fetched).toEqual(['one:a', 'one:b', 'two:a', 'two:b']);
+            expect(captured.entries?.get('a')).toBe('two:a');
+            expect(captured.entries?.get('b')).toBe('two:b');
+        } finally {
+            await act(async () => root.unmount());
+            dom.restore();
+        }
+    });
+
+});
+
 describe('useBoundedDirectoryRetry', () => {
     test('starts once and reports no exhaustion on success', async () => {
         const dom = installMinimalDom();

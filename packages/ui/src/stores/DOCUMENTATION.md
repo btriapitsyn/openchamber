@@ -58,12 +58,24 @@ commits have pushed it beyond the latest 50.
 
 `hooks/useGitComparison.ts` owns the local file-list state used by desktop and
 mobile comparisons. Its key contains runtime, directory, and the complete
-branch/commit source. A source change hides the old list immediately; failed
+branch/commit/PR source. A source change hides the old list immediately; failed
 reads remain errors, and manual retries cannot publish into a superseded scope.
 The hook also resolves per-file patch requests, including a commit rename's
 previous path. Views own their lazy patch caches through `useRangeKeyedCache`.
 Mobile requests only the active detail path and suspends reads while its
 keep-alive workspace pane is hidden.
+
+`usePullRequestSelectionStore.ts` shares session-only PR choices across desktop,
+mobile Changes and walkthrough, keyed by runtime, directory, checked-out branch
+and bound repository, so a rebind to another repository starts without a choice. Explicit selection bounds remembered choices to 100 entries. A choice
+contains the PR number and its repository, so fork and upstream PRs with equal
+numbers remain distinct. `usePullRequestComparison` owns the searchable,
+paginated list while PR mode is active and reads it through
+`SourceControlAPI.changeRequestsList` with the bound GitHub context. The shared
+status store, asked through that same context, supplies the initial choice,
+independently of list pagination. An absent match requires selection. External walkthrough handoffs
+apply once, and later picker changes
+remain authoritative when a retained panel becomes visible again.
 
 Examples:
 
@@ -347,6 +359,14 @@ project in Settings cannot change what chat sees. Components select through
 `selectAgentsForDirectory` / `selectCommandsForDirectory` /
 `selectSkillsForDirectory` / `selectMcpServersForDirectory` /
 `selectProvidersForDirectory`, which return stored arrays.
+
+Command discovery compares responses only with the requested directory's cache.
+A first successful response always creates that entry, even when empty or
+identical to another project's commands. Cached and unchanged loads restore the
+active-project mirror; asynchronous completions check the active directory at
+commit time. Failed loads leave the current cache untouched. Discovery passes
+its directory directly to the SDK wrapper without changing the client's shared
+directory context.
 
 Settings resolves its directory through `useSettingsDirectory`, backed by
 `useUIStore.settingsProjectPath`. That selection is Settings-local and not

@@ -19,14 +19,16 @@ import type { WalkthroughSource, WalkthroughTarget, WalkthroughWorkingTreeScope 
 import { ModelSelector } from '@/components/sections/agents/ModelSelector';
 import { useBranchComparisonBase } from '@/hooks/useBranchComparisonBase';
 import { useCommitComparison } from '@/hooks/useCommitComparison';
+import { usePullRequestComparison } from '@/hooks/usePullRequestComparison';
+import { PullRequestComparisonSelector } from '@/components/views/git/PullRequestComparisonSelector';
 import { CommitComparisonSelector } from '@/components/views/git/CommitComparisonSelector';
 import { BranchComparisonSelector } from '@/components/views/git/BranchComparisonSelector';
 import { useGitBaseBranchStore } from '@/stores/useGitBaseBranchStore';
 import { runtimeFetch } from '@/lib/runtime-fetch';
+import { gitPushScopeKey, subscribeGitPush } from '@/lib/gitPushEvents';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useGitBranches, useGitStatus, useGitStore, useIsGitRepo } from '@/stores/useGitStore';
 import {
-  getFreshestSourceControlStatusForBranch,
   getSourceControlStatusKey,
   useGitHubPrStatusStore,
 } from '@/stores/useGitHubPrStatusStore';
@@ -165,7 +167,7 @@ export const WalkthroughView = ({ directory: rootDirectory, visible = true }: Wa
     [setStoredTocWidth, tocWidth]
   );
   const [scope, setScope] = useState<WalkthroughWorkingTreeScope>('all');
-  const [pendingSourceSelection, setPendingSourceSelection] = useState<{ directory: string; kind: 'branch' | 'commit' } | null>(null);
+  const [pendingSourceSelection, setPendingSourceSelection] = useState<{ directory: string; kind: 'branch' | 'commit' | 'pr' } | null>(null);
   const [activeStopId, setActiveStopId] = useState<string | null>(null);
   const [scrollToStopId, setScrollToStopId] = useState<string | null>(null);
   const [visitedStopIds, setVisitedStopIds] = useState<ReadonlySet<string>>(() => new Set());
@@ -179,8 +181,14 @@ export const WalkthroughView = ({ directory: rootDirectory, visible = true }: Wa
 
   const requestedTarget = useWalkthroughStore((state) => state.getRequestedTarget(directory));
   const clearRequestedTarget = useWalkthroughStore((state) => state.clearRequestedTarget);
+  const openContextPanelTab = useUIStore((state) => state.openContextPanelTab);
 
   const status = useGitStatus(directory || null);
+  const runtimeKey = useGitStore((state) => state.runtimeKey);
+  const [pushRevision, setPushRevision] = useState(0);
+  useEffect(() => subscribeGitPush((scope) => {
+    if (scope === gitPushScopeKey(directory, runtimeKey)) setPushRevision((value) => value + 1);
+  }), [directory, runtimeKey]);
   const branches = useGitBranches(directory || null);
   const setBaseOverride = useGitBaseBranchStore((state) => state.setOverride);
   const ensureAll = useGitStore((state) => state.ensureAll);
@@ -188,8 +196,8 @@ export const WalkthroughView = ({ directory: rootDirectory, visible = true }: Wa
   const binding = useRepositoryBinding(directory, sourceControl);
 
   useEffect(() => {
-    if (directory) void ensureAll(directory, git);
-  }, [directory, ensureAll, git]);
+    if (visible && directory) void ensureAll(directory, git);
+  }, [directory, ensureAll, git, visible]);
 
   // Changes and the walkthrough share one base: the person's explicit choice,
   // else what the branch's own reflog says it was created from.
@@ -278,25 +286,21 @@ export const WalkthroughView = ({ directory: rootDirectory, visible = true }: Wa
     sourceControl,
   ]);
 
-  // Selecting the number rather than the entry map: a primitive keeps this
-  // panel out of every unrelated PR status update.
-  const branchPrNumber = useGitHubPrStatusStore((state) => {
-    if (!directory || !currentBranch || !readContext || !readAuth.connected) return null;
-    const branchStatus = getFreshestSourceControlStatusForBranch(
-      state.entries,
-      readContext,
-      currentBranch,
-    );
-    return (branchStatus?.changeRequest ?? branchStatus?.pr)?.number ?? null;
-  });
+  const choosingPr = pendingSourceSelection?.directory === directory && pendingSourceSelection.kind === 'pr' && !requestedTarget;
+  const isPrScope = choosingPr || requestedTarget?.source.kind === 'pr';
+  const prComparison = usePullRequestComparison(directory || null, currentBranch, readContext, visible && isPrScope,
+    requestedTarget?.source.kind === 'pr' ? requestedTarget.source : undefined);
+  const selectedPr = prComparison.selectedSource;
 
   const target = useMemo<WalkthroughTarget>(
-    () => isCommitScope && selectedCommitHash
-      ? { source: { kind: 'commit', hash: selectedCommitHash } }
-      : requestedTarget?.source.kind === 'branch'
-        ? { source: branchSource ?? requestedTarget.source }
-        : requestedTarget ?? { source: { kind: 'working-tree', scope } },
-    [branchSource, isCommitScope, requestedTarget, scope, selectedCommitHash]
+    () => isPrScope && selectedPr && readContext?.provider === 'github'
+      ? { source: selectedPr, context: readContext }
+      : isCommitScope && selectedCommitHash
+        ? { source: { kind: 'commit', hash: selectedCommitHash } }
+        : requestedTarget?.source.kind === 'branch'
+          ? { source: branchSource ?? requestedTarget.source }
+          : requestedTarget ?? { source: { kind: 'working-tree', scope } },
+    [branchSource, isCommitScope, isPrScope, readContext, requestedTarget, scope, selectedCommitHash, selectedPr]
   );
   const source = target.source;
   // A scope the person picked before its subject exists: the base of a branch
@@ -306,16 +310,8 @@ export const WalkthroughView = ({ directory: rootDirectory, visible = true }: Wa
   const isBranchScope = choosingBranchBase || source.kind === 'branch';
   const branchNeedsBase = choosingBranchBase || (source.kind === 'branch' && !branchSource);
   const commitNeedsSelection = choosingCommit || (isCommitScope && !selectedCommitHash);
-  const needsSourceSelection = branchNeedsBase || commitNeedsSelection;
-
-  // Offer whichever pull request we know about: the one already selected, or
-  // the one this branch has.
-  const prTarget = useMemo<Extract<WalkthroughTarget, { source: { kind: 'pr' } }> | null>(() => {
-    if ('context' in target) return target;
-    return branchPrNumber && readContext?.provider === 'github'
-      ? { source: { kind: 'pr', number: branchPrNumber }, context: readContext }
-      : null;
-  }, [branchPrNumber, readContext, target]);
+  const prNeedsSelection = isPrScope && !selectedPr;
+  const needsSourceSelection = branchNeedsBase || commitNeedsSelection || prNeedsSelection;
 
   const selectWorkingTree = useCallback(
     (value: WalkthroughWorkingTreeScope) => {
@@ -330,6 +326,11 @@ export const WalkthroughView = ({ directory: rootDirectory, visible = true }: Wa
   const generate = useWalkthroughStore((state) => state.generate);
   const cancel = useWalkthroughStore((state) => state.cancel);
   const requestTarget = useWalkthroughStore((state) => state.requestTarget);
+  useEffect(() => {
+    if (!choosingPr || !selectedPr || readContext?.provider !== 'github') return;
+    requestTarget(directory, { source: selectedPr, context: readContext });
+    setPendingSourceSelection(null);
+  }, [choosingPr, directory, readContext, requestTarget, selectedPr]);
   useEffect(() => {
     if (!choosingBranchBase || !branchSource) return;
     requestTarget(directory, { source: branchSource });
@@ -362,9 +363,17 @@ export const WalkthroughView = ({ directory: rootDirectory, visible = true }: Wa
   // the model can produce structured output, are answers about a specific
   // request — and the language instruction is part of that request.
   const sourceRevision = source.kind === 'branch' ? branchRevision : '';
+  const prPushRevision = source.kind === 'pr' ? pushRevision : 0;
+  const lastPrRead = useRef<string | null>(null);
   useEffect(() => {
-    if (visible && !needsSourceSelection) void load(directory, target, { language: activeLanguage });
-  }, [activeLanguage, needsSourceSelection, directory, load, selectedModel, sourceRevision, target, visible]);
+    if (!visible || needsSourceSelection) return;
+    if (target.source.kind === 'pr') {
+      const key = JSON.stringify([runtimeKey, directory, target, activeLanguage, selectedModel, prPushRevision]);
+      if (lastPrRead.current === key) return;
+      lastPrRead.current = key;
+    }
+    void load(directory, target, { language: activeLanguage });
+  }, [activeLanguage, needsSourceSelection, directory, load, target, selectedModel, sourceRevision, visible, runtimeKey, prPushRevision]);
 
   const view = useMemo(() => needsSourceSelection ? null : buildWalkthroughView(entry.result), [needsSourceSelection, entry.result]);
 
@@ -409,8 +418,8 @@ export const WalkthroughView = ({ directory: rootDirectory, visible = true }: Wa
 
   const [sourceMenuOpen, setSourceMenuOpen] = useState(false);
   const [languageMenuOpen, setLanguageMenuOpen] = useState(false);
-  const sourceValue = isCommitScope ? 'commit' : isBranchScope ? 'branch' : source.kind === 'working-tree' ? source.scope : source.kind;
-  const sourceLabel = isCommitScope ? t('commitComparison.mode') : isBranchScope
+  const sourceValue = isPrScope ? 'pr' : isCommitScope ? 'commit' : isBranchScope ? 'branch' : source.kind === 'working-tree' ? source.scope : source.kind;
+  const sourceLabel = isPrScope ? t('session.githubIntegration.tabs.pullRequests') : isCommitScope ? t('commitComparison.mode') : isBranchScope
     ? t('walkthrough.scope.branch')
     : source.kind === 'pr'
       ? t('walkthrough.scope.pullRequest', { number: source.number })
@@ -623,8 +632,8 @@ export const WalkthroughView = ({ directory: rootDirectory, visible = true }: Wa
                   return;
                 }
                 if (value === 'pr') {
-                  setPendingSourceSelection(null);
-                  if (prTarget) requestTarget(directory, prTarget);
+                  clearRequestedTarget(directory);
+                  setPendingSourceSelection({ directory, kind: 'pr' });
                   return;
                 }
                 selectWorkingTree(value as WalkthroughWorkingTreeScope);
@@ -659,9 +668,9 @@ export const WalkthroughView = ({ directory: rootDirectory, visible = true }: Wa
               <DropdownMenuRadioItem value="commit">
                 {t('commitComparison.mode')}
               </DropdownMenuRadioItem>
-              {prTarget && (
+              {readContext?.provider === 'github' && (
                 <DropdownMenuRadioItem value="pr">
-                  {t('walkthrough.scope.pullRequest', { number: prTarget.source.number })}
+                  {t('session.githubIntegration.tabs.pullRequests')}
                 </DropdownMenuRadioItem>
               )}
             </DropdownMenuRadioGroup>
@@ -691,8 +700,15 @@ export const WalkthroughView = ({ directory: rootDirectory, visible = true }: Wa
             onRefresh={() => void commitComparison.refresh()}
           />
         )}
+        {isPrScope && <PullRequestComparisonSelector key={JSON.stringify([directory, currentBranch])} comparison={prComparison} />}
 
         <div className="ml-auto flex min-w-0 items-center gap-1">
+          {isPrScope && selectedPr && <Button variant="ghost" size="sm"
+            aria-label={t('contextPanel.mode.diff')} title={t('contextPanel.mode.diff')}
+            onClick={() => openContextPanelTab(rootDirectory, { mode: 'diff', diffScope: 'pr' })}>
+            <Icon name="arrow-left-right" className="size-4" />
+            {!compactHeader && t('contextPanel.mode.diff')}
+          </Button>}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -911,7 +927,13 @@ export const WalkthroughView = ({ directory: rootDirectory, visible = true }: Wa
       )}
 
       <div className={cn('flex min-h-0 flex-1', showToc ? 'flex-row' : 'flex-col')}>
-        {commitNeedsSelection ? (
+        {prNeedsSelection ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
+            <p className="typography-meta text-muted-foreground">{prComparison.error ?? (prComparison.loading
+              ? t('session.githubPrPicker.loading.pullRequests') : t('pullRequestComparison.select'))}</p>
+            {!prComparison.loading && <PullRequestComparisonSelector comparison={prComparison} />}
+          </div>
+        ) : commitNeedsSelection ? (
           <div className="flex flex-1 items-center justify-center gap-2 p-8 typography-meta text-muted-foreground">
             {commitComparison.loading ? <Icon name="loader-4" className="size-6 animate-spin" />
               : commitComparison.error ?? t('commitComparison.noCommits')}

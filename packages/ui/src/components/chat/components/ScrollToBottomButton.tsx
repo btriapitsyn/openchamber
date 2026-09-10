@@ -53,6 +53,7 @@ const ScrollToBottomButton: React.FC<ScrollToBottomButtonProps> = ({ visible, wo
                 'pointer-events-none absolute bottom-full inset-x-0 mb-2 transition-opacity duration-100',
                 visible ? 'opacity-100' : 'opacity-0',
             )}
+            style={{ transform: 'translateY(calc(-1 * var(--chat-floating-panel-clearance, 0px)))' }}
         >
             {/* The same column that centres the composer, so the pill's left
                 edge lines up exactly with the input frame. */}

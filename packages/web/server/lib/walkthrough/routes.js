@@ -1,3 +1,5 @@
+import { parseSource } from './sources.js';
+
 // `req.destroyed` is true for every healthy request once the body parser has
 // consumed the stream, so using it as a disconnect check silently swallows every
 // response. The response socket is the one that actually reflects whether the
@@ -83,6 +85,30 @@ export function registerWalkthroughRoutes(app, { getWalkthroughService, validate
       res.json(result);
     } catch (error) {
       respondWithError(res, error, 'Failed to load walkthrough');
+    }
+  });
+
+  // The comparison view needs the complete published patch, without model
+  // readiness checks, generated-file filtering, or local working-tree reads.
+  app.get('/api/walkthrough/pr-diff', async (req, res) => {
+    try {
+      const query = new URL(req.originalUrl, 'http://localhost').searchParams;
+      const directory = query.get('directory')?.trim() ?? '';
+      if (!directory) return res.status(400).json({ error: 'directory parameter is required' });
+      const source = parseSource(readSource(query.get('source')));
+      if (source.kind !== 'pr') return res.status(400).json({ error: 'A pull request source is required' });
+      // Same exact binding authority as the walkthrough routes: the repository
+      // and account come from the checkout's binding, and a named source
+      // repository is only checked against it.
+      const readContext = await validatePullRequestContext(source, Object.fromEntries(query), directory);
+      const { getPullRequestDiff } = await getWalkthroughService();
+      const { patch } = await getPullRequestDiff(readContext?.directory ?? directory, source.number, readContext, {
+        allowEmpty: true,
+        sourceRepo: source.sourceRepo ?? null,
+      });
+      res.type('text/plain').send(patch);
+    } catch (error) {
+      respondWithError(res, error, 'Failed to load pull request diff');
     }
   });
 

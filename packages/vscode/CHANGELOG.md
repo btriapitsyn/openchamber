@@ -1,3 +1,43 @@
+## [1.23.0] - 2026-09-09
+
+### New
+
+- Chat: Replies can contain collapsible Markdown sections that stay open as the answer streams.
+- Projects: Store worktree setup commands and draft starters in the repository from Project settings. Repository commands require trust before running and after changes.
+- Usage: ClinePass now shows five-hour, weekly, and monthly usage limits (thanks to @NemeZZiZZ).
+- Usage: Charm Hyper shows your remaining Hypercredits and their dollar value (thanks to @airtaxi).
+- Settings: "Always show scrollbars" keeps scrollbars visible when the pointer leaves a scrollable area.
+
+### Improvements
+
+- **Chat:** `/btw` now has a separate composer with its own draft, model, and effort. The "By the way…" text-selection action prefills a question with the selected passage (thanks to @ChangeHow).
+- Chat: Completed live Activity can collapse into a tool and file-change summary while the final answer stays visible, following your Activity Default setting.
+- Settings: VS Code keeps its own appearance and chat layout preferences, separate from web, desktop, and mobile.
+- Settings: In narrow panels, Back returns from an item to its list before returning to the settings menu.
+- Chat: Ctrl+N/P navigation works across model lists, menus, and autocomplete. The model picker reopens with your selected model in view (thanks to @ChangeHow).
+- Settings/Chat: Send-shortcut and large-text paste options have clearer descriptions (thanks to @ChangeHow).
+- Chat: More compact Markdown, smaller action buttons, and a softer final-answer divider make replies easier to scan.
+- Chat: Text selection and comment highlights use a consistent, readable accent tint across themes.
+
+### Fixes
+
+- Sessions: New sessions and worktree sessions open without false history-loading errors.
+- Settings: A failed screen load no longer triggers a broken reload of the chat.
+- Chat: Forking a user message fills the destination composer with its prompt and attachments while keeping the original session's draft intact (thanks to @karimodm).
+- Chat: Tools interrupted before a reload no longer keep a running timer indefinitely (thanks to @alvins82).
+- Chat: Images attached to a sent message appear only once.
+- Chat: Resizing the chat keeps the latest reply in view when following the end. Sending or collapsing Activity no longer creates a large blank space below it.
+- Chat: Message details adapt to narrow panels without leaving gaps between the model, effort, and duration.
+- Chat: Long Thinking output stays in a capped scroll box while streaming; scrolling upward pauses its automatic scrolling (thanks to @alvins82).
+- Chat: Narrow tables keep their border and toolbar close to the columns (thanks to @ChangeHow).
+- Usage: Failed refreshes keep the last known figures visible with an error, while other providers continue to load.
+- Usage: OpenRouter reports key spending and limits accurately, including monthly spending for unlimited keys (thanks to @leducmaxime).
+- Usage: Ollama Cloud dollar-based plans show monthly spending and extra credits; credential checks reject unreadable usage pages (thanks to @kydorn).
+- Usage: NeuralWatt shows allowance percentages correctly in both used and remaining modes (thanks to @kydorn).
+- Usage: Provider requests have enough time to connect on slower networks, fixing premature "fetch failed" errors (thanks to @ouyangjian28).
+- Scrollbars: Hover reveals scrollbars in chat, Settings, and shared dialogs without moving the content sideways (thanks to @sergiofspedro).
+- Language/Turkish: Activity and input-history settings use consistent agent and prompt terminology (thanks to @fitzgpt).
+
 ## [1.22.2] - 2026-09-05
 
 ### New

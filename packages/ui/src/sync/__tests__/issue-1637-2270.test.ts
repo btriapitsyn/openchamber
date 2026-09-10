@@ -90,13 +90,16 @@ beforeEach(() => {
   nextCreateSessionResponse = { id: "ses_default", time: { created: 1 } } as Session
   currentDirectory = null
 
-  // Initialize action refs. `createSession` does not touch the sdk, but it does
-  // insert the created session into the directory's child store, so that stub
-  // has to behave like one.
-  const childStore = { getState: () => ({ session: [] }), setState: () => undefined }
+  // Initialize action refs. `createSession` seeds the created session into its
+  // directory's child store, so the mock hands back an empty store; the sdk
+  // is not exercised, only the directory getter is.
   setActionRefs(
     {} as never,
-    { children: new Map(), ensureChild: () => childStore, getChild: () => undefined } as never,
+    {
+      children: new Map(),
+      ensureChild: () => ({ getState: () => ({ session: [] }), setState: () => undefined }),
+      getChild: () => undefined,
+    } as never,
     () => currentDirectory ?? "",
   )
 })

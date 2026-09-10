@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import type { SourceControlReadContext } from '@/lib/api/types';
-import type { WalkthroughResult, WalkthroughTarget } from '@/lib/walkthrough/types';
+import type { WalkthroughResult, WalkthroughSource, WalkthroughTarget } from '@/lib/walkthrough/types';
 
 const SOURCE = { source: { kind: 'working-tree', scope: 'all' } } satisfies WalkthroughTarget;
 type WorkingTreeResult = WalkthroughResult & { source: typeof SOURCE.source };
@@ -99,7 +99,21 @@ mock.module('@/lib/walkthrough/api', () => ({
 let runtimeKey = 'local';
 mock.module('@/lib/runtime-switch', () => ({ getRuntimeKey: () => runtimeKey }));
 
-const { useWalkthroughStore } = await import('./useWalkthroughStore');
+const { useWalkthroughStore, walkthroughSourceKey } = await import('./useWalkthroughStore');
+
+test('PR cache and handoff identity include the selected repository', () => {
+  const upstream: WalkthroughSource = { kind: 'pr', number: 42, sourceRepo: { owner: 'upstream', repo: 'project' } };
+  const fork: WalkthroughSource = { kind: 'pr', number: 42, sourceRepo: { owner: 'fork', repo: 'project' } };
+  expect(walkthroughSourceKey({ kind: 'pr', number: 42 })).toBe('pr:42');
+  expect(walkthroughSourceKey(upstream)).toBe('pr:upstream/project:42');
+  expect(walkthroughSourceKey(fork)).toBe('pr:fork/project:42');
+  const context = {
+    provider: 'github', instance: 'github.com', accountId: 'account-a', repositoryId: 'repo-1',
+    bindingRevision: 3, directory: '/repo', primaryRemote: 'origin',
+  } as const;
+  useWalkthroughStore.getState().requestTarget('/repo', { source: upstream, context });
+  expect(useWalkthroughStore.getState().getRequestedTarget('/repo')).toEqual({ source: upstream, context });
+});
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 

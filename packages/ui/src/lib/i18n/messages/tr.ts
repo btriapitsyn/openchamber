@@ -3,7 +3,14 @@ import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
 import { linearPanelI18n } from './linear-panel.i18n';
 
 export const dict = {
+  'sessions.aiRename.action': 'Yapay zekâ ile yeniden adlandır',
+  'sessions.aiRename.generating': 'Oturum başlığı oluşturuluyor...',
+  'sessions.aiRename.checking': 'Tamamlanan konuşma turları kontrol ediliyor...',
+  'sessions.aiRename.noCompletedTurns': 'İlk yanıt tamamlandıktan sonra kullanılabilir.',
+  'sessions.aiRename.failed': 'Oturum yeniden adlandırılamadı. Küçük model ayarlarını kontrol edip tekrar deneyin.',
+  'sessions.aiRename.unsupported': 'Yapay zekâ ile yeniden adlandırma VS Code içinde kullanılamaz.',
   'commitComparison.mode': 'Commit',
+  'pullRequestComparison.select': 'Çekme isteği seçin',
   'commitComparison.select': 'Commit seç',
   'commitComparison.search': 'Commit ara...',
   'commitComparison.loadError': 'Commitler yüklenemedi',
@@ -2067,6 +2074,8 @@ export const dict = {
   'chat.pendingChanges.changedInWorkspace': 'çalışma alanında değişti',
   'chat.changedFiles.title': 'Değişen dosyalar',
   'chat.changedFiles.actions.openFileTitle': '{path} dosyasını aç',
+  'chat.changedFiles.actions.showMore': 'Daha fazla göster ({count})',
+  'chat.changedFiles.actions.collapse': 'Daralt',
   'chat.emptyState.opencodeUnreachable': 'OpenCode\'a erişilemiyor',
   'chat.emptyState.startNewChat': 'Yeni sohbet başlat',
   'chat.emptyState.draftTitle': 'Ne üzerinde çalışıyoruz?',

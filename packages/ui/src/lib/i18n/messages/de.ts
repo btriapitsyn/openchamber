@@ -3,7 +3,14 @@ import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
 import { linearPanelI18n } from './linear-panel.i18n';
 
 export const dict = {
+  'sessions.aiRename.action': 'Mit KI umbenennen',
+  'sessions.aiRename.generating': 'Sitzungstitel wird generiert...',
+  'sessions.aiRename.checking': 'Abgeschlossene Antworten werden geprüft...',
+  'sessions.aiRename.noCompletedTurns': 'Nach der ersten abgeschlossenen Antwort verfügbar.',
+  'sessions.aiRename.failed': 'Die Sitzung konnte nicht umbenannt werden. Prüfe die Einstellungen für das kleine Modell und versuche es erneut.',
+  'sessions.aiRename.unsupported': 'Umbenennen mit KI ist in VS Code nicht verfügbar.',
   'commitComparison.mode': 'Commit',
+  'pullRequestComparison.select': 'Pull Request auswählen',
   'commitComparison.select': 'Commit auswählen',
   'commitComparison.search': 'Commits suchen...',
   'commitComparison.loadError': 'Commits konnten nicht geladen werden',
@@ -2019,6 +2026,8 @@ export const dict = {
   'chat.pendingChanges.changedInWorkspace': 'im Workspace geändert',
   'chat.changedFiles.title': 'Geänderte Dateien',
   'chat.changedFiles.actions.openFileTitle': '{path} öffnen',
+  'chat.changedFiles.actions.showMore': 'Mehr anzeigen ({count})',
+  'chat.changedFiles.actions.collapse': 'Einklappen',
   'chat.emptyState.opencodeUnreachable': 'OpenCode ist nicht erreichbar',
   'chat.emptyState.startNewChat': 'Neuen Chat starten',
   'chat.emptyState.draftTitle': 'Worüber arbeiten wir?',

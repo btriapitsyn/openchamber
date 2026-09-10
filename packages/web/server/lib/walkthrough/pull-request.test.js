@@ -14,6 +14,7 @@ describe('getPullRequestDiff', () => {
   let getOctokitForAccountId;
   let resolveGitHubRepoFromDirectory;
   let onAccountUnavailable;
+  let resolveRepoNetwork;
   const readContext = {
     provider: 'github',
     instance: 'github.com',
@@ -27,6 +28,7 @@ describe('getPullRequestDiff', () => {
   const read = (overrides = {}) => getPullRequestDiff('/repo', 2122, readContext, {
     getOctokitForAccountId,
     resolveGitHubRepoFromDirectory,
+    resolveRepoNetwork,
     onAccountUnavailable,
     ...overrides,
   });
@@ -35,6 +37,12 @@ describe('getPullRequestDiff', () => {
     request = vi.fn().mockResolvedValue({ data: PATCH });
     getOctokitForAccountId = vi.fn().mockResolvedValue({ octokit: { request } });
     onAccountUnavailable = vi.fn();
+    // The bound repository is a fork of `upstream/project`: the same network the
+    // bound pull request list reads.
+    resolveRepoNetwork = vi.fn().mockResolvedValue([
+      { owner: 'openchamber', repo: 'openchamber', source: 'origin' },
+      { owner: 'upstream', repo: 'project', source: 'upstream' },
+    ]);
     // The resolver hands back a wrapper, not the repo. Reading `.owner` off the
     // wrapper made every repository look remote-less, which is what this suite
     // exists to prevent.
@@ -67,6 +75,43 @@ describe('getPullRequestDiff', () => {
       statusCode: 400,
     });
     expect(request).not.toHaveBeenCalled();
+  });
+
+  it('reads a named source repository when it is the bound one, without resolving the network', async () => {
+    const result = await read({ sourceRepo: { owner: 'OpenChamber', repo: 'OpenChamber' } });
+
+    expect(result.meta).toEqual({ owner: 'openchamber', repo: 'openchamber', number: 2122 });
+    expect(request).toHaveBeenCalledOnce();
+    expect(resolveRepoNetwork).not.toHaveBeenCalled();
+  });
+
+  it('reads an upstream pull request the bound repository was forked from', async () => {
+    const result = await read({ sourceRepo: { owner: 'upstream', repo: 'project' } });
+
+    expect(result.meta).toEqual({ owner: 'upstream', repo: 'project', number: 2122 });
+    expect(resolveRepoNetwork).toHaveBeenCalledWith(expect.anything(), '/repo', 'upstream', { strictErrors: true });
+    expect(request).toHaveBeenCalledWith('GET /repos/{owner}/{repo}/pulls/{pull_number}', expect.objectContaining({
+      owner: 'upstream', repo: 'project', pull_number: 2122,
+    }));
+  });
+
+  // The bound pull request list reads the repository and its upstream with this
+  // account. The diff keeps that boundary: a name outside it would reach a
+  // repository the binding never covered, and the same number there is a
+  // different pull request.
+  it('refuses a named repository outside the bound repository network', async () => {
+    await expect(read({ sourceRepo: { owner: 'stranger', repo: 'elsewhere' } })).rejects.toMatchObject({
+      code: 'PULL_REQUEST_REPOSITORY_MISMATCH',
+      statusCode: 409,
+    });
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it('allows an empty comparison but rejects malformed GitHub bodies', async () => {
+    request.mockResolvedValue({ data: '' });
+    expect((await read({ allowEmpty: true })).patch).toBe('');
+    request.mockResolvedValue({ data: { message: 'Not a diff' } });
+    await expect(read()).rejects.toThrow();
   });
 
   it('requires the exact bound account before repository resolution', async () => {

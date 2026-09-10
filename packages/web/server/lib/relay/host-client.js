@@ -4,6 +4,7 @@
 // dispatcher. Spec: .opencode/plans/private-relay/01-protocol-spec.md (Layer 1).
 
 import { WebSocket } from 'ws';
+import { createRequire } from 'node:module';
 
 import { RELAY_PROTOCOL_VERSION, RelayCloseCode, createHostHandshake } from './e2ee.js';
 import { createOutboundFrameBatcher, decodeFrameBatch, decodeTunnelFrame, decodeDeliveryAck, encodeFrameBatch, TunnelFrameType } from './tunnel-codec.js';
@@ -50,6 +51,8 @@ const resolveBatchWindowMs = (option) => {
  * }} options
  */
 export const startRelayHost = ({ relayUrl, identity, localPort, getLocalPort, onStatus, logger = console, batchWindowMs, batch, flowControl }) => {
+  const { version } = createRequire(import.meta.url)('../../../package.json');
+  const platform = process.env.OPENCHAMBER_RUNTIME || 'web';
   const resolveLocalPort = typeof getLocalPort === 'function' ? getLocalPort : () => localPort;
   const localBatch = batch !== false;
   const resolvedBatchWindowMs = resolveBatchWindowMs(batchWindowMs);
@@ -82,6 +85,10 @@ export const startRelayHost = ({ relayUrl, identity, localPort, getLocalPort, on
     url.searchParams.set('v', String(RELAY_PROTOCOL_VERSION));
     url.searchParams.set('role', role);
     url.searchParams.set('serverId', identity.serverId);
+    // Self-reported diagnostics, not part of relay authentication.
+    url.searchParams.set('appId', 'openchamber');
+    url.searchParams.set('appVersion', version);
+    url.searchParams.set('platform', platform);
     if (connectionId) url.searchParams.set('connectionId', connectionId);
     const auth = identity.signRelayAuth(role, connectionId ?? null);
     url.searchParams.set('ts', String(auth.ts));

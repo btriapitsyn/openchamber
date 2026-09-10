@@ -21,11 +21,15 @@ export function registerGitRoutes(app, {
   networkOperations, managedSshInventory, getSourceControlBinding, contributorProvenance, resolveChangeRequestSource,
   backfillIdentities,
   createHttpsCredentialReference, resolveSourceControlAccount, errorRedactionSecrets = [], worktreeBootstrapStore,
+  emitWorktreeChanged,
 } = {}) {
   let gitLibraries = null;
   const getGitLibraries = async () => {
     if (!gitLibraries) {
       gitLibraries = await import('./index.js');
+      if (emitWorktreeChanged) {
+        gitLibraries.subscribeWorktreeTopologyChanges(emitWorktreeChanged);
+      }
     }
     return gitLibraries;
   };
@@ -533,7 +537,7 @@ export function registerGitRoutes(app, {
   });
 
   app.get('/api/git/status', async (req, res) => {
-    const { getStatus, isGitRepository } = await getGitLibraries();
+    const { getStatus, isGitRepository, observeWorktreeTopology } = await getGitLibraries();
 
     try {
       const directory = resolveDirectoryQuery(req.query.directory);
@@ -545,6 +549,11 @@ export function registerGitRoutes(app, {
       if (!isRepo) {
         return res.json(nonRepoStatusPayload());
       }
+
+      // Clients ask for status while they work in a repository, so this is
+      // where an externally added or removed worktree gets noticed. It runs
+      // beside the status call and never delays or fails the response.
+      void observeWorktreeTopology(directory);
 
       const mode = req.query.mode === 'light' ? 'light' : undefined;
       const status = await getStatus(directory, { mode });
@@ -1346,7 +1355,7 @@ export function registerGitRoutes(app, {
   });
 
   app.get('/api/git/worktrees', async (req, res) => {
-    const { getWorktrees } = await getGitLibraries();
+    const { getWorktrees, observeWorktreeTopology } = await getGitLibraries();
     try {
       const directory = req.query.directory;
       if (!directory) {
@@ -1367,16 +1376,21 @@ export function registerGitRoutes(app, {
           }
         }
       }
+      // A repository always lists at least its primary worktree; an empty
+      // list means "not a repository" and has no topology to track.
+      if (worktrees.length > 0) {
+        void observeWorktreeTopology(directory);
+      }
       res.json(worktrees);
     } catch (error) {
       if (error?.code === 'CONTRIBUTOR_PROVENANCE_STORE_INVALID') {
         return res.status(500).json({ error: 'Failed to verify contributor worktree provenance', code: 'UNKNOWN' });
       }
-      // Worktrees are an optional feature. Avoid repeated 500s (and repeated client retries)
-      // when the directory isn't a git repo or uses shell shorthand like "~/".
-      console.warn('Failed to get worktrees, returning empty list:', error?.message || error);
-      res.setHeader('X-OpenChamber-Warning', 'git worktrees unavailable');
-      res.json([]);
+      // A directory outside any repository still answers `[]` from getWorktrees.
+      // Anything else is a real failure the client must not mistake for "no
+      // worktrees", or it would drop the ones it already knows.
+      console.error('Failed to get worktrees:', error);
+      res.status(500).json({ error: error.message || 'Failed to get worktrees' });
     }
   });
 

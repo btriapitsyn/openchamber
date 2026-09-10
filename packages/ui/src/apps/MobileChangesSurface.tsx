@@ -33,10 +33,13 @@ import { SystemIdentityConfirmDialog } from '@/components/views/git/SystemIdenti
 import type { GitIdentityProfile } from '@/lib/api/types';
 import { PierreDiffViewer } from '@/components/views/PierreDiffViewer';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
+import { useRepositoryBinding } from '@/lib/source-control/repository-binding';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { useNestedGitDirectory } from '@/hooks/useNestedGitDirectory';
 import { useBranchComparisonBase } from '@/hooks/useBranchComparisonBase';
 import { useCommitComparison } from '@/hooks/useCommitComparison';
+import { usePullRequestComparison } from '@/hooks/usePullRequestComparison';
+import { PullRequestComparisonSelector } from '@/components/views/git/PullRequestComparisonSelector';
 import { useGitComparison, type GitComparisonFile, type GitComparisonSource } from '@/hooks/useGitComparison';
 import { useGitBaseBranchStore } from '@/stores/useGitBaseBranchStore';
 import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
@@ -69,7 +72,7 @@ import { settleGitFileReverts } from './mobileChangesOperations';
 type SyncAction = 'fetch' | 'sync' | 'publish' | null;
 type CommitAction = 'commit' | 'commitAndPush' | null;
 
-type ChangesMode = 'working' | 'branch' | 'commit';
+type ChangesMode = 'working' | 'branch' | 'commit' | 'pr';
 type ChangesRoute =
   | { type: 'list' }
   | { type: 'diff'; path: string; staged: boolean }
@@ -268,13 +271,17 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
   const branchComparison = useBranchComparisonBase(currentDirectory || null, currentBranch, visible && mode === 'branch' && showBranchOption);
   const commitComparison = useCommitComparison(currentDirectory || null, currentBranch, visible && mode === 'commit' && isGitRepo === true);
   const selectedCommitHash = commitComparison.selectedCommit?.hash ?? null;
+  const binding = useRepositoryBinding(currentDirectory || null, sourceControl);
+  const prComparison = usePullRequestComparison(currentDirectory || null, currentBranch, binding.contexts[0] ?? null, visible && mode === 'pr' && isGitRepo === true);
+  const selectedPr = prComparison.selectedSource;
   const comparisonSource = React.useMemo<GitComparisonSource | null>(() => {
+    if (mode === 'pr') return selectedPr;
     if (mode === 'branch' && currentBranch && branchComparison.base) return { kind: 'branch', baseRef: branchComparison.base, headRef: currentBranch };
     if (mode === 'commit' && selectedCommitHash) return { kind: 'commit', hash: selectedCommitHash };
     return null;
-  }, [branchComparison.base, currentBranch, mode, selectedCommitHash]);
+  }, [branchComparison.base, currentBranch, mode, selectedCommitHash, selectedPr]);
   const comparisonRevision = mode === 'branch' ? branchComparison.revision : '';
-  const comparison = useGitComparison(currentDirectory || null, comparisonSource, visible && isGitRepo === true, comparisonRevision);
+  const comparison = useGitComparison(currentDirectory || null, comparisonSource, visible && isGitRepo === true, comparisonRevision, prComparison.readContext);
   const { fetchDiff: loadComparisonDiff } = comparison;
   const comparisonFiles = React.useMemo(() => comparison.files ? [...comparison.files].sort((a, b) => a.path.localeCompare(b.path)) : null, [comparison.files]);
   const activeComparisonPath = route.type === 'comparison' && route.sourceKey === comparison.key ? route.path : null;
@@ -290,11 +297,11 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
     }
   }, [loadComparisonDiff, t]);
   const comparisonDiffs = useRangeKeyedCache<ComparisonDiff>(
-    comparison.files ? comparison.key : null,
+    comparison.files ? (mode === 'pr' ? JSON.stringify([comparison.key, comparison.revision]) : comparison.key) : null,
     visible && activeComparisonPath ? activeComparisonPath : '',
     visible ? fetchComparisonDiff : null,
     LOADING_COMPARISON_DIFF,
-    JSON.stringify([comparisonRevision, comparisonRetry]),
+    JSON.stringify([comparisonRevision, mode === 'pr' ? comparison.revision : 0, comparisonRetry]),
   );
   const activeComparisonDiff = activeComparisonPath ? comparisonDiffs.get(activeComparisonPath) ?? LOADING_COMPARISON_DIFF : null;
 
@@ -816,10 +823,10 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
     );
   }
 
-  const modeLabel = mode === 'branch' ? t('diffView.scope.branch') : mode === 'commit' ? t('commitComparison.mode') : t('mobile.nav.changes');
+  const modeLabel = mode === 'pr' ? t('session.githubIntegration.tabs.pullRequests') : mode === 'branch' ? t('diffView.scope.branch') : mode === 'commit' ? t('commitComparison.mode') : t('mobile.nav.changes');
   const sourceLabel = mode === 'branch' && branchComparison.base
     ? branchRefLabel(branchComparison.base)
-    : mode === 'commit' ? selectedCommitHash?.slice(0, 8) : null;
+    : mode === 'commit' ? selectedCommitHash?.slice(0, 8) : mode === 'pr' && selectedPr ? `#${selectedPr.number}` : null;
   if (activeComparisonPath && activeComparisonDiff) {
     return (
       <MobileDiffDetail
@@ -838,6 +845,11 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
   }
 
   const renderComparison = () => {
+    if (mode === 'pr' && !selectedPr) return <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+      <MobileChangesState loading={prComparison.loading} message={prComparison.error ?? (prComparison.loading
+        ? t('session.githubPrPicker.loading.pullRequests') : t('pullRequestComparison.select'))} />
+      {!prComparison.loading && <PullRequestComparisonSelector mobile comparison={prComparison} />}
+    </div>;
     if (mode === 'branch' && !branchComparison.base) {
       return <MobileChangesState
         loading={!branchComparison.resolved}
@@ -860,7 +872,7 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
     }
     if (!comparisonFiles) return <MobileChangesState loading message={t('diffView.state.loadingChanges')} />;
     if (comparisonFiles.length === 0) {
-      return <MobileChangesState icon={mode === 'branch'} message={mode === 'commit'
+      return <MobileChangesState icon={mode === 'branch'} message={mode === 'pr' ? t('walkthrough.blocked.emptyDiff.description') : mode === 'commit'
         ? t('commitComparison.emptyDiff')
         : t('diffView.branch.empty', { base: sourceLabel ?? '' })} />;
     }
@@ -893,11 +905,12 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
             <DropdownMenuRadioGroup value={mode} onValueChange={(value) => {
-              if (value === 'working' || value === 'branch' || value === 'commit') changeMode(value);
+              if (value === 'working' || value === 'branch' || value === 'commit' || value === 'pr') changeMode(value);
             }}>
               <DropdownMenuRadioItem value="working" className="min-h-8 items-center">{t('mobile.nav.changes')}</DropdownMenuRadioItem>
               {showBranchOption && <DropdownMenuRadioItem value="branch" className="min-h-8 items-center">{t('diffView.scope.branch')}</DropdownMenuRadioItem>}
               <DropdownMenuRadioItem value="commit" className="min-h-8 items-center">{t('commitComparison.mode')}</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="pr" className="min-h-8 items-center">{t('session.githubIntegration.tabs.pullRequests')}</DropdownMenuRadioItem>
             </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -912,6 +925,11 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
             loading={commitComparison.loading} error={commitComparison.error}
             onSelect={commitComparison.select} onRefresh={() => void commitComparison.refresh()} />
         )}
+        {visible && mode === 'pr' && <>
+          <PullRequestComparisonSelector mobile key={JSON.stringify([ownerKey, currentBranch])} comparison={prComparison} />
+          {selectedPr && <Button variant="ghost" size="sm" disabled={comparison.loading} aria-label={t('session.githubIssuePicker.actions.refresh')}
+            onClick={() => void comparison.refresh()}><Icon name="refresh" className="size-4" /></Button>}
+        </>}
       </header>
       {mode === 'working' && (
         <div className="flex shrink-0 items-center gap-2 px-3 py-2">

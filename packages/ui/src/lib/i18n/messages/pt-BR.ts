@@ -4,7 +4,14 @@ import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
 import { linearPanelI18n } from './linear-panel.i18n';
 
 export const dict: Record<I18nKey, string> = {
+  'sessions.aiRename.action': 'Renomear com IA',
+  'sessions.aiRename.generating': 'Gerando título da sessão...',
+  'sessions.aiRename.checking': 'Verificando turnos concluídos...',
+  'sessions.aiRename.noCompletedTurns': 'Disponível após a primeira resposta concluída.',
+  'sessions.aiRename.failed': 'Não foi possível renomear a sessão. Verifique as configurações do modelo pequeno e tente novamente.',
+  'sessions.aiRename.unsupported': 'A renomeação com IA não está disponível no VS Code.',
   'commitComparison.mode': 'Commit',
+  'pullRequestComparison.select': 'Selecionar pull request',
   'commitComparison.select': 'Selecionar commit',
   'commitComparison.search': 'Buscar commits...',
   'commitComparison.loadError': 'Não foi possível carregar os commits',
@@ -2193,6 +2200,8 @@ export const dict: Record<I18nKey, string> = {
   "chat.pendingChanges.changedInWorkspace": "modificado no workspace",
   "chat.changedFiles.title": "Arquivos modificados",
   "chat.changedFiles.actions.openFileTitle": "Abrir {path}",
+  "chat.changedFiles.actions.showMore": "Mostrar mais ({count})",
+  "chat.changedFiles.actions.collapse": "Recolher",
   "chat.emptyState.opencodeUnreachable": "OpenCode não está acessível",
   "chat.emptyState.startNewChat": "Iniciar uma nova conversa",
   "chat.emptyState.draftTitle": "What are we working on?",

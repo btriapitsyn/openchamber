@@ -4,7 +4,14 @@ import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
 import { linearPanelI18n } from './linear-panel.i18n';
 
 export const dict: Record<I18nKey, string> = {
+  'sessions.aiRename.action': '使用 AI 重新命名',
+  'sessions.aiRename.generating': '正在產生工作階段標題...',
+  'sessions.aiRename.checking': '正在檢查已完成的對話回合...',
+  'sessions.aiRename.noCompletedTurns': '首次回覆完成後即可使用。',
+  'sessions.aiRename.failed': '無法重新命名工作階段。請檢查小型模型設定後重試。',
+  'sessions.aiRename.unsupported': 'VS Code 尚未支援 AI 重新命名。',
   'commitComparison.mode': '提交',
+  'pullRequestComparison.select': '選擇拉取請求',
   'commitComparison.select': '選擇提交',
   'commitComparison.search': '搜尋提交...',
   'commitComparison.loadError': '無法載入提交',
@@ -2195,6 +2202,8 @@ export const dict: Record<I18nKey, string> = {
   'chat.pendingChanges.changedInWorkspace': '工作區中有變更',
   'chat.changedFiles.title': '已變更檔案',
   'chat.changedFiles.actions.openFileTitle': '開啟 {path}',
+  'chat.changedFiles.actions.showMore': '顯示更多（{count}）',
+  'chat.changedFiles.actions.collapse': '收起',
   'chat.emptyState.opencodeUnreachable': '無法連線 OpenCode',
   'chat.emptyState.startNewChat': '開始新的聊天',
   'chat.emptyState.draftTitle': 'What are we working on?',

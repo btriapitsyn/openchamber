@@ -89,11 +89,27 @@ its current hunk index while visible; regeneration remains user-initiated. The
 content-addressed cache continues to reuse an old review only when its hunks
 match, and otherwise reports stale anchors and uncovered current hunks.
 
-The panel offers the current branch's pull request on its own: it registers with
-the shared GitHub PR status store (`useGitHubPrStatusStore`) rather than waiting
-for the pull request panel to have been visited. That store already dedupes
-concurrent requests by signature and throttles by TTL, so several panels asking
-the same question produce one call to GitHub.
+PR mode uses the same searchable, paginated selector as Changes. Its list loads
+only while PR mode is visible. Selection ownership and handoff rules are in
+`packages/ui/src/stores/DOCUMENTATION.md`.
+
+PR sources may include `sourceRepo: { owner, repo }`. It qualifies the cache/job
+key as `pr:<owner>/<repo>:<number>`, so equal numbers in different repositories
+stay apart. Number-only sources keep `pr:<number>` and read the repository behind
+the bound primary remote. A named repository is honoured only inside the bound
+repository's network, the repository and the upstream it was forked from, which
+is what the bound pull request list reads with the same account. A name outside
+that network fails with `409 PULL_REQUEST_REPOSITORY_MISMATCH` before any GitHub
+request. The PR panel forwards the project of the pull request it shows.
+
+`GET /api/walkthrough/pr-diff` accepts `directory`, a JSON `source` restricted
+to PRs, and the same bound read-context fields as the other walkthrough routes.
+It validates that context against the binding and reads with its exact account;
+without one it reads nothing. It returns GitHub's complete published diff as
+text, with no model readiness checks or generation. Successful empty patches return 200; auth,
+GitHub and malformed-response failures remain errors. Walkthrough generation
+keeps its existing empty-diff refusal. UI comparison behavior is documented in
+`packages/ui/src/components/views/DOCUMENTATION.md`.
 
 ## No truncation
 

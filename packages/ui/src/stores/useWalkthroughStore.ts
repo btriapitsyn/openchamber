@@ -46,15 +46,19 @@ export const walkthroughSourceKey = (source: WalkthroughSource): string => {
   if (source.kind === 'working-tree') return `working-tree:${source.scope}`;
   if (source.kind === 'branch') return `branch:${source.baseRef}...${source.headRef}`;
   if (source.kind === 'commit') return `commit:${source.hash}`;
-  return `pr:${source.number}`;
+  return source.sourceRepo ? `pr:${source.sourceRepo.owner}/${source.sourceRepo.repo}:${source.number}` : `pr:${source.number}`;
 };
 
 const walkthroughTargetKey = (target: WalkthroughTarget): string => {
   if (!('context' in target)) return walkthroughSourceKey(target.source);
   const { context, source } = target;
+  // The named repository keeps equal numbers in different repositories apart,
+  // even under one binding: the server refuses the one that is not bound, and
+  // that refusal must not be cached under the other's key.
   return JSON.stringify([
     'pr',
     source.number,
+    source.sourceRepo ? `${source.sourceRepo.owner}/${source.sourceRepo.repo}` : null,
     ...sourceControlReadContextParts(context),
   ]);
 };

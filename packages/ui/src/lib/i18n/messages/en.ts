@@ -3,7 +3,14 @@ import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
 import { linearPanelI18n } from './linear-panel.i18n';
 
 export const dict = {
+  'sessions.aiRename.action': 'Rename with AI',
+  'sessions.aiRename.generating': 'Generating session title...',
+  'sessions.aiRename.checking': 'Checking completed turns...',
+  'sessions.aiRename.noCompletedTurns': 'Available after the first completed reply.',
+  'sessions.aiRename.failed': 'Could not rename the session. Check your Small Model settings and try again.',
+  'sessions.aiRename.unsupported': 'AI renaming is not available in VS Code.',
   'commitComparison.mode': 'Commit',
+  'pullRequestComparison.select': 'Select pull request',
   'commitComparison.select': 'Select commit',
   'commitComparison.search': 'Search commits...',
   'commitComparison.loadError': 'Failed to load commits',
@@ -2225,6 +2232,8 @@ export const dict = {
   'chat.pendingChanges.changedInWorkspace': 'changed in workspace',
   'chat.changedFiles.title': 'Changed files',
   'chat.changedFiles.actions.openFileTitle': 'Open {path}',
+  'chat.changedFiles.actions.showMore': 'Show more ({count})',
+  'chat.changedFiles.actions.collapse': 'Collapse',
   'chat.emptyState.opencodeUnreachable': 'OpenCode is not reachable',
   'chat.emptyState.startNewChat': 'Start a new chat',
   'chat.emptyState.draftTitle': 'What are we working on?',

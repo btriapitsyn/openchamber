@@ -16,7 +16,7 @@ import { isWindowsArm64 } from '@/lib/platform';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { getRuntimeKey, isTransientRuntimeKey } from '@/lib/runtime-switch';
 
-export type PendingDiffScope = 'working' | 'staged' | 'turn' | 'branch' | 'commit';
+export type PendingDiffScope = 'working' | 'staged' | 'turn' | 'branch' | 'commit' | 'pr';
 const contextPanelModeSchema = z.enum(['diff', 'walkthrough', 'file', 'context', 'plan', 'chat', 'browser', 'git', 'pr', 'linear', 'notes', 'terminal']);
 export type ContextPanelMode = z.infer<typeof contextPanelModeSchema>;
 const persistedPanelWidthsSchema = z.object({
@@ -289,7 +289,7 @@ const normalizeContextTabLabel = (value: string | null | undefined): string | nu
 };
 
 const normalizePendingDiffScope = (value: unknown): PendingDiffScope | null => {
-  return value === 'working' || value === 'staged' || value === 'turn' || value === 'branch' || value === 'commit' ? value : null;
+  return value === 'working' || value === 'staged' || value === 'turn' || value === 'branch' || value === 'commit' || value === 'pr' ? value : null;
 };
 
 /** A plan tab's owner must be a complete project reference or nothing; a

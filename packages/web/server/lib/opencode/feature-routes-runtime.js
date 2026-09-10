@@ -111,11 +111,13 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       ]);
       walkthroughService = {
         ...service,
-        getPullRequestDiff: (directory, number, readContext) => pullRequest.getPullRequestDiff(
+        // Forward only the two request options by name: the remaining slots are
+        // dependency overrides and must not be reachable from a route.
+        getPullRequestDiff: (directory, number, readContext, { allowEmpty, sourceRepo } = {}) => pullRequest.getPullRequestDiff(
           directory,
           number,
           readContext,
-          { onAccountUnavailable: walkthroughBindingService?.accountUnavailable },
+          { allowEmpty, sourceRepo, onAccountUnavailable: walkthroughBindingService?.accountUnavailable },
         ),
       };
     }
@@ -519,6 +521,19 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       resolveSourceControlAccount,
       errorRedactionSecrets: [openchamberDataDir],
       worktreeBootstrapStore,
+      emitWorktreeChanged: ({ directories, at }) => {
+        const clients = getOpenChamberEventClients();
+        for (const client of clients) {
+          try {
+            writeSseEvent(client, {
+              type: 'openchamber:worktree-changed',
+              properties: { directories, at },
+            });
+          } catch {
+            clients.delete(client);
+          }
+        }
+      },
     });
     registerLinearRoutes(app);
     registerDevServerRoutes(app, { scanner: devServerScanner, getOwnPorts });
