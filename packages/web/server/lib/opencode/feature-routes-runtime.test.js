@@ -107,8 +107,9 @@ describe('createFeatureRoutesRuntime', () => {
 
     await runtime.registerRoutes(createApp(), createRouteDependencies(broadcastGlobalUiEvent));
 
-    expect(registerGitRoutes).toHaveBeenCalledWith(expect.any(Object), {
-      broadcastGlobalUiEvent,
-    });
+    expect(registerGitRoutes).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({ broadcastGlobalUiEvent, emitWorktreeChanged: expect.any(Function) }),
+    );
   });
 });
