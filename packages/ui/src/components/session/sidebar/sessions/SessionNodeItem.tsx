@@ -1,3 +1,4 @@
+import { DirectoryActionIndicator } from './DirectoryActionIndicator';
 import React from 'react';
 import type { Session } from '@opencode-ai/sdk/v2';
 import { ContextMenu } from '@base-ui/react/context-menu';
@@ -22,6 +23,9 @@ import { isSessionPinned, useSessionPinnedStore } from '@/stores/useSessionPinne
 import { Icon } from "@/components/icon/Icon";
 import { buildExportFilename, downloadAsMarkdown, formatSessionAsMarkdown, getExportRevealLabelKey, revealExportedMarkdown, saveAsMarkdownDesktop } from '@/lib/exportSession';
 import type { ChildSessionExport } from '@/lib/exportSession';
+import { SessionAiRenameMenuItem } from '@/components/session/SessionAiRenameMenuItem';
+import { handleSessionRenameKeyDown } from '@/components/session/sessionRenameKeyboard';
+import { useIsSessionAiRenamePending } from '@/sync/use-session-ai-rename';
 import { useGlobalSessionStatus, useSessionPermissions, useSessionQuestionCount } from '@/sync/sync-context';
 import { usePrefetchSessionMessages, useSessionMessageRecordsForExport } from '@/sync/use-sync';
 import { getSyncSessionMaterializationStatus } from '@/sync/sync-refs';
@@ -233,7 +237,7 @@ const QuickSessionAction = React.memo(function QuickSessionAction({
   };
 
   return (
-    <Tooltip delayDuration={500}>
+    <Tooltip>
       <TooltipTrigger asChild>
         <button
           type="button"
@@ -335,6 +339,9 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
         ? 'group-hover:pr-7 group-focus-within:pr-7'
         : 'group-hover:pr-3 group-focus-within:pr-3');
   const alwaysActionPaddingClass = showQuickArchiveAction ? 'pr-13' : 'pr-7';
+  const menuActionPaddingClass = isVSCode
+    ? (showQuickArchiveAction ? 'pr-18' : 'pr-14')
+    : (showQuickArchiveAction ? 'pr-7' : 'pr-3');
   const suppressNextSelectRef = React.useRef(false);
   const [isTouchPressed, setIsTouchPressed] = React.useState(false);
   const editingIdRef = React.useRef(editingId);
@@ -347,6 +354,8 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
   const renameDraftRef = React.useRef(renameDraft);
   renameDraftRef.current = renameDraft;
   const renameTargetRef = React.useRef<string | null>(null);
+  const pendingRenameSelectRef = React.useRef(false);
+  const renameInputRef = React.useRef<HTMLInputElement>(null);
   const formRef = React.useRef<HTMLFormElement>(null);
 
   const session = node.session;
@@ -457,6 +466,8 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
   // tick of the counter it only decides to mount.
   const hasActivityDuration = useHasSessionActivityDuration(session.id, isStreaming);
   const isMovingToWorktree = useIsSessionWorktreeMovePending(session.id);
+  const isAiRenaming = useIsSessionAiRenamePending(session.id, sessionDirectory);
+  const isSessionActionPending = isMovingToWorktree || isAiRenaming;
   const currentWorktreeMetadata = node.worktree ?? useSessionUIStore.getState().getWorktreeMetadata(session.id) ?? null;
   const [worktreeTargets, setWorktreeTargets] = React.useState<SessionWorktreeMenuTarget[]>([]);
   const [worktreeTargetsLoading, setWorktreeTargetsLoading] = React.useState(false);
@@ -633,8 +644,23 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
     }
     if (renameTargetRef.current === session.id) return;
     renameTargetRef.current = session.id;
+    pendingRenameSelectRef.current = true;
     setRenameDraft(editTitle);
   }, [editingId, editTitle, session.id]);
+
+  // Entering rename mode selects the whole title, so the first keystroke
+  // replaces it instead of appending to it. The selection waits for the commit
+  // that actually renders `editTitle`: the draft state above is seeded when the
+  // row mounts, so on a session whose title changed since then the input still
+  // holds the old text during the commit that opens the form.
+  React.useLayoutEffect(() => {
+    if (editingId !== session.id || !pendingRenameSelectRef.current) return;
+    const input = renameInputRef.current;
+    if (!input || input.value !== editTitle) return;
+    pendingRenameSelectRef.current = false;
+    input.focus();
+    input.select();
+  }, [editingId, editTitle, renameDraft, session.id]);
 
   if (editingId === session.id) {
     return (
@@ -656,18 +682,13 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
             }}
           >
             <input
+              ref={renameInputRef}
               value={renameDraft}
               onChange={(event) => setRenameDraft(event.target.value)}
               className="flex-1 min-w-0 bg-transparent typography-ui-label outline-none placeholder:text-muted-foreground"
               autoFocus
               placeholder={t('sessions.sidebar.session.menu.rename')}
-              onKeyDown={(event) => {
-                event.stopPropagation();
-                if (event.key === 'Escape') {
-                  handleCancelEdit();
-                  return;
-                }
-              }}
+              onKeyDown={(event) => handleSessionRenameKeyDown(event, handleCancelEdit)}
             />
             <button
               type="submit"
@@ -704,7 +725,7 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
     menuOpen: isSessionMenuOpen,
     hideOnHoverClass,
   });
-  const showUnreadStatus = !isMovingToWorktree && !isStreaming && needsAttention && !isActive;
+  const showUnreadStatus = !isSessionActionPending && !isStreaming && needsAttention && !isActive;
   const showStatusMarker = isStreaming || showUnreadStatus;
   // Both states are the same static dot; only the color separates "running"
   // from "unread". The elapsed-turn readout on the right carries the motion
@@ -725,8 +746,8 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
   // The settled duration lives exactly as long as the unread marker does, so a
   // session read (or watched) while it finishes never keeps a stale total.
   const showActivityDuration = (isStreaming || showUnreadStatus) && hasActivityDuration;
-  const hideLeadingIndicatorOnHover = !alwaysShowActions && hasChildren && (isMovingToWorktree || showStatusMarker || isPinnedSession);
-  const showPinnedMarker = isPinnedSession && !isMovingToWorktree && !showStatusMarker;
+  const hideLeadingIndicatorOnHover = !alwaysShowActions && hasChildren && (isSessionActionPending || showStatusMarker || isPinnedSession);
+  const showPinnedMarker = isPinnedSession && !isSessionActionPending && !showStatusMarker;
   const pinnedMarkerContent = (
     <Icon
       name="pushpin"
@@ -734,7 +755,7 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
       aria-label={t('sessions.sidebar.session.status.pinned')}
     />
   );
-  const leadingIndicators = isMovingToWorktree || showStatusMarker || showPinnedMarker ? (
+  const leadingIndicators = isSessionActionPending || showStatusMarker || showPinnedMarker ? (
     <span
       style={{ left: ROW_GUTTER_LEFT_PX + depth * ROW_DEPTH_STEP_PX }}
       className={cn(
@@ -742,16 +763,16 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
         hideLeadingIndicatorOnHover ? 'opacity-100 group-hover:opacity-0 group-focus-within:opacity-0' : '',
       )}
     >
-      {isMovingToWorktree ? (
+      {isSessionActionPending ? (
         <Icon
           name="loader-4"
           className="h-3 w-3 animate-spin text-primary"
-          aria-label={t('sessions.sidebar.session.status.movingToWorktree')}
+          aria-label={isAiRenaming ? t('sessions.aiRename.generating') : t('sessions.sidebar.session.status.movingToWorktree')}
         />
       ) : showStatusMarker ? statusMarkerContent : showPinnedMarker ? pinnedMarkerContent : null}
     </span>
   ) : null;
-  const hideChevronUntilHover = hasChildren && !alwaysShowActions && (isMovingToWorktree || showStatusMarker || isPinnedSession);
+  const hideChevronUntilHover = hasChildren && !alwaysShowActions && (isSessionActionPending || showStatusMarker || isPinnedSession);
   const subsessionChevron = hasChildren ? (
     <span
       role="button"
@@ -995,6 +1016,7 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
         <Icon name="pencil-ai" className="mr-1 h-4 w-4" />
         {t('sessions.sidebar.session.menu.rename')}
       </Item>
+      <SessionAiRenameMenuItem sessionID={session.id} directory={sessionDirectory} open={isSessionMenuOpen} Item={Item} />
       <Item onClick={() => handleCopySessionId(session.id)} className="[&>svg]:mr-1">
         <Icon name="file-copy" className="mr-1 h-4 w-4" />
         {t('sessions.sidebar.session.menu.copyId')}
@@ -1392,7 +1414,7 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
 	                      isTouchPressed && 'bg-interactive-hover/70',
                       alwaysShowActions
                         ? (isVSCode ? revealPaddingClass : alwaysActionPaddingClass)
-                        : revealPaddingClass,
+                        : (isSessionMenuOpen ? menuActionPaddingClass : revealPaddingClass),
                     )}
                   >
                     <div className="flex w-full items-center min-w-0 flex-1 gap-1 overflow-hidden">
@@ -1400,6 +1422,18 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
                           would reflow the truncated title and cause a micro
                           horizontal shift when the status flips. */}
                       <div className={cn('block min-w-0 flex-1 truncate typography-ui-label font-normal', isActive ? 'text-primary' : needsAttention ? 'text-foreground' : 'text-foreground/80')}>{renderHighlightedText(sessionTitle, normalizedSessionSearchQuery)}</div>
+                      {!archivedBucket && sessionDirectory && (renderContext === 'recent'
+                        || (sessionGroupingMode === 'flat' && node.worktree
+                          && normalizePath(node.worktree.path) !== normalizePath(node.worktree.projectDirectory))) ? (
+                        <DirectoryActionIndicator
+                          directory={sessionDirectory}
+                          className={alwaysShowActions ? undefined : isSessionMenuOpen
+                            ? 'mr-1'
+                            : isVSCode
+                              ? 'group-hover:mr-1'
+                              : 'group-hover:mr-1 group-focus-within:mr-1'}
+                        />
+                      ) : null}
                       {/* While a turn runs (and until its result is read) the
                           elapsed counter takes over this slot from the usual
                           goal/branch/date metadata, which stays one hover or
@@ -1425,13 +1459,15 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
                           )}
                         </span>
                       ) : (showActivityDuration || sessionGoalGlyph || showInlineBranchMarker || renderContext === 'recent') ? (
-                        <div className="relative ml-1 flex h-4 flex-shrink-0 items-center justify-end">
-                          <span className={cn(
-                            'inline-flex items-center gap-1 whitespace-nowrap text-right transition-opacity duration-150',
+                        <div className={cn(
+                            'relative ml-1 flex h-4 flex-shrink-0 items-center justify-end',
                             isSessionMenuOpen
-                              ? 'opacity-0'
-                              : hideOnHoverClass,
+                              ? 'hidden'
+                              : isVSCode
+                                ? 'group-hover:hidden'
+                                : 'group-hover:hidden group-focus-within:hidden',
                           )}>
+                          <span className="inline-flex items-center gap-1 whitespace-nowrap text-right">
                             {showActivityDuration ? (
                               <SessionActivityDuration
                                 sessionId={session.id}

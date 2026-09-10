@@ -3,6 +3,7 @@ export type QuotaProviderId =
   | 'codex'
   | 'cursor'
   | 'claude'
+  | 'cline-pass'
   | 'github-copilot'
   | 'github-copilot-addon'
   | 'google'
@@ -18,6 +19,8 @@ export type QuotaProviderId =
   | 'opencode-go'
   | 'crof'
   | 'deepseek'
+  | 'exe-dev'
+  | 'hyper'
   | 'neuralwatt'
   | 'xai';
 

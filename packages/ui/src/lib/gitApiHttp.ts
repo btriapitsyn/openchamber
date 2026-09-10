@@ -1,12 +1,15 @@
+import { z } from 'zod';
 import type {
   GitStatus,
   GitDiffResponse,
   GetGitDiffOptions,
   GetGitRangeDiffOptions,
   GetGitRangeFilesOptions,
+  GetGitCommitDiffOptions,
   GitFileDiffResponse,
   GetGitFileDiffOptions,
   GitBranch,
+  GitUnpushedBranchCounts,
   GitDeleteBranchPayload,
   GitDeleteRemoteBranchPayload,
   GitRemoveRemotePayload,
@@ -35,12 +38,32 @@ import type {
   RevertCommitResponse,
   ResetToCommitResponse,
 } from './api/types';
+import { normalizePath } from './pathNormalization';
 import { runtimeFetch } from './runtime-fetch';
 import { getRuntimeUrlResolver } from './runtime-url';
 import { getRuntimeKey } from './runtime-switch';
-import { notifyGitStatusInvalidated } from './gitStatusInvalidation';
+import { notifyGitStatusInvalidated, subscribeGitStatusInvalidations } from './gitStatusInvalidation';
+import { notifyGitPush } from './gitPushEvents';
 
 const API_BASE = '/api/git';
+const gitRangeDiffSchema = z.object({ diff: z.string() });
+const gitRangeFilesSchema = z.object({ files: z.array(z.object({ path: z.string(), status: z.string() })) });
+const gitRangeErrorSchema = z.object({ error: z.string() });
+const gitCommitFilesSchema = z.object({ files: z.array(z.object({
+  path: z.string(), previousPath: z.string().optional(), changeType: z.string(),
+  insertions: z.number(), deletions: z.number(), isBinary: z.boolean(),
+})) });
+const gitLogEntrySchema = z.object({
+  hash: z.string(), date: z.string(), message: z.string(), refs: z.string(), body: z.string(),
+  author_name: z.string(), author_email: z.string(), filesChanged: z.number(),
+  insertions: z.number(), deletions: z.number(), parents: z.array(z.string()),
+});
+const gitLogSchema = z.object({ all: z.array(gitLogEntrySchema), latest: gitLogEntrySchema.nullable(), total: z.number() });
+
+async function rangeResponseError(response: Response, fallback: string): Promise<Error> {
+  const parsed = gitRangeErrorSchema.safeParse(await response.json().catch(() => null));
+  return new Error(parsed.success ? parsed.data.error : `${fallback}: ${response.statusText}`);
+}
 const GIT_STATUS_CACHE_TTL_MS = 1200;
 const GIT_REPO_CHECK_CACHE_TTL_MS = 5000;
 const gitStatusCache = new Map<string, { value: GitStatus; expiresAt: number }>();
@@ -58,8 +81,7 @@ const getStatusCacheKey = (runtimeKey: string, directory: string, mode?: 'light'
 const getStatusCacheVersion = (runtimeKey: string, directory: string): number =>
   gitStatusCacheVersions.get(getDirectoryCacheKey(runtimeKey, directory)) ?? 0;
 
-const invalidateGitStatusCache = (directory: string): void => {
-  const runtimeKey = getRuntimeKey();
+const clearGitStatusCache = (runtimeKey: string, directory: string): void => {
   const key = getDirectoryCacheKey(runtimeKey, directory);
   gitStatusCacheVersions.set(key, getStatusCacheVersion(runtimeKey, directory) + 1);
   for (const mode of [undefined, 'light'] as const) {
@@ -67,6 +89,13 @@ const invalidateGitStatusCache = (directory: string): void => {
     gitStatusCache.delete(statusKey);
     gitStatusInFlight.delete(statusKey);
   }
+};
+
+subscribeGitStatusInvalidations((directory) => {
+  clearGitStatusCache(getRuntimeKey(), directory);
+});
+
+const invalidateGitStatusCache = (directory: string): void => {
   notifyGitStatusInvalidated(directory);
 };
 
@@ -131,9 +160,43 @@ export async function checkIsGitRepository(directory: string): Promise<boolean> 
   }
 }
 
-export async function getGitStatus(directory: string, options?: { mode?: 'light' }): Promise<GitStatus> {
+export class GitDirectoriesUnsupportedError extends Error {
+  constructor() {
+    super('Nested git repository discovery is not supported by this runtime');
+    this.name = 'GitDirectoriesUnsupportedError';
+  }
+}
+
+export async function listGitDirectories(root: string): Promise<string[]> {
+  const response = await runtimeFetch('/api/fs/git-dirs', { query: { path: root } });
+  if (response.status === 501) {
+    throw new GitDirectoriesUnsupportedError();
+  }
+  if (!response.ok) {
+    throw new Error(`Failed to list git directories: ${response.statusText}`);
+  }
+  // SAFETY: the route is ours (`GET /api/fs/git-dirs`) and answers this exact
+  // shape on every 2xx; a malformed body fails the array check below.
+  const data = await response.json() as { repositories?: Array<{ path?: string | null }> };
+  if (!Array.isArray(data?.repositories)) {
+    throw new Error('Unexpected git directories response');
+  }
+  // The server joins paths with the platform separator; every other git
+  // directory key in the UI is normalized, so match that here or a Windows
+  // repository never equals its own selection or root prefix.
+  return data.repositories
+    .map((entry) => normalizePath(entry?.path ?? null))
+    .filter((path): path is string => path !== null);
+}
+
+export async function getGitStatus(directory: string, options?: { mode?: 'light'; fresh?: boolean }): Promise<GitStatus> {
   const mode = options?.mode;
   const runtimeKey = getRuntimeKey();
+  if (options?.fresh) {
+    // A forced read must cross the transport cache boundary too. Advancing the
+    // version also prevents an older in-flight response from repopulating it.
+    clearGitStatusCache(runtimeKey, directory);
+  }
   const key = getStatusCacheKey(runtimeKey, directory, mode);
   const now = Date.now();
   const cached = gitStatusCache.get(key);
@@ -243,7 +306,7 @@ export async function getGitRangeDiff(
   directory: string,
   options: GetGitRangeDiffOptions
 ): Promise<GitDiffResponse> {
-  const { base, head, path, contextLines } = options;
+  const { base, head, path, contextLines, includeWorkingTree } = options;
   if (!base || !head) {
     throw new Error('base and head are required to fetch git range diff');
   }
@@ -254,40 +317,46 @@ export async function getGitRangeDiff(
       head,
       path: path || undefined,
       context: contextLines,
+      includeWorkingTree,
     })
   );
 
   if (!response.ok) {
-    throw new Error(`Failed to get git range diff: ${response.statusText}`);
+    throw await rangeResponseError(response, 'Failed to get git range diff');
   }
 
-  return response.json();
+  return gitRangeDiffSchema.parse(await response.json());
+}
+
+export async function getGitCommitDiff(directory: string, options: GetGitCommitDiffOptions): Promise<GitDiffResponse> {
+  const response = await runtimeFetch(buildUrl(`${API_BASE}/commit-diff`, directory, {
+    hash: options.hash,
+    path: options.path,
+    previousPath: options.previousPath,
+    context: options.contextLines,
+  }));
+  if (!response.ok) throw await rangeResponseError(response, 'Failed to get commit diff');
+  return gitRangeDiffSchema.parse(await response.json());
 }
 
 export async function getGitRangeFiles(
   directory: string,
   options: GetGitRangeFilesOptions
 ): Promise<import('./api/types').GitRangeFileEntry[]> {
-  const { base, head } = options;
+  const { base, head, includeWorkingTree } = options;
   if (!base || !head) {
     throw new Error('base and head are required to fetch git range files');
   }
 
   const response = await runtimeFetch(
-    buildUrl(`${API_BASE}/range-files`, directory, { base, head })
+    buildUrl(`${API_BASE}/range-files`, directory, { base, head, includeWorkingTree })
   );
 
   if (!response.ok) {
-    throw new Error(`Failed to get git range files: ${response.statusText}`);
+    throw await rangeResponseError(response, 'Failed to get git range files');
   }
 
-  const payload = (await response.json()) as { files?: unknown };
-  if (!Array.isArray(payload.files)) return [];
-  return payload.files.filter((entry): entry is import('./api/types').GitRangeFileEntry => {
-    if (!entry || typeof entry !== 'object') return false;
-    const candidate = entry as { path?: unknown; status?: unknown };
-    return typeof candidate.path === 'string' && typeof candidate.status === 'string';
-  });
+  return gitRangeFilesSchema.parse(await response.json()).files;
 }
 
 export async function getBranchBase(
@@ -460,6 +529,16 @@ export async function getGitBranches(directory: string): Promise<GitBranch> {
   if (!response.ok) {
     throw new Error(`Failed to get branches: ${response.statusText}`);
   }
+  return response.json();
+}
+
+export async function getGitUnpushedBranchCounts(directory: string, branches: string[]): Promise<GitUnpushedBranchCounts> {
+  const response = await runtimeFetch(buildUrl(`${API_BASE}/branch-push-status`, directory), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ branches }),
+  });
+  if (!response.ok) throw new Error(`Failed to get branch push status: ${response.statusText}`);
   return response.json();
 }
 
@@ -732,6 +811,7 @@ export async function gitPush(
   directory: string,
   options: { remote?: string; branch?: string; options?: string[] | Record<string, unknown> } = {}
 ): Promise<GitPushResult> {
+  const runtimeKey = getRuntimeKey();
   const response = await runtimeFetch(buildUrl(`${API_BASE}/push`, directory), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -741,7 +821,9 @@ export async function gitPush(
     const error = await response.json().catch(() => ({ error: response.statusText }));
     throw new Error(error.error || 'Failed to push');
   }
-  return completeStatusMutation(directory, response);
+  const result = await completeStatusMutation<GitPushResult>(directory, response);
+  if (result.success) notifyGitPush(directory, runtimeKey);
+  return result;
 }
 
 export async function gitPull(
@@ -892,7 +974,7 @@ export async function getGitLog(
     const errorBody = await response.json().catch(() => ({ error: response.statusText }));
     throw new Error(`Failed to get git log: ${errorBody.error || response.statusText}`);
   }
-  return response.json();
+  return gitLogSchema.parse(await response.json());
 }
 
 export async function getCommitFiles(
@@ -903,9 +985,9 @@ export async function getCommitFiles(
     buildUrl(`${API_BASE}/commit-files`, directory, { hash })
   );
   if (!response.ok) {
-    throw new Error(`Failed to get commit files: ${response.statusText}`);
+    throw await rangeResponseError(response, 'Failed to get commit files');
   }
-  return response.json();
+  return gitCommitFilesSchema.parse(await response.json());
 }
 
 export async function getCommitFileDiff(

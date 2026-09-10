@@ -426,7 +426,16 @@ export const createScheduledTasksRuntime = (deps) => {
     }
 
     for (const projectID of activeProjectIDs) {
-      await syncProject(projectID);
+      try {
+        await syncProject(projectID);
+      } catch (error) {
+        // One project's config being unusable (a broken file, a lock timeout)
+        // must not keep every other project's tasks from being scheduled.
+        logger.warn?.('[ScheduledTasks] failed to sync project', {
+          projectID,
+          error: error?.message ?? String(error),
+        });
+      }
     }
   };
 

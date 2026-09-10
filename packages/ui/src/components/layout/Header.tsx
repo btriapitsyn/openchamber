@@ -9,7 +9,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -30,8 +29,6 @@ import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { streamPerfCount } from '@/stores/utils/streamDebug';
 import { useFeatureFlagsStore } from '@/stores/useFeatureFlagsStore';
 
-import { useGitHubAuthStore } from '@/stores/useGitHubAuthStore';
-import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useDesktopWindowControlsLayout } from '@/hooks/useDesktopWindowControlsLayout';
 import { ContextUsageDisplay } from '@/components/ui/ContextUsageDisplay';
 import { WindowsWindowControls } from '@/components/desktop/WindowsWindowControls';
@@ -45,10 +42,11 @@ import {
 
 import {
 } from '@/components/ui/collapsible';
-import type { GitHubAuthStatus } from '@/lib/api/types';
 import type { SessionContextUsage } from '@/stores/types/sessionTypes';
 import { DesktopHostSwitcherDialog } from '@/components/desktop/DesktopHostSwitcher';
 import { OpenInAppButton } from '@/components/desktop/OpenInAppButton';
+import { ProjectActionsButton } from '@/components/layout/ProjectActionsButton';
+import { useProjectActionsContext } from '@/hooks/useProjectActionsContext';
 import { SessionSwitcherDropdown } from '@/components/session/SessionSwitcherDropdown';
 import { SessionTabsStrip, type SessionTabMenuArgs } from './SessionTabsStrip';
 import { canUseElectronDesktopIPC, invokeDesktop, isDesktopLocalOriginActive, isDesktopShell, isVSCodeRuntime, startDesktopWindowDrag, type UpdateInfo } from '@/lib/desktop';
@@ -69,6 +67,9 @@ import type { IconName } from "@/components/icon/icons";
 import { toast } from '@/components/ui';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { buildExportFilename, downloadAsMarkdown, formatSessionAsMarkdown, saveAsMarkdownDesktop } from '@/lib/exportSession';
+import { SessionAiRenameMenuItem } from '@/components/session/SessionAiRenameMenuItem';
+import { handleSessionRenameKeyDown } from '@/components/session/sessionRenameKeyboard';
+import { useIsSessionAiRenamePending } from '@/sync/use-session-ai-rename';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { buildSessionTreeMoveMessages, requestSessionTreeMove, useIsSessionWorktreeMovePending } from '@/lib/worktrees/sessionWorktreeMove';
@@ -123,136 +124,9 @@ const HeaderIconActionButton = React.memo(function HeaderIconActionButton({
   );
 });
 
-type DesktopGitHubControlProps = {
-  isMobile: boolean;
-  githubAuthStatus: GitHubAuthStatus | null;
-  githubAccounts: Array<NonNullable<GitHubAuthStatus['accounts']>[number]>;
-  githubAvatarUrl: string | null;
-  githubLogin: string | null;
-  isSwitchingGitHubAccount: boolean;
-  handleGitHubAccountSwitch: (accountId: string) => Promise<void>;
-};
-
-const DesktopGitHubControl = React.memo(function DesktopGitHubControl({
-  isMobile,
-  githubAuthStatus,
-  githubAccounts,
-  githubAvatarUrl,
-  githubLogin,
-  isSwitchingGitHubAccount,
-  handleGitHubAccountSwitch,
-}: DesktopGitHubControlProps) {
-  const { t } = useI18n();
-  if (!githubAuthStatus?.connected || isMobile) {
-    return null;
-  }
-
-  if (githubAccounts.length > 1) {
-    return (
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            className={cn(
-              DESKTOP_HEADER_ICON_BUTTON_CLASS,
-              'h-7 w-7 overflow-hidden rounded-full border border-border/60 bg-muted/80 p-0'
-            )}
-            title={githubLogin ? t('header.github.connectedWithLogin', { login: githubLogin }) : t('header.github.connected')}
-            disabled={isSwitchingGitHubAccount}
-          >
-            {githubAvatarUrl ? (
-              <img
-                src={githubAvatarUrl}
-                alt={githubLogin ? t('header.github.avatarWithLogin', { login: githubLogin }) : t('header.github.avatar')}
-                className="h-full w-full object-cover"
-                loading="lazy"
-                referrerPolicy="no-referrer"
-              />
-            ) : (
-              <Icon name="github-fill" className="h-3.5 w-3.5 text-foreground" />
-            )}
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-64">
-          <DropdownMenuLabel className="typography-ui-header font-semibold text-foreground">
-            {t('header.github.accountsTitle')}
-          </DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          {githubAccounts.map((account) => {
-            const accountUser = account.user;
-            const isCurrent = Boolean(account.current);
-            const sourceLabel = account.source === 'gh-cli'
-              ? t('header.github.accountSource.cli')
-              : t('header.github.accountSource.oauth');
-            return (
-              <DropdownMenuItem
-                key={account.id}
-                className="gap-2"
-                disabled={isSwitchingGitHubAccount}
-                onSelect={() => {
-                  if (!isCurrent) {
-                    void handleGitHubAccountSwitch(account.id);
-                  }
-                }}
-              >
-                {accountUser?.avatarUrl ? (
-                  <img
-                    src={accountUser.avatarUrl}
-                    alt={accountUser.login ? t('header.github.avatarWithLogin', { login: accountUser.login }) : t('header.github.avatar')}
-                    className="h-6 w-6 rounded-full border border-border/60 bg-muted object-cover"
-                    loading="lazy"
-                    referrerPolicy="no-referrer"
-                  />
-                ) : (
-                  <div className="flex h-6 w-6 items-center justify-center rounded-full border border-border/60 bg-muted">
-                    <Icon name="github-fill" className="h-3 w-3 text-muted-foreground" />
-                  </div>
-                )}
-                <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate typography-ui-label text-foreground">
-                    {accountUser?.name?.trim() || accountUser?.login || 'GitHub'}
-                  </span>
-                  {accountUser?.login ? (
-                    <span className="truncate typography-micro text-muted-foreground">
-                      <span className="font-mono">{accountUser.login}</span>
-                      <span className="mx-1 opacity-50">·</span>
-                      <span>{sourceLabel}</span>
-                    </span>
-                  ) : null}
-                </span>
-                {isCurrent ? <Icon name="check" className="h-4 w-4 text-primary" /> : null}
-              </DropdownMenuItem>
-            );
-          })}
-        </DropdownMenuContent>
-      </DropdownMenu>
-    );
-  }
-
-  return (
-    <div
-      className="app-region-no-drag flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-border/60 bg-muted/80"
-      title={githubLogin ? t('header.github.connectedWithLogin', { login: githubLogin }) : t('header.github.connected')}
-    >
-      {githubAvatarUrl ? (
-        <img
-          src={githubAvatarUrl}
-          alt={githubLogin ? t('header.github.avatarWithLogin', { login: githubLogin }) : t('header.github.avatar')}
-          className="h-full w-full object-cover"
-          loading="lazy"
-          referrerPolicy="no-referrer"
-        />
-      ) : (
-        <Icon name="github-fill" className="h-3.5 w-3.5 text-foreground" />
-      )}
-    </div>
-  );
-});
-
 type DesktopServicesMenuProps = {
   isDesktopApp: boolean;
   currentInstanceLabel: string;
-  compactCurrentInstanceLabel: string;
   currentInstanceIsLocal: boolean;
   isDesktopServicesOpen: boolean;
   setIsDesktopServicesOpen: React.Dispatch<React.SetStateAction<boolean>>;
@@ -267,7 +141,6 @@ type DesktopServicesMenuProps = {
 const DesktopServicesMenu = React.memo(function DesktopServicesMenu({
   isDesktopApp,
   currentInstanceLabel,
-  compactCurrentInstanceLabel,
   currentInstanceIsLocal,
   isDesktopServicesOpen,
   setIsDesktopServicesOpen,
@@ -299,12 +172,12 @@ const DesktopServicesMenu = React.memo(function DesktopServicesMenu({
                 : t('header.services.open')}
               className={cn(
                 DESKTOP_HEADER_ICON_BUTTON_CLASS,
-                isDesktopApp ? 'w-auto max-w-[14rem] justify-start gap-1.5 px-2.5' : 'h-8 w-8'
+                isDesktopApp ? 'w-auto max-w-[20rem] justify-start gap-1.5 px-2.5' : 'h-8 w-8'
               )}
             >
               <Icon name="server" className="h-[18px] w-[18px]" />
               {isDesktopApp ? (
-                <span className="truncate typography-ui-label font-medium text-foreground">{compactCurrentInstanceLabel}</span>
+                <span className="truncate typography-ui-label font-medium text-foreground">{currentInstanceLabel}</span>
               ) : null}
             </button>
           </DropdownMenuTrigger>
@@ -379,27 +252,6 @@ const isSameContextUsage = (
     && (a.lastMessageId ?? '') === (b.lastMessageId ?? '');
 };
 
-const formatCompactHeaderLabel = (value: string): string => {
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return '';
-  }
-
-  const words = trimmed.split(/\s+/).filter(Boolean);
-  if (words.length >= 2) {
-    const first = words[0];
-    const second = words[1].slice(0, 3);
-    const shortTwoWord = `${first} ${second}`.trim();
-    if (words.length > 2 || shortTwoWord.length < trimmed.length) {
-      return `${shortTwoWord}...`;
-    }
-    return shortTwoWord;
-  }
-
-  return trimmed.length > 12 ? `${trimmed.slice(0, 9).trimEnd()}...` : trimmed;
-};
-
-
 const normalize = (value: string): string => {
   if (!value) return '';
   const replaced = value.replace(/\\/g, '/');
@@ -439,7 +291,6 @@ export const Header: React.FC = () => {
   const sessionTabsEnabled = useUIStore((state) => state.sessionTabsEnabled);
 
   const getCurrentModel = useConfigStore((state) => state.getCurrentModel);
-  const runtimeApis = useRuntimeAPIs();
 
   const getContextUsage = useSessionUIStore((state) => state.getContextUsage);
   const isNewSessionDraftOpen = useSessionUIStore((state) => Boolean(state.newSessionDraft?.open));
@@ -488,8 +339,6 @@ export const Header: React.FC = () => {
   const loadQuotaSettings = useQuotaStore((state) => state.loadSettings);
 
   const { isMobile } = useDeviceInfo();
-  const githubAuthStatus = useGitHubAuthStore((state) => state.status);
-  const setGitHubAuthStatus = useGitHubAuthStore((state) => state.setStatus);
 
   const headerRef = React.useRef<HTMLElement | null>(null);
 
@@ -571,10 +420,6 @@ export const Header: React.FC = () => {
     }
   }, [contextUsage, currentSessionId, isContextUsageResolvedForSession]);
 
-  const githubAvatarUrl = githubAuthStatus?.connected ? (githubAuthStatus.user?.avatarUrl ?? null) : null;
-  const githubLogin = githubAuthStatus?.connected ? (githubAuthStatus.user?.login ?? null) : null;
-  const githubAccounts = githubAuthStatus?.accounts ?? [];
-  const [isSwitchingGitHubAccount, setIsSwitchingGitHubAccount] = React.useState(false);
   const [isDesktopServicesOpen, setIsDesktopServicesOpen] = React.useState(false);
   const [currentInstanceLabel, setCurrentInstanceLabel] = React.useState('Local');
   const [currentInstanceIsLocal, setCurrentInstanceIsLocal] = React.useState(true);
@@ -582,7 +427,6 @@ export const Header: React.FC = () => {
   const [remoteUpdateInfo, setRemoteUpdateInfo] = React.useState<UpdateInfo | null>(null);
   const [remoteUpdateChecking, setRemoteUpdateChecking] = React.useState(false);
   const [remoteUpdateError, setRemoteUpdateError] = React.useState<string | null>(null);
-  const compactCurrentInstanceLabel = React.useMemo(() => formatCompactHeaderLabel(currentInstanceLabel), [currentInstanceLabel]);
   const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
   // While the work-status panel is on screen it already reports the project,
   // the branch and the context fill — three paces away in the same window.
@@ -839,6 +683,7 @@ export const Header: React.FC = () => {
     if (!worktreeAttachment) return null;
     return formatSessionWorktreeBadge(worktreeAttachment, {
       pending: t('gitView.empty.worktreeSetupInProgress'),
+      missing: t('sessions.sidebar.group.worktreeMissing'),
     });
   }, [t, worktreeAttachment]);
 
@@ -860,6 +705,7 @@ export const Header: React.FC = () => {
     const raw = typeof currentSession?.directory === 'string' ? currentSession.directory : '';
     return normalize(raw || '');
   }, [currentSession?.directory]);
+  const isCurrentSessionAiRenaming = useIsSessionAiRenamePending(currentSessionId ?? '', sessionDirectory);
 
   const draftDirectory = useSessionUIStore((state) => {
     if (!state.newSessionDraft?.open) {
@@ -941,6 +787,15 @@ export const Header: React.FC = () => {
 
   const beginHeaderSessionRenameRef = React.useRef(beginHeaderSessionRename);
   beginHeaderSessionRenameRef.current = beginHeaderSessionRename;
+
+  // The rename field opens with the whole title selected, so the first
+  // keystroke replaces it. Stable ref callback: an inline one would re-run on
+  // every render and re-select the text mid-edit.
+  const focusHeaderRenameInput = React.useCallback((node: HTMLInputElement | null) => {
+    if (!node) return;
+    node.focus();
+    node.select();
+  }, []);
 
   React.useEffect(() => {
     setIsHeaderSessionMenuOpen(false);
@@ -1134,27 +989,9 @@ export const Header: React.FC = () => {
     return normalize(openDirectory || activeProject?.path || '');
   }, [activeProject?.path, openDirectory]);
 
-  const activeProjectRef = React.useMemo(() => {
-    if (!activeProject) {
-      return null;
-    }
-    return { id: activeProject.id, path: activeProject.path };
-  }, [activeProject]);
-
-  const lastProjectActionsContextRef = React.useRef<{
-    projectRef: { id: string; path: string };
-    directory: string;
-  } | null>(null);
-
-  React.useEffect(() => {
-    if (!activeProjectRef || !actionDirectory) {
-      return;
-    }
-    lastProjectActionsContextRef.current = {
-      projectRef: activeProjectRef,
-      directory: actionDirectory,
-    };
-  }, [actionDirectory, activeProjectRef]);
+  // Same resolution the titlebar overlay used to own: worktree → session →
+  // draft → project path, sticky across session switches.
+  const projectActionsContext = useProjectActionsContext();
 
 
   const planModeEnabled = useFeatureFlagsStore((state) => state.planModeEnabled);
@@ -1183,37 +1020,6 @@ export const Header: React.FC = () => {
     sessionDirectory,
   ]);
 
-  const handleGitHubAccountSwitch = React.useCallback(async (accountId: string) => {
-    if (!accountId || isSwitchingGitHubAccount) return;
-    setIsSwitchingGitHubAccount(true);
-    try {
-      const payload = runtimeApis.github
-        ? await runtimeApis.github.authActivate(accountId)
-        : await (async () => {
-          const response = await runtimeFetch('/api/github/auth/activate', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Accept: 'application/json',
-            },
-            body: JSON.stringify({ accountId }),
-          });
-          const body = (await response.json().catch(() => null)) as
-            | (GitHubAuthStatus & { error?: string })
-            | null;
-          if (!response.ok || !body) {
-            throw new Error(body?.error || response.statusText);
-          }
-          return body;
-        })();
-
-      setGitHubAuthStatus(payload);
-    } catch (error) {
-      console.error('Failed to switch GitHub account:', error);
-    } finally {
-      setIsSwitchingGitHubAccount(false);
-    }
-  }, [isSwitchingGitHubAccount, runtimeApis.github, setGitHubAuthStatus]);
 
 
 
@@ -1274,7 +1080,9 @@ export const Header: React.FC = () => {
   // `--oc-titlebar-left-inset` so the sidebar strip can mirror it.
   const titlebarLeftInset = React.useMemo(() => {
     if (isDesktopApp && isMacPlatform && !isDesktopWindowFullscreen) {
-      return '5.5rem';
+      // Native traffic lights have a fixed physical footprint. Keep this
+      // clearance in pixels so shrinking the interface cannot overlap them.
+      return '88px';
     }
     if (isTabletStandalonePwa) {
       return 'max(calc(0.75rem + var(--oc-wco-left-inset, 0px)), 5.5rem)';
@@ -1462,6 +1270,13 @@ export const Header: React.FC = () => {
 
   const desktopSidebarActions = (
     <>
+      {projectActionsContext ? (
+        <ProjectActionsButton
+          projectRef={projectActionsContext.projectRef}
+          directory={projectActionsContext.directory}
+          className="mr-2"
+        />
+      ) : null}
       <OpenInAppButton directory={actionDirectory} className="mr-1" />
       {/* Instances only exist in the desktop app. On web the menu was left
           holding a single dev-only shutdown action, which is not a reason to
@@ -1470,7 +1285,6 @@ export const Header: React.FC = () => {
       <DesktopServicesMenu
         isDesktopApp={isDesktopApp}
         currentInstanceLabel={currentInstanceLabel}
-        compactCurrentInstanceLabel={compactCurrentInstanceLabel}
         currentInstanceIsLocal={currentInstanceIsLocal}
         isDesktopServicesOpen={isDesktopServicesOpen}
         setIsDesktopServicesOpen={setIsDesktopServicesOpen}
@@ -1482,21 +1296,12 @@ export const Header: React.FC = () => {
         onOpenRemoteUpdate={openRemoteInstanceUpdate}
       />
       ) : null}
-      <DesktopGitHubControl
-        isMobile={isMobile}
-        githubAuthStatus={githubAuthStatus}
-        githubAccounts={githubAccounts}
-        githubAvatarUrl={githubAvatarUrl}
-        githubLogin={githubLogin}
-        isSwitchingGitHubAccount={isSwitchingGitHubAccount}
-        handleGitHubAccountSwitch={handleGitHubAccountSwitch}
-      />
     </>
   );
 
   const showMiniChatHeaderAction = hasElectronDesktopIPC && (isNewSessionDraftOpen || Boolean(currentSessionId));
 
-  const renderSessionTabMenu = React.useCallback(({ session, isActive, select, closeOtherTabs, components }: SessionTabMenuArgs) => {
+  const renderSessionTabMenu = React.useCallback(({ session, open, isActive, select, closeOtherTabs, components }: SessionTabMenuArgs) => {
     const { Item, Separator } = components;
     const shareUrl = session.share?.url ?? null;
     const canMoveToWorktree = isActive && !isVSCode && !isChatContext && currentSession && !currentSession.parentId;
@@ -1505,6 +1310,7 @@ export const Header: React.FC = () => {
         <Item onClick={() => { if (!isActive) select(); pendingHeaderRenameRef.current = session.id; }}>
           <Icon name="pencil-ai" className="mr-2 size-4" />{t('sessions.sidebar.session.menu.rename')}
         </Item>
+        <SessionAiRenameMenuItem sessionID={session.id} directory={session.directory} open={open} Item={Item} />
         <Item onClick={() => copySessionIdFor(session.id)}>
           <Icon name="file-copy" className="mr-2 size-4" />{t('sessions.sidebar.session.menu.copyId')}
         </Item>
@@ -1610,6 +1416,7 @@ export const Header: React.FC = () => {
           </div>
         ) : (isVSCode || !sessionTabsEnabled) ? (
           <div className="app-region-no-drag mr-3 flex min-w-0 max-w-full items-center gap-0.5 py-0.5 -my-0.5 text-left">
+            {isCurrentSessionAiRenaming ? <Icon name="loader-4" className="mr-1 size-3 shrink-0 animate-spin text-primary" aria-label={t('sessions.aiRename.generating')} /> : null}
             {!isSidebarOpen ? (
               <SessionSwitcherDropdown align="start">
                 <button
@@ -1633,15 +1440,10 @@ export const Header: React.FC = () => {
                   }}
                 >
                   <input
+                    ref={focusHeaderRenameInput}
                     value={headerSessionTitleDraft}
                     onChange={(event) => setHeaderSessionTitleDraft(event.target.value)}
-                    autoFocus
-                    onKeyDown={(event) => {
-                      event.stopPropagation();
-                      if (event.key === 'Escape') {
-                        setIsRenamingHeaderSession(false);
-                      }
-                    }}
+                    onKeyDown={(event) => handleSessionRenameKeyDown(event, () => setIsRenamingHeaderSession(false))}
                     placeholder={t('sessions.sidebar.session.menu.rename')}
                     className="min-w-0 flex-1 bg-transparent typography-ui-label text-[14px] font-normal leading-tight outline-none placeholder:text-muted-foreground"
                   />
@@ -1713,6 +1515,7 @@ export const Header: React.FC = () => {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="min-w-[190px]">
                     <DropdownMenuItem onClick={() => { pendingHeaderRenameRef.current = currentSessionId; }}><Icon name="pencil-ai" className="mr-2 size-4" />{t('sessions.sidebar.session.menu.rename')}</DropdownMenuItem>
+                    <SessionAiRenameMenuItem sessionID={currentSessionId} directory={sessionDirectory} open={isHeaderSessionMenuOpen} Item={DropdownMenuItem} />
                     <DropdownMenuItem onClick={() => currentSessionId && copySessionIdFor(currentSessionId)}><Icon name="file-copy" className="mr-2 size-4" />{t('sessions.sidebar.session.menu.copyId')}</DropdownMenuItem>
                     <DropdownMenuSeparator />
                     {currentSession?.shareUrl ? (
@@ -1790,15 +1593,10 @@ export const Header: React.FC = () => {
                   }}
                 >
                   <input
+                    ref={focusHeaderRenameInput}
                     value={headerSessionTitleDraft}
                     onChange={(event) => setHeaderSessionTitleDraft(event.target.value)}
-                    autoFocus
-                    onKeyDown={(event) => {
-                      event.stopPropagation();
-                      if (event.key === 'Escape') {
-                        setIsRenamingHeaderSession(false);
-                      }
-                    }}
+                    onKeyDown={(event) => handleSessionRenameKeyDown(event, () => setIsRenamingHeaderSession(false))}
                     placeholder={t('sessions.sidebar.session.menu.rename')}
                     className="min-w-0 flex-1 bg-transparent text-[13px] font-medium leading-4 outline-none placeholder:text-muted-foreground"
                   />

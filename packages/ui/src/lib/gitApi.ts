@@ -84,7 +84,7 @@ export async function checkIsGitRepository(directory: string): Promise<boolean> 
   return gitHttp.checkIsGitRepository(directory);
 }
 
-export async function getGitStatus(directory: string, options?: { mode?: 'light' }): Promise<import('./api/types').GitStatus> {
+export async function getGitStatus(directory: string, options?: { mode?: 'light'; fresh?: boolean }): Promise<import('./api/types').GitStatus> {
   const runtime = getRuntimeGit();
   if (runtime) return runtime.getGitStatus(directory, options);
   return gitHttp.getGitStatus(directory, options);
@@ -212,6 +212,12 @@ export async function getGitBranches(directory: string): Promise<import('./api/t
   const runtime = getRuntimeGit();
   if (runtime) return runtime.getGitBranches(directory);
   return gitHttp.getGitBranches(directory);
+}
+
+export async function getGitUnpushedBranchCounts(directory: string, branches: string[]): Promise<import('./api/types').GitUnpushedBranchCounts> {
+  const runtime = getRuntimeGit();
+  if (runtime) return runtime.getGitUnpushedBranchCounts(directory, branches);
+  return gitHttp.getGitUnpushedBranchCounts(directory, branches);
 }
 
 export async function deleteGitBranch(directory: string, payload: import('./api/types').GitDeleteBranchPayload): Promise<{ success: boolean }> {
@@ -976,6 +982,15 @@ export async function getCommitFiles(
   const runtime = getRuntimeGit();
   if (runtime) return runtime.getCommitFiles(directory, hash);
   return gitHttp.getCommitFiles(directory, hash);
+}
+
+export async function getGitCommitDiff(directory: string, options: import('./api/types').GetGitCommitDiffOptions): Promise<import('./api/types').GitDiffResponse> {
+  const runtime = getRuntimeGit();
+  if (runtime) {
+    if (!runtime.getGitCommitDiff) throw new Error('Commit comparisons are unavailable in this runtime');
+    return runtime.getGitCommitDiff(directory, options);
+  }
+  return gitHttp.getGitCommitDiff(directory, options);
 }
 
 export async function getCommitFileDiff(
