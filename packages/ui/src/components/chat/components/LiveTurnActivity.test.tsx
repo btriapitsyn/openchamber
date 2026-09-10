@@ -250,6 +250,19 @@ describe('live Activity with the real message body', () => {
         expect(container.querySelectorAll('button[aria-label^="Відкрити src/file-"]')).toHaveLength(4);
     });
 
+    test('a file without line counts shows its name alone, and one outside the turn diff is not a button', async () => {
+        const record = turn([assistant('final', [text('answer', 'Done')], 'stop')]);
+        await act(async () => root.render(<Harness record={record} changedFiles={[
+            { file: 'src/a.ts' },
+            { file: 'src/b.ts', additions: 1, deletions: 2 },
+            { file: 'src/c.ts', additions: 1, deletions: 0, inTurnDiff: false },
+        ]} />));
+        expect(container.querySelector('button[aria-label="Open src/a.ts"]')?.textContent).toBe('a.ts');
+        expect(container.querySelector('button[aria-label="Open src/b.ts"]')?.textContent).toBe('b.ts+1/-2');
+        expect(container.querySelector('button[aria-label="Open src/c.ts"]')).toBeNull();
+        expect(container.querySelector('span[title="src/c.ts"]')?.textContent).toBe('c.ts+1/-0');
+    });
+
     test('keeps historical files informational and withholds the list before stop', async () => {
         const files = Array.from({ length: 5 }, (_, index) => ({ file: `src/file-${index}.ts`, additions: 1, deletions: 0 }));
         const final = assistant('final', [text('answer', 'Done')], 'tool-calls');
