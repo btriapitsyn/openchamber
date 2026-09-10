@@ -33,6 +33,7 @@ export const useGuestSurfaces = (): ContextSurfaceDescriptor[] => {
   }, []);
 
   return React.useMemo(() => {
+    void runtimeKey;
     const authenticatedAsset = getRuntimeUrlResolver().authenticatedAsset;
     return guests
       .filter((guest) => guest.enabled !== false)
@@ -53,6 +54,7 @@ export const useGuestAttachItems = (): GuestAttachItem[] => {
   }, []);
 
   return React.useMemo(() => {
+    void runtimeKey;
     if (isVSCodeRuntime() || isMobileSurfaceRuntime()) return [];
     const authenticatedAsset = getRuntimeUrlResolver().authenticatedAsset;
     const items: GuestAttachItem[] = [];

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { cssMaskUrl, GUEST_RAIL_ICON_MASK_SIZE } from './GuestRailIcon';
+import { cssMaskUrl, GUEST_RAIL_ICON_MASK_SIZE } from '@/lib/guests/icon';
 
 describe('cssMaskUrl', () => {
   test('quotes a tokenized asset url', () => {

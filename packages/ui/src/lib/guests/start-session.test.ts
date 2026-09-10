@@ -23,7 +23,7 @@ const request = {
 
 const deps = (overrides: Partial<StartGuestSessionDeps> = {}): StartGuestSessionDeps => ({
   createSession: overrides.createSession ?? (async (title, directory) => ({ id: 'ses-1', directory })),
-  createWorktree: overrides.createWorktree ?? (async (_directory, _branch, _kind) => ({ id: 'ses-2', directory: '/wt' })),
+  createWorktree: overrides.createWorktree ?? (async () => ({ id: 'ses-2', directory: '/wt' })),
   initializeSession: overrides.initializeSession ?? (() => {}),
   setLinkedIssue: overrides.setLinkedIssue ?? (async () => {}),
   sendFirstMessage: overrides.sendFirstMessage ?? (async () => 'sent'),

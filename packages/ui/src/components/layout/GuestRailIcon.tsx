@@ -3,22 +3,12 @@ import React from 'react';
 import { Icon } from '@/components/icon/Icon';
 import type { IconName } from '@/components/icon/icons';
 import { cn } from '@/lib/utils';
+import { cssMaskUrl, GUEST_RAIL_ICON_MASK_SIZE } from '@/lib/guests/icon';
 
 type GuestRailIconProps = {
   src: string;
   className?: string;
 };
-
-export const cssMaskUrl = (src: string): string => {
-  const escaped = src.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-  return `url("${escaped}")`;
-};
-
-/**
- * Package brand SVGs usually fill the 24×24 viewBox; Remixicon glyphs keep ~2px
- * inset. Scale the mask so a guest mark matches host rail icons at the same box.
- */
-export const GUEST_RAIL_ICON_MASK_SIZE = '84%';
 
 /** Guest SVG as a currentColor silhouette. `<img>` cannot inherit the rail token. */
 export const GuestRailIcon: React.FC<GuestRailIconProps> = ({ src, className }) => {

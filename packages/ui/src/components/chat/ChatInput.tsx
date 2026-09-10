@@ -1335,7 +1335,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             return;
         }
         recordLinkedReferences(queueSessionId, queueTarget.directory, linked);
-        }, [getCurrentInputSnapshot, currentSessionId, messageQueueTarget, inputMode, hasDrafts, attachedFiles, sanitizeAttachmentsForSend, prepareDocumentMentions, extractInlineFileMentions, agents, currentDirectory, consumePendingSyntheticParts, inlineDraftTarget, consumeDrafts, linkedIssue, linkedPr, linkedLinearIssue, scrollToLatest, clearAttachedFiles, isMobile, addToQueue, currentProviderId, currentModelId, currentAgentName, currentVariant, t]);
+        }, [getCurrentInputSnapshot, currentSessionId, messageQueueTarget, inputMode, hasDrafts, attachedFiles, sanitizeAttachmentsForSend, prepareDocumentMentions, extractInlineFileMentions, agents, currentDirectory, consumePendingSyntheticParts, inlineDraftTarget, consumeDrafts, linkedIssue, linkedPr, linkedLinearIssue, linkedGuestIssue, scrollToLatest, clearAttachedFiles, isMobile, addToQueue, currentProviderId, currentModelId, currentAgentName, currentVariant, t]);
 
     /** Put the context a queued message was captured with back on the composer chips. */
     const restoreQueuedContext = React.useCallback((context: readonly QueuedContextPart[]) => {
