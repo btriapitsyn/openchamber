@@ -355,6 +355,12 @@ export const createSettingsHelpers = (dependencies) => {
         result.githubScopes = trimmed;
       }
     }
+    if (typeof candidate.gitlabClientId === 'string') {
+      const trimmed = candidate.gitlabClientId.trim();
+      if (trimmed.length > 0) {
+        result.gitlabClientId = trimmed;
+      }
+    }
     if (typeof candidate.showReasoningTraces === 'boolean') {
       result.showReasoningTraces = candidate.showReasoningTraces;
     }
@@ -586,6 +592,9 @@ export const createSettingsHelpers = (dependencies) => {
     }
     if (typeof candidate.showOpenCodeUpdateNotifications === 'boolean') {
       result.showOpenCodeUpdateNotifications = candidate.showOpenCodeUpdateNotifications;
+    }
+    if (typeof candidate.agentGitAuthorityEnabled === 'boolean') {
+      result.agentGitAuthorityEnabled = candidate.agentGitAuthorityEnabled;
     }
     if (typeof candidate.agentWebToolEnabled === 'boolean') {
       result.agentWebToolEnabled = candidate.agentWebToolEnabled;

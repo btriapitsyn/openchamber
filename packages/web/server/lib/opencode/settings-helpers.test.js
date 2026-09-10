@@ -69,6 +69,13 @@ const createTestHelpersWithRealSanitizers = () => {
 };
 
 describe('settings helpers', () => {
+  it('sanitizes the optional GitLab OAuth client ID', () => {
+    const helpers = createTestHelpers();
+    expect(helpers.sanitizeSettingsUpdate({ gitlabClientId: ' client-id ' })).toEqual({ gitlabClientId: 'client-id' });
+    expect(helpers.sanitizeSettingsUpdate({ gitlabClientId: '' })).toEqual({});
+    expect(helpers.sanitizeSettingsUpdate({ gitlabClientId: 42 })).toEqual({});
+  });
+
   it('round-trips telemetry opt-in with the hidden list and preserves it across unrelated writes', () => {
     const helpers = createTestHelpers();
     const legacy = helpers.sanitizeSettingsUpdate({ workStatusHiddenSections: [] });
@@ -743,9 +750,9 @@ describe('settings registry gate', () => {
     projects: [{ id: 'p', path: '/home/testuser/project' }], activeProjectId: 'p',
     securityScopedBookmarks: ['bookmark'], pinnedDirectories: ['/home/testuser/project'],
     desktopLanAccessEnabled: true, desktopKeepAwakeEnabled: true, desktopMinimizeToTrayEnabled: true, desktopMacMenuBarEnabled: true,
-    desktopUiPassword: 'secret', githubClientId: 'client', githubScopes: 'repo', skillCatalogs: [{ id: 'c', label: 'C', source: 'https://x' }],
+    desktopUiPassword: 'secret', githubClientId: 'client', githubScopes: 'repo', gitlabClientId: 'gitlab-client', skillCatalogs: [{ id: 'c', label: 'C', source: 'https://x' }],
     defaultGitIdentityId: 'global', permissionAutoAccept: { sessions: { s: true }, revision: 1 },
-    agentControlToolEnabled: true, agentWebToolEnabled: true, agentMemoryToolEnabled: true, openCodeUpdateToastDismissedVersion: '1.0.0',
+    agentGitAuthorityEnabled: true, agentControlToolEnabled: true, agentWebToolEnabled: true, agentMemoryToolEnabled: true, openCodeUpdateToastDismissedVersion: '1.0.0',
     autoDeleteEnabled: true, autoDeleteAfterDays: 30, sessionRetentionAction: 'archive', terminalShell: 'zsh', terminalLoginShells: ['zsh'],
     openInAppId: 'vscode', dictationEnabled: true, sttProvider: 'local', sttServerUrl: 'http://localhost:8001/v1', sttModel: 'm', sttLocalModel: 'm', sttLanguage: 'en',
     tunnelProvider: 'cloudflare', tunnelMode: 'quick', tunnelBootstrapTtlMs: 600000, tunnelSessionTtlMs: 86400000, managedLocalTunnelConfigPath: '/tmp/x',
