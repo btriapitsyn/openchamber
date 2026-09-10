@@ -11,9 +11,8 @@ import { cn } from '@/lib/utils';
  * the cheapest possible indicator; motion lives in the 1 Hz elapsed counter
  * (see faa9c243). The opt-in `animatedActivityIndicators` preference swaps
  * the running dot for a `loader-4` spinner stepped to 20 fps
- * (`.activity-spinner`, VS Code's steps() throttling). Under
- * prefers-reduced-motion, CSS hides the spinner and shows the fallback dot,
- * so the preference never overrides the OS setting.
+ * (`.activity-spinner`, VS Code's steps() throttling). The explicit local
+ * preference controls spinner rendering across OpenChamber runtimes.
  */
 export const SessionActivityIndicator: React.FC<{
   /** 'running' (busy/retry) or 'unread' (unseen activity on a settled turn). */
@@ -35,7 +34,6 @@ export const SessionActivityIndicator: React.FC<{
         data-session-activity-indicator={state}
       >
         <Icon name="loader-4" className="activity-spinner h-3 w-3 text-primary" />
-        <span className="activity-spinner-fallback h-1.5 w-1.5 rounded-full bg-primary" />
       </span>
     );
   }

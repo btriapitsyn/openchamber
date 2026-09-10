@@ -40,11 +40,11 @@ cache. Live busy and retry state comes from `global-session-status`, never from
 the global cache or persisted history. A failed global or directory fetch keeps
 existing data; it is never treated as an authoritative empty list.
 
-Activity indicators default to a dot plus a per-session counter. The Appearance
-setting `animatedActivityIndicators` is off by default and swaps running dots
-for the 20 fps stepped `SessionActivityIndicator` spinner; `prefers-reduced-motion`
-always falls back to the dot. The counter/timer behavior is unchanged. Aggregate
-rows show the indicator without a counter.
+Activity indicators default to a dot plus a per-session counter. The local
+Appearance setting `animatedActivityIndicators` is off by default. Enabling it
+swaps running dots for the 20 fps stepped `SessionActivityIndicator` spinner
+across runtimes, even when the OS requests reduced motion. The counter/timer
+behavior is unchanged. Aggregate rows show the indicator without a counter.
 
 Web and desktop show managed Chats before optional Recent activity. Chats use
 their shared managed root for folders and never expose worktree actions. Project

@@ -65,17 +65,26 @@ describe('SessionActivityIndicator', () => {
     expect(markup).not.toContain('activity-spinner');
   });
 
-  test('renders a non-shrinking spinner and fallback dot when animated running indicators are enabled', async () => {
+  test('renders a non-shrinking loader-4 spinner when animated running indicators are enabled', async () => {
     useSessionDisplayStore.setState({ animatedActivityIndicators: true });
 
-    const markup = await renderIndicator({ state: 'running', label: 'Running' });
+    await renderIndicator({ state: 'running', label: 'Running' });
     const indicator = host.querySelector<HTMLElement>('[data-session-activity-indicator="running"]');
 
-    expect(markup).toContain('loader-4');
-    expect(markup).toContain('activity-spinner');
-    expect(markup).toContain('activity-spinner-fallback');
     expect(indicator).not.toBeNull();
-    expect(indicator?.classList).toContain('shrink-0');
+    if (indicator === null) throw new Error('Missing running activity indicator');
+
+    const spinner = indicator.querySelector<SVGSVGElement>('.activity-spinner');
+    expect(spinner).not.toBeNull();
+    if (spinner === null) throw new Error('Missing running activity spinner');
+
+    const iconUse = spinner.querySelector('use');
+    expect(iconUse).not.toBeNull();
+    if (iconUse === null) throw new Error('Missing spinner icon use element');
+
+    expect(iconUse.getAttribute('href')).toBe('#oc-loader-4');
+    expect(indicator.querySelector('.activity-spinner-fallback')).toBeNull();
+    expect(indicator.classList).toContain('shrink-0');
   });
 
   test('renders a non-shrinking static info dot for unread state when animated indicators are enabled', async () => {
