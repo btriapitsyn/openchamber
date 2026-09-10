@@ -90,11 +90,15 @@ beforeEach(() => {
   nextCreateSessionResponse = { id: "ses_default", time: { created: 1 } } as Session
   currentDirectory = null
 
-  // Initialize action refs. The first two args (sdk, childStores) are not
-  // exercised by `createSession` itself, only the directory getter is.
+  // createSession writes the created session into the directory child store, so
+  // ensureChild must return a store API even though these tests do not inspect it.
+  const emptyChildStore = {
+    getState: () => ({ session: [] }),
+    setState: () => undefined,
+  }
   setActionRefs(
     {} as never,
-    { children: new Map(), ensureChild: () => ({}), getChild: () => undefined } as never,
+    { children: new Map(), ensureChild: () => emptyChildStore, getChild: () => undefined } as never,
     () => currentDirectory ?? "",
   )
 })
