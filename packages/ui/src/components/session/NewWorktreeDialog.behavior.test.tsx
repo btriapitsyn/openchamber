@@ -237,7 +237,7 @@ describe('NewWorktreeDialog behavior', () => {
       expect(dom.container.textContent).toContain('Keep the selected issue');
 
       // SAFETY: Test minimal worktree metadata stub for availableWorktreesByProject
-      const worktreeStub = { name: 'newly-created-worktree' } as import('@/lib/worktrees/worktreeManager').WorktreeMetadata;
+      const worktreeStub = { name: 'newly-created-worktree' } as import('@/types/worktree').WorktreeMetadata;
       await act(async () => actualSessionUIStore.useSessionUIStore.setState({
         availableWorktreesByProject: new Map([
           [project.path, [worktreeStub]],
