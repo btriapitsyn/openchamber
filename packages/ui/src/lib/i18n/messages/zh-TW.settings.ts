@@ -1887,7 +1887,7 @@ export const settingsDict = {
   'settings.openchamber.visual.field.streamingAutoFollowInfo': '回覆串流時，畫面會持續捲動到最新內容。關閉後畫面保持不動，可手動捲動；此時從聊天中間傳送訊息也不會移動畫面。',
   'settings.openchamber.visual.field.animatedActivityIndicators': '執行中工作階段的動畫指示器',
   'settings.openchamber.visual.field.animatedActivityIndicatorsAria': '在執行中的工作階段上顯示動畫加載器',
-  'settings.openchamber.visual.field.animatedActivityIndicatorsInfo': '執行中的工作階段顯示動畫加載器而不是靜態圓點。加載器每秒更新 20 次，比圓點消耗更多電力。',
+  'settings.openchamber.visual.field.animatedActivityIndicatorsInfo': '執行中的工作階段顯示動畫加載器而不是靜態圓點。加載器每秒更新 20 次，比圓點消耗更多電力。即使啟用「減少動畫」，此動畫仍會播放。',
   'settings.openchamber.visual.section.messageAppearance': '訊息外觀',
   'settings.openchamber.visual.section.toolsAndFiles': '工具與檔案',
   'settings.openchamber.visual.section.composer': '輸入框',

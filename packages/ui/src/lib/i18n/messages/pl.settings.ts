@@ -1256,7 +1256,7 @@ export const settingsDict = {
   'settings.openchamber.visual.field.streamingAutoFollowInfo': 'Podczas napływania odpowiedzi widok płynnie podąża za najnowszą treścią. Wyłącz, aby widok pozostał nieruchomy i przewijać ręcznie; wysłanie wiadomości ze środka czatu również nie przesunie wtedy widoku.',
   'settings.openchamber.visual.field.animatedActivityIndicators': 'Animowane wskaźniki aktywności',
   'settings.openchamber.visual.field.animatedActivityIndicatorsAria': 'Pokaż animowany spinner dla działających sesji',
-  'settings.openchamber.visual.field.animatedActivityIndicatorsInfo': 'Działające sesje wyświetlają spinner zamiast statycznej kropki. Spinner aktualizuje się 20 razy na sekundę i zużywa więcej energii niż kropka.',
+  'settings.openchamber.visual.field.animatedActivityIndicatorsInfo': 'Działające sesje wyświetlają spinner zamiast statycznej kropki. Spinner aktualizuje się 20 razy na sekundę i zużywa więcej energii niż kropka. Ta animacja jest odtwarzana nawet wtedy, gdy opcja Zmniejsz ruch jest włączona.',
   'settings.openchamber.visual.section.messageAppearance': 'Wygląd wiadomości',
   'settings.openchamber.visual.section.toolsAndFiles': 'Narzędzia i pliki',
   'settings.openchamber.visual.section.composer': 'Pole wiadomości',

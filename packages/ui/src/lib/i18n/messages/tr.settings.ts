@@ -2273,7 +2273,7 @@ export const settingsDict = {
   'settings.openchamber.visual.field.streamingAutoFollowInfo': 'Bir yanıt akarken görünüm en yeni içeriğe doğru kayar. Görünümün sabit kalması için bunu kapatın ve elle kaydırın; bu durumda sohbetin ortasından mesaj göndermek de görünümü yerinden oynatmaz.',
   'settings.openchamber.visual.field.animatedActivityIndicators': 'Animasyonlu çalıştırma göstergeleri',
   'settings.openchamber.visual.field.animatedActivityIndicatorsAria': 'Çalışan oturumların üzerinde animasyonlu döner göster',
-  'settings.openchamber.visual.field.animatedActivityIndicatorsInfo': 'Çalışan oturumlar statik noktanın yerine bir döner gösterir. Döner saniyede 20 kez güncellenir ve noktadan daha fazla enerji tüketir.',
+  'settings.openchamber.visual.field.animatedActivityIndicatorsInfo': 'Çalışan oturumlar statik noktanın yerine bir döner gösterir. Döner saniyede 20 kez güncellenir ve noktadan daha fazla enerji tüketir. Hareketi Azalt etkinleştirildiğinde bile bu animasyon oynatılır.',
   'settings.openchamber.visual.field.sessionTabsGroup': 'Session sekmeleri',
   'settings.openchamber.visual.field.sessionTabs': 'Session\'ları başlıkta sekme olarak göster',
   'settings.openchamber.visual.field.sessionTabsAria': 'Başlıktaki session sekmelerini aç/kapat',

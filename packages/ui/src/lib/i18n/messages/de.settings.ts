@@ -1930,7 +1930,7 @@ export const settingsDict = {
   'settings.openchamber.visual.field.streamingAutoFollowInfo': 'Während eine Antwort eintrifft, folgt die Ansicht laufend dem neuesten Inhalt. Deaktivieren, um die Ansicht ruhig zu halten und manuell zu scrollen; das Senden einer Nachricht aus der Mitte des Chats lässt die Ansicht dann ebenfalls an Ort und Stelle.',
   'settings.openchamber.visual.field.animatedActivityIndicators': 'Animierte Aktivitätsanzeige',
   'settings.openchamber.visual.field.animatedActivityIndicatorsAria': 'Animierten Spinner für laufende Sitzungen anzeigen',
-  'settings.openchamber.visual.field.animatedActivityIndicatorsInfo': 'Laufende Sitzungen zeigen einen Spinner statt des statischen Punkts. Der Spinner aktualisiert sich 20-mal pro Sekunde und verbraucht mehr Energie als der Punkt.',
+  'settings.openchamber.visual.field.animatedActivityIndicatorsInfo': 'Laufende Sitzungen zeigen einen Spinner statt des statischen Punkts. Der Spinner aktualisiert sich 20-mal pro Sekunde und verbraucht mehr Energie als der Punkt. Diese Animation wird auch wiedergegeben, wenn „Bewegung reduzieren“ aktiviert ist.',
   'settings.openchamber.visual.section.messageAppearance': 'Nachrichten-Erscheinungsbild',
   'settings.openchamber.visual.section.toolsAndFiles': 'Werkzeuge & Dateien',
   'settings.openchamber.visual.section.composer': 'Komponist',

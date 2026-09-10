@@ -1894,7 +1894,7 @@ export const settingsDict = {
   'settings.openchamber.visual.field.streamingAutoFollowInfo': 'Pendant qu’une réponse arrive, la vue glisse vers le contenu le plus récent. Désactivez pour garder la vue immobile et défiler manuellement ; envoyer un message depuis le milieu de la conversation laisse alors aussi la vue en place.',
   'settings.openchamber.visual.field.animatedActivityIndicators': 'Indicateurs d\'activité animés',
   'settings.openchamber.visual.field.animatedActivityIndicatorsAria': 'Afficher un indicateur animé sur les sessions en cours d\'exécution',
-  'settings.openchamber.visual.field.animatedActivityIndicatorsInfo': 'Les sessions en cours d\'exécution affichent un indicateur animé au lieu du point statique. L\'indicateur se met à jour 20 fois par seconde et consomme plus d\'énergie que le point.',
+  'settings.openchamber.visual.field.animatedActivityIndicatorsInfo': 'Les sessions en cours d\'exécution affichent un indicateur animé au lieu du point statique. L\'indicateur se met à jour 20 fois par seconde et consomme plus d\'énergie que le point. Cette animation s\'exécute même lorsque l\'option Réduire les animations est activée.',
   'settings.openchamber.visual.section.messageAppearance': 'Apparence des messages',
   'settings.openchamber.visual.section.toolsAndFiles': 'Outils et fichiers',
   'settings.openchamber.visual.section.composer': 'Zone de saisie',

@@ -1980,7 +1980,7 @@ export const settingsDict = {
   "settings.openchamber.visual.field.streamingAutoFollowInfo": "Mientras llega una respuesta, la vista se desplaza hacia el contenido más reciente. Desactívalo para mantener la vista quieta y desplazarte manualmente; enviar un mensaje desde la mitad del chat tampoco moverá la vista.",
   "settings.openchamber.visual.field.animatedActivityIndicators": "Indicadores de actividad animados",
   "settings.openchamber.visual.field.animatedActivityIndicatorsAria": "Mostrar un indicador animado en las sesiones en ejecución",
-  "settings.openchamber.visual.field.animatedActivityIndicatorsInfo": "Las sesiones en ejecución muestran un indicador animado en lugar del punto estático. El indicador se actualiza 20 veces por segundo y consume más energía que el punto.",
+  "settings.openchamber.visual.field.animatedActivityIndicatorsInfo": "Las sesiones en ejecución muestran un indicador animado en lugar del punto estático. El indicador se actualiza 20 veces por segundo y consume más energía que el punto. Esta animación se reproduce incluso cuando se habilita Reducir movimiento.",
   "settings.openchamber.visual.section.messageAppearance": "Apariencia de los mensajes",
   "settings.openchamber.visual.section.toolsAndFiles": "Herramientas y archivos",
   "settings.openchamber.visual.section.composer": "Compositor",

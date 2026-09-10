@@ -1980,7 +1980,7 @@ export const settingsDict = {
   'settings.openchamber.visual.field.streamingAutoFollowInfo': '回复流式输出时，视图会持续滚动到最新内容。关闭后视图保持不动，可手动滚动；此时从聊天中间发送消息也不会移动视图。',
   'settings.openchamber.visual.field.animatedActivityIndicators': '运行中会话的动画指示器',
   'settings.openchamber.visual.field.animatedActivityIndicatorsAria': '在运行中的会话上显示动画加载器',
-  'settings.openchamber.visual.field.animatedActivityIndicatorsInfo': '运行中的会话显示动画加载器而不是静态圆点。加载器每秒更新 20 次，比圆点消耗更多能量。',
+  'settings.openchamber.visual.field.animatedActivityIndicatorsInfo': '运行中的会话显示动画加载器而不是静态圆点。加载器每秒更新 20 次，比圆点消耗更多能量。即使启用了“减少动画”，此动画也会播放。',
   'settings.openchamber.visual.section.messageAppearance': '消息外观',
   'settings.openchamber.visual.section.toolsAndFiles': '工具和文件',
   'settings.openchamber.visual.section.composer': '输入框',

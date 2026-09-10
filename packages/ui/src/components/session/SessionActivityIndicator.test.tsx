@@ -1,10 +1,13 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
 import { Window } from 'happy-dom';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { SessionActivityIndicator } from './SessionActivityIndicator';
+
+const sessionTabsStripSource = readFileSync(new URL('../layout/SessionTabsStrip.tsx', import.meta.url), 'utf8');
 
 describe('SessionActivityIndicator', () => {
   let windowInstance: Window;
@@ -97,5 +100,10 @@ describe('SessionActivityIndicator', () => {
     expect(indicator?.classList).toContain('bg-[var(--status-info)]');
     expect(indicator?.classList).toContain('shrink-0');
     expect(markup).not.toContain('activity-spinner');
+  });
+
+  test('is used by header session tabs for running and unread activity', () => {
+    expect(sessionTabsStripSource).toContain('<SessionActivityIndicator');
+    expect(sessionTabsStripSource).toContain("state={isStreaming ? 'running' : 'unread'}");
   });
 });

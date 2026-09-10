@@ -2013,7 +2013,7 @@ export const settingsDict = {
   'settings.openchamber.visual.field.streamingAutoFollowInfo': '応答の受信中、ビューは常に最新の内容へスクロールします。オフにするとビューは動かず、手動でスクロールできます。その場合、チャットの途中からメッセージを送信してもビューは移動しません。',
   'settings.openchamber.visual.field.animatedActivityIndicators': '実行中セッションのアニメーションインジケータ',
   'settings.openchamber.visual.field.animatedActivityIndicatorsAria': '実行中セッションにアニメーションスピナーを表示',
-  'settings.openchamber.visual.field.animatedActivityIndicatorsInfo': '実行中セッションは静的なドットの代わりにスピナーを表示します。スピナーは1秒あたり20回更新され、ドットよりも多くのエネルギーを消費します。',
+  'settings.openchamber.visual.field.animatedActivityIndicatorsInfo': '実行中セッションは静的なドットの代わりにスピナーを表示します。スピナーは1秒あたり20回更新され、ドットよりも多くのエネルギーを消費します。このアニメーションは「動きを減らす」が有効な場合でも再生されます。',
   'settings.openchamber.visual.section.messageAppearance': 'メッセージの外観',
   'settings.openchamber.visual.section.toolsAndFiles': 'ツールとファイル',
   'settings.openchamber.visual.section.composer': '入力欄',

@@ -1980,7 +1980,7 @@ export const settingsDict = {
   "settings.openchamber.visual.field.streamingAutoFollowInfo": "Поки відповідь надходить, вигляд плавно рухається до найновішого вмісту. Вимкніть, щоб вигляд залишався нерухомим і гортати вручну; тоді й надсилання повідомлення з середини чату не зсуватиме вигляд.",
   "settings.openchamber.visual.field.animatedActivityIndicators": "Анімовані індикатори активності",
   "settings.openchamber.visual.field.animatedActivityIndicatorsAria": "Показувати анімований спінер для запущених сесій",
-  "settings.openchamber.visual.field.animatedActivityIndicatorsInfo": "Запущені сесії показують спінер замість статичної крапки. Спінер оновлюється 20 разів на секунду й споживає більше енергії, ніж крапка.",
+  "settings.openchamber.visual.field.animatedActivityIndicatorsInfo": "Запущені сесії показують спінер замість статичної крапки. Спінер оновлюється 20 разів на секунду й споживає більше енергії, ніж крапка. Ця анімація відтворюється навіть якщо увімкнено Зменшення руху.",
   "settings.openchamber.visual.section.messageAppearance": "Вигляд повідомлень",
   "settings.openchamber.visual.section.toolsAndFiles": "Інструменти та файли",
   "settings.openchamber.visual.section.composer": "Поле вводу",

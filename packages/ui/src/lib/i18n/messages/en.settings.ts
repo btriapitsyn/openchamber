@@ -2003,7 +2003,7 @@ export const settingsDict = {
   'settings.openchamber.visual.field.streamingAutoFollowInfo': 'While a reply streams in, the view keeps gliding to the newest content. Turn this off to keep the view still and scroll manually; sending a message while scrolled up then also leaves the view where it is.',
   'settings.openchamber.visual.field.animatedActivityIndicators': 'Animated running indicators',
   'settings.openchamber.visual.field.animatedActivityIndicatorsAria': 'Show an animated spinner on running sessions',
-  'settings.openchamber.visual.field.animatedActivityIndicatorsInfo': 'Running sessions show a spinner instead of the static dot. The spinner updates 20 times per second and uses more energy than the dot.',
+  'settings.openchamber.visual.field.animatedActivityIndicatorsInfo': 'Running sessions show a spinner instead of the static dot. The spinner updates 20 times per second and uses more energy than the dot. This animation plays even when Reduce Motion is enabled.',
   'settings.openchamber.visual.section.messageAppearance': 'Message Appearance',
   'settings.openchamber.visual.section.toolsAndFiles': 'Tools & Files',
   'settings.openchamber.visual.section.composer': 'Composer',
