@@ -101,8 +101,9 @@ Ein Panel zeichnen und die aktuelle Session lesen braucht keine Berechtigung. Al
 | --- | --- |
 | `prompt` | Nachrichten in die Session des Nutzers senden (`prompt({ send: true })`, `startSession` mit `text`) |
 | `sessions` | Sessions und Worktrees anlegen (`startSession`) |
+| `files` | Dateien innerhalb des offenen Projekts lesen und schreiben (`readFile`, `writeFile`, `listDir`, `stat` mit einem relativen Pfad) |
 
-Zwei weitere kommen automatisch dazu: `network`, wenn du eine `integration` deklarierst, und `service`, wenn du einen `service` deklarierst.
+Drei weitere kommen automatisch dazu: `network`, wenn du eine `integration` deklarierst, `service`, wenn du einen `service` deklarierst, und `filesystem`, wenn du `filesystem`-Muster deklarierst.
 
 Der Nutzer sieht die vollständige Liste einmal, bei der Installation der Erweiterung, und bestätigt sie oder entfernt die Erweiterung. Fordert eine neue Version mehr an, erscheint der Dialog erneut. Ein Aufruf, der eine nicht bestätigte Berechtigung braucht, schlägt mit `NOT_GRANTED` fehl.
 
@@ -123,6 +124,27 @@ Was jedes `scheme` sendet:
 | `"basic"` | `Authorization: Basic base64(username:token)` | die API dokumentiert HTTP Basic Auth mit Benutzername (oft eine E-Mail) und API-Token; die Karte fragt nach beidem, und `usernameLabel` beschriftet das erste Feld |
 
 `settings` fügt der Karte einfache Textfelder hinzu. Ihre Werte kommen in `ctx.settings` an.
+
+## Dateien
+
+Deine Seite kann die Festplatte nicht selbst anfassen. OpenChamber liest und schreibt für sie, innerhalb der Grenzen, die der Nutzer bestätigt hat.
+
+- Ein relativer Pfad (`README.md`, `src/index.ts`, `.`) meint das offene Projekt. Braucht die Berechtigung `files`. Kein offenes Projekt ist `NO_DIRECTORY`.
+- Ein Pfad, der mit `/` oder `~/` beginnt, meint irgendwo sonst. Er muss zu einem der Muster passen, die du in `contributes.filesystem` deklarierst, und der Nutzer sieht genau diese Muster im Bestätigungsdialog:
+
+```json
+"filesystem": ["~/.config/opencode/opencode.json", "~/notes/**"]
+```
+
+In Mustern steht `*` für ein Pfadsegment und `**` für beliebige Tiefe. Alles außerhalb davon ist `BAD_PATH`, auch nach der Bestätigung. `..` ist nie erlaubt.
+
+```ts
+const config = await host.readFile("~/.config/opencode/opencode.json");
+await host.writeFile("~/.config/opencode/opencode.json", nextJson);
+const { entries } = await host.listDir(".");
+```
+
+Schreibvorgänge sind atomar: OpenChamber schreibt eine temporäre Datei und benennt sie um, ein Leser sieht also nie eine halb geschriebene Datei. Dateien werden als UTF-8-Text gelesen und geschrieben, bis 2 MB.
 
 ## Die ersten Zeilen im Panel
 

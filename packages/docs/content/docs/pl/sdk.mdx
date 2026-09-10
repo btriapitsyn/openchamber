@@ -101,8 +101,9 @@ Rysowanie panelu i odczyt bieżącej sesji nie wymagają żadnej zgody. Wszystko
 | --- | --- |
 | `prompt` | wysyłanie wiadomości do sesji użytkownika (`prompt({ send: true })`, `startSession` z `text`) |
 | `sessions` | tworzenie sesji i worktree (`startSession`) |
+| `files` | odczyt i zapis plików w otwartym projekcie (`readFile`, `writeFile`, `listDir`, `stat` ze ścieżką względną) |
 
-Dwa kolejne są dodawane automatycznie: `network`, gdy deklarujesz `integration`, oraz `service`, gdy deklarujesz `service`.
+Trzy kolejne są dodawane automatycznie: `network`, gdy deklarujesz `integration`, `service`, gdy deklarujesz `service`, oraz `filesystem`, gdy deklarujesz wzorce `filesystem`.
 
 Użytkownik widzi pełną listę raz, przy instalacji rozszerzenia, i albo ją zatwierdza, albo usuwa rozszerzenie. Jeśli nowa wersja prosi o więcej, okno pojawia się ponownie. Wywołanie, które wymaga niezatwierdzonego uprawnienia, kończy się błędem `NOT_GRANTED`.
 
@@ -123,6 +124,27 @@ Co wysyła każdy `scheme`:
 | `"basic"` | `Authorization: Basic base64(username:token)` | API dokumentuje HTTP Basic auth z nazwą użytkownika (często e-mail) i tokenem API; karta prosi o oba, a `usernameLabel` nazywa pierwsze pole |
 
 `settings` dodaje do karty zwykłe pola tekstowe. Ich wartości trafiają do `ctx.settings`.
+
+## Pliki
+
+Twoja strona nie może sama dotykać dysku. OpenChamber czyta i zapisuje za nią, w granicach zatwierdzonych przez użytkownika.
+
+- Ścieżka względna (`README.md`, `src/index.ts`, `.`) oznacza otwarty projekt. Wymaga uprawnienia `files`. Brak otwartego projektu to `NO_DIRECTORY`.
+- Ścieżka zaczynająca się od `/` lub `~/` oznacza dowolne inne miejsce. Musi pasować do jednego ze wzorców zadeklarowanych w `contributes.filesystem`, a użytkownik widzi dokładnie te wzorce w oknie zatwierdzania:
+
+```json
+"filesystem": ["~/.config/opencode/opencode.json", "~/notes/**"]
+```
+
+Wzorce używają `*` dla jednego segmentu ścieżki i `**` dla dowolnej głębokości. Wszystko poza nimi to `BAD_PATH`, nawet po zatwierdzeniu. `..` nigdy nie jest dozwolone.
+
+```ts
+const config = await host.readFile("~/.config/opencode/opencode.json");
+await host.writeFile("~/.config/opencode/opencode.json", nextJson);
+const { entries } = await host.listDir(".");
+```
+
+Zapisy są atomowe: OpenChamber zapisuje plik tymczasowy i zmienia jego nazwę, więc czytający nigdy nie zobaczy pliku zapisanego do połowy. Pliki są czytane i zapisywane jako tekst UTF-8, do 2 MB.
 
 ## Pierwsze linie w panelu
 

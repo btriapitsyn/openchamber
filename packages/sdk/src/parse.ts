@@ -3,7 +3,11 @@ import { z } from 'zod';
 import { OPENCHAMBER_SDK_MANIFEST_API_VERSIONS } from './api-version.ts';
 import { OPENCHAMBER_ENGINE_PATTERN } from './host-version.ts';
 import {
+  DECLARED_GUEST_CAPABILITIES,
+  GUEST_FILESYSTEM_PATTERNS_MAX,
+  GUEST_FILESYSTEM_PATTERN_MAX,
   PANEL_ID,
+  isGuestFilesystemPattern,
   isGuestPackageSvgIcon,
   isSafeAssetPath,
   resolveIntegrationAuth,
@@ -177,9 +181,12 @@ export const openChamberManifestSchema = z.object({
   contributes: z.object({
     panel: panelSchema,
     attach: z.union([z.boolean(), z.enum(['panel', 'dialog'])]).optional(),
-    capabilities: z.array(z.enum(['prompt', 'sessions'])).max(8).optional(),
+    capabilities: z.array(z.enum(DECLARED_GUEST_CAPABILITIES)).max(8).optional(),
     integration: integrationSchema.optional(),
     service: serviceSchema.optional(),
+    filesystem: z.array(
+      z.string().max(GUEST_FILESYSTEM_PATTERN_MAX).refine(isGuestFilesystemPattern),
+    ).min(1).max(GUEST_FILESYSTEM_PATTERNS_MAX).optional(),
   }),
 });
 
@@ -243,12 +250,18 @@ const failureFromIssue = (issue: { path: ReadonlyArray<PropertyKey>; code: strin
     case 'contributes.attach':
       return fail('invalid-attach', 'contributes.attach must be true, false, "panel", or "dialog".');
     case 'contributes.capabilities':
-      return fail('invalid-capabilities', 'contributes.capabilities may list "prompt" and "sessions".');
+      return fail('invalid-capabilities', 'contributes.capabilities may list "prompt", "sessions", and "files".');
     default:
       break;
   }
   if (path.startsWith('contributes.capabilities')) {
-    return fail('invalid-capabilities', 'contributes.capabilities may list "prompt" and "sessions".');
+    return fail('invalid-capabilities', 'contributes.capabilities may list "prompt", "sessions", and "files".');
+  }
+  if (path.startsWith('contributes.filesystem')) {
+    return fail(
+      'invalid-filesystem',
+      'contributes.filesystem lists 1 to 16 patterns starting with "/" or "~/", without "..", empty segments, or backslashes.',
+    );
   }
   if (path.startsWith('contributes.integration')) {
     return fail(

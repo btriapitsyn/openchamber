@@ -2,7 +2,13 @@ import { describe, expect, test } from 'bun:test';
 
 import { OPENCHAMBER_SDK_API_VERSION, OPENCHAMBER_SDK_CHANNEL } from './api-version.ts';
 import { connectHost, HostRequestError, type HostFrame } from './host.ts';
-import { GUEST_ATTACH_TITLE_MAX, type GuestMessage, type HostMessage } from './contract.ts';
+import {
+  GUEST_ATTACH_TITLE_MAX,
+  GUEST_FILE_CONTENT_MAX,
+  GUEST_FILE_PATH_MAX,
+  type GuestMessage,
+  type HostMessage,
+} from './contract.ts';
 
 type Listener = (event: Event) => void;
 
@@ -531,6 +537,56 @@ describe('connectHost', () => {
       status: 200,
       body: '{"user":{"username":"ada"}}',
     });
+    host.dispose();
+  });
+
+  test('posts file calls and narrows their results', async () => {
+    const parent = createFrame();
+    const guest = createFrame();
+    guest.parent = parent.parent;
+    const host = connectHost({ target: guest, acceptSource: () => true });
+    const answer = (index: number, type: GuestMessage['type'], payload: object) => {
+      const posted = parent.posted[index];
+      if (posted?.type !== type || !('id' in posted)) {
+        throw new Error(`expected ${type}`);
+      }
+      guest.dispatch(new MessageEvent('message', {
+        data: { channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'result', id: posted.id, ok: true, payload },
+      }));
+      return posted;
+    };
+    const read = host.readFile('README.md');
+    expect(answer(1, 'file-read', { content: '# hi' })).toMatchObject({ payload: { path: 'README.md' } });
+    await expect(read).resolves.toEqual({ content: '# hi' });
+
+    const write = host.writeFile('notes.txt', 'x');
+    expect(answer(2, 'file-write', { written: true })).toMatchObject({ payload: { path: 'notes.txt', content: 'x' } });
+    await expect(write).resolves.toEqual({ written: true });
+
+    const list = host.listDir('.');
+    answer(3, 'file-list', { entries: [{ name: 'a', kind: 'file' }] });
+    await expect(list).resolves.toEqual({ entries: [{ name: 'a', kind: 'file' }] });
+
+    const stat = host.stat('~/.config/x');
+    answer(4, 'file-stat', { kind: 'missing', size: 0, mtime: 0 });
+    await expect(stat).resolves.toEqual({ kind: 'missing', size: 0, mtime: 0 });
+
+    // A wrong-shaped answer is a host refusal, not a silently wrong value.
+    const mismatch = host.readFile('a');
+    answer(5, 'file-read', { written: true });
+    await expect(mismatch).rejects.toMatchObject({ code: 'HOST_REJECTED' });
+    host.dispose();
+  });
+
+  test('refuses a bad file path or oversized content without posting', async () => {
+    const parent = createFrame();
+    const guest = createFrame();
+    guest.parent = parent.parent;
+    const host = connectHost({ target: guest, acceptSource: () => true });
+    await expect(host.readFile('')).rejects.toMatchObject({ code: 'BAD_PATH' });
+    await expect(host.stat('x'.repeat(GUEST_FILE_PATH_MAX + 1))).rejects.toMatchObject({ code: 'BAD_PATH' });
+    await expect(host.writeFile('a', 'x'.repeat(GUEST_FILE_CONTENT_MAX + 1))).rejects.toMatchObject({ code: 'FILE_TOO_LARGE' });
+    expect(parent.posted).toHaveLength(1);
     host.dispose();
   });
 

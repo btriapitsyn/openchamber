@@ -53,6 +53,10 @@ const host = connectHost();
 | `request({ method, path, query?, body? })` | 사용자의 토큰을 붙여 통합의 `apiOrigin` 호출 |
 | `serviceRequest({ method, path, query?, body? })` | 확장의 로컬 서비스 호출(`GUEST_SERVICES.md` 참고) |
 | `serviceStatus()` | `stopped`, `starting`, `ready`, `failed` 중 하나 |
+| `readFile(path)` | 텍스트 파일 읽기. `{ content }`를 반환. |
+| `writeFile(path, content)` | 텍스트 파일을 원자적으로 쓰고, 상위 폴더도 만듦. `{ written: true }`를 반환. |
+| `listDir(path)` | 폴더 목록. `{ entries: [{ name, kind }] }`를 반환하며, `kind`는 `file`, `directory`, `other` 중 하나. |
+| `stat(path)` | `{ kind, size, mtime }`. `kind`는 `file`, `directory`, `other`, `missing` 중 하나. |
 
 ## attach, startSession, sessionLink
 
@@ -153,6 +157,19 @@ const result = await host.serviceRequest({ method: "GET", path: "/containers" })
 
 `path`는 `request`와 같은 규칙을 따릅니다. 로컬 서비스를 선언하면 설치 시 사용자가 승인하는 권한에 `service`가 추가됩니다. 승인 전에는 모든 `serviceRequest`가 `NO_SERVICE`입니다. 전체 계약은 패키지 파일 `GUEST_SERVICES.md`에 있습니다.
 
+## 파일
+
+상대 경로는 열린 프로젝트 안을 가리키며 `files` 권한이 필요합니다. `/` 또는 `~/`로 시작하는 경로는 선언된 `contributes.filesystem` 패턴과 일치해야 하며 `filesystem` 권한이 필요합니다. 규칙은 [확장 만들기](/sdk/#파일)를 참고하세요.
+
+```ts
+const { content } = await host.readFile("package.json");
+await host.writeFile("notes/today.md", "# Today\n");
+const { entries } = await host.listDir("src");
+const info = await host.stat("~/.config/opencode/opencode.json");
+```
+
+제한: 경로는 최대 1024자, 내용은 최대 2,000,000자, 목록은 최대 2000개 항목. 내용 제한을 넘으면 `FILE_TOO_LARGE`입니다.
+
 ## 오류 코드
 
 실패한 호출은 `HostRequestError`를 throw합니다. `code`는 다음 중 하나이며, `message`에 자세한 내용이 있습니다.
@@ -171,6 +188,10 @@ const result = await host.serviceRequest({ method: "GET", path: "/containers" })
 | `NO_SERVICE` | 로컬 서비스가 선언되지 않았거나, 승인되지 않았거나, 실행 중이 아님 |
 | `NOT_GRANTED` | 이 호출에 필요한 권한을 사용자가 승인하지 않음 |
 | `SERVICE_FAILED` | 로컬 서비스가 충돌했거나 ready 상태가 되지 못함 |
+| `NO_DIRECTORY` | 열린 프로젝트 없이 상대 파일 경로를 사용함 |
+| `NOT_FOUND` | 존재하지 않는 파일에 대한 `readFile` |
+| `FILE_TOO_LARGE` | 읽기 또는 쓰기 시 파일 내용이 제한을 넘음 |
+| `DENIED` | 운영 체제가 파일 작업을 거부함 |
 
 ## 관련 문서
 

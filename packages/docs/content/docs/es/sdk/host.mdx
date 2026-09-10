@@ -53,6 +53,10 @@ Los tokens de acceso nunca aparecen aquí ni en el resultado de un `request`.
 | `request({ method, path, query?, body? })` | llama al `apiOrigin` de tu integración con el token del usuario adjunto |
 | `serviceRequest({ method, path, query?, body? })` | llama al servicio local de tu extensión (consulta `GUEST_SERVICES.md`) |
 | `serviceStatus()` | `stopped`, `starting`, `ready` o `failed` |
+| `readFile(path)` | lee un archivo de texto. Devuelve `{ content }`. |
+| `writeFile(path, content)` | escribe un archivo de texto de forma atómica, creando las carpetas superiores. Devuelve `{ written: true }`. |
+| `listDir(path)` | lista una carpeta. Devuelve `{ entries: [{ name, kind }] }`, `kind` es `file`, `directory` u `other`. |
+| `stat(path)` | `{ kind, size, mtime }`, `kind` es `file`, `directory`, `other` o `missing`. |
 
 ## attach, startSession y sessionLink
 
@@ -153,6 +157,19 @@ const result = await host.serviceRequest({ method: "GET", path: "/containers" })
 
 `path` sigue las mismas reglas que `request`. Declarar un servicio local añade `service` a las capacidades que el usuario aprueba al instalar; hasta entonces, cada `serviceRequest` es `NO_SERVICE`. El contrato completo está en el archivo `GUEST_SERVICES.md` del paquete.
 
+## Archivos
+
+Una ruta relativa está dentro del proyecto abierto y necesita la capacidad `files`. Una ruta que empieza por `/` o `~/` debe coincidir con un patrón declarado en `contributes.filesystem` y necesita la capacidad `filesystem`. Consulta [Crea una extensión](/sdk/#archivos) para las reglas.
+
+```ts
+const { content } = await host.readFile("package.json");
+await host.writeFile("notes/today.md", "# Today\n");
+const { entries } = await host.listDir("src");
+const info = await host.stat("~/.config/opencode/opencode.json");
+```
+
+Límites: ruta de hasta 1024 caracteres, contenido de hasta 2,000,000 caracteres, listado de hasta 2000 entradas. Superar el límite de contenido es `FILE_TOO_LARGE`.
+
 ## Códigos de error
 
 Las llamadas fallidas lanzan `HostRequestError`. `code` es uno de estos; `message` da más detalles.
@@ -171,6 +188,10 @@ Las llamadas fallidas lanzan `HostRequestError`. `code` es uno de estos; `messag
 | `NO_SERVICE` | no hay servicio local declarado, no está aprobado o no está en ejecución |
 | `NOT_GRANTED` | el usuario no ha aprobado la capacidad que necesita esta llamada |
 | `SERVICE_FAILED` | el servicio local falló o nunca llegó a estar listo |
+| `NO_DIRECTORY` | se usó una ruta de archivo relativa sin proyecto abierto |
+| `NOT_FOUND` | `readFile` sobre un archivo que no existe |
+| `FILE_TOO_LARGE` | contenido del archivo por encima del límite, al leer o escribir |
+| `DENIED` | el sistema operativo rechazó la operación sobre el archivo |
 
 ## Relacionado
 

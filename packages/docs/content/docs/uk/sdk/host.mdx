@@ -53,6 +53,10 @@ const host = connectHost();
 | `request({ method, path, query?, body? })` | викликати `apiOrigin` вашої інтеграції з доданим токеном користувача |
 | `serviceRequest({ method, path, query?, body? })` | викликати локальний сервіс вашого розширення (див. `GUEST_SERVICES.md`) |
 | `serviceStatus()` | `stopped`, `starting`, `ready` або `failed` |
+| `readFile(path)` | прочитати текстовий файл. Повертає `{ content }`. |
+| `writeFile(path, content)` | атомарно записати текстовий файл, створюючи батьківські теки. Повертає `{ written: true }`. |
+| `listDir(path)` | перелічити теку. Повертає `{ entries: [{ name, kind }] }`, `kind` - `file`, `directory` або `other`. |
+| `stat(path)` | `{ kind, size, mtime }`, `kind` - `file`, `directory`, `other` або `missing`. |
 
 ## attach, startSession і sessionLink
 
@@ -153,6 +157,19 @@ const result = await host.serviceRequest({ method: "GET", path: "/containers" })
 
 `path` підкоряється тим самим правилам, що й у `request`. Оголошення сервісу додає `service` до дозволів, які користувач підтверджує під час встановлення; до того кожен `serviceRequest` - `NO_SERVICE`. Повний контракт: файл пакета `GUEST_SERVICES.md`.
 
+## Файли
+
+Відносний шлях лежить усередині відкритого проєкту і потребує дозволу `files`. Шлях, що починається з `/` або `~/`, має збігатися з оголошеним шаблоном `contributes.filesystem` і потребує дозволу `filesystem`. Правила див. у [Зробити розширення](/sdk/#файли).
+
+```ts
+const { content } = await host.readFile("package.json");
+await host.writeFile("notes/today.md", "# Today\n");
+const { entries } = await host.listDir("src");
+const info = await host.stat("~/.config/opencode/opencode.json");
+```
+
+Обмеження: шлях до 1024 символів, вміст до 2,000,000 символів, список до 2000 записів. Перевищення обмеження вмісту - `FILE_TOO_LARGE`.
+
 ## Коди помилок
 
 Невдалі виклики кидають `HostRequestError`. `code` - один із цих; `message` пояснює докладніше.
@@ -171,6 +188,10 @@ const result = await host.serviceRequest({ method: "GET", path: "/containers" })
 | `NO_SERVICE` | сервіс не оголошено, не підтверджено або не запущено |
 | `NOT_GRANTED` | користувач не підтвердив дозвіл, потрібний для цього виклику |
 | `SERVICE_FAILED` | сервіс упав або так і не став готовим |
+| `NO_DIRECTORY` | відносний шлях до файлу використано без відкритого проєкту |
+| `NOT_FOUND` | `readFile` файлу, якого не існує |
+| `FILE_TOO_LARGE` | вміст файлу перевищує обмеження, під час читання або запису |
+| `DENIED` | операційна система відмовила у файловій операції |
 
 ## Дивіться також
 

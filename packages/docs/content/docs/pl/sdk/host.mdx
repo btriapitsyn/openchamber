@@ -53,6 +53,10 @@ Tokeny dostępu nigdy nie pojawiają się tutaj ani w wyniku `request`.
 | `request({ method, path, query?, body? })` | wywołuje `apiOrigin` Twojej integracji z dołączonym tokenem użytkownika |
 | `serviceRequest({ method, path, query?, body? })` | wywołuje usługę lokalną Twojego rozszerzenia (zobacz `GUEST_SERVICES.md`) |
 | `serviceStatus()` | `stopped`, `starting`, `ready` lub `failed` |
+| `readFile(path)` | czyta plik tekstowy. Zwraca `{ content }`. |
+| `writeFile(path, content)` | zapisuje plik tekstowy atomowo, tworząc foldery nadrzędne. Zwraca `{ written: true }`. |
+| `listDir(path)` | wypisuje zawartość folderu. Zwraca `{ entries: [{ name, kind }] }`, `kind` to `file`, `directory` lub `other`. |
+| `stat(path)` | `{ kind, size, mtime }`, `kind` to `file`, `directory`, `other` lub `missing`. |
 
 ## attach, startSession i sessionLink
 
@@ -153,6 +157,19 @@ const result = await host.serviceRequest({ method: "GET", path: "/containers" })
 
 `path` podlega tym samym zasadom co w `request`. Zadeklarowanie usługi lokalnej dodaje `service` do uprawnień, które użytkownik zatwierdza przy instalacji; do tego czasu każde `serviceRequest` to `NO_SERVICE`. Pełny kontrakt: plik `GUEST_SERVICES.md` w pakiecie.
 
+## Pliki
+
+Ścieżka względna leży w otwartym projekcie i wymaga uprawnienia `files`. Ścieżka zaczynająca się od `/` lub `~/` musi pasować do zadeklarowanego wzorca `contributes.filesystem` i wymaga uprawnienia `filesystem`. Zasady opisuje [Tworzenie rozszerzenia](/sdk/#pliki).
+
+```ts
+const { content } = await host.readFile("package.json");
+await host.writeFile("notes/today.md", "# Today\n");
+const { entries } = await host.listDir("src");
+const info = await host.stat("~/.config/opencode/opencode.json");
+```
+
+Limity: ścieżka do 1024 znaków, treść do 2 000 000 znaków, listing do 2000 wpisów. Przekroczenie limitu treści to `FILE_TOO_LARGE`.
+
 ## Kody błędów
 
 Nieudane wywołania rzucają `HostRequestError`. `code` to jeden z poniższych; `message` mówi więcej.
@@ -171,6 +188,10 @@ Nieudane wywołania rzucają `HostRequestError`. `code` to jeden z poniższych; 
 | `NO_SERVICE` | usługa lokalna niezadeklarowana, niezatwierdzona albo nieuruchomiona |
 | `NOT_GRANTED` | użytkownik nie zatwierdził uprawnienia, którego wymaga to wywołanie |
 | `SERVICE_FAILED` | usługa lokalna padła albo nigdy nie osiągnęła gotowości |
+| `NO_DIRECTORY` | względna ścieżka pliku użyta bez otwartego projektu |
+| `NOT_FOUND` | `readFile` na pliku, który nie istnieje |
+| `FILE_TOO_LARGE` | treść pliku ponad limit, przy odczycie lub zapisie |
+| `DENIED` | system operacyjny odmówił operacji na pliku |
 
 ## Zobacz też
 

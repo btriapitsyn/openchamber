@@ -13,6 +13,11 @@ import {
   GUEST_ATTACH_URL_MAX,
   GUEST_CLIPBOARD_TEXT_MAX,
   GUEST_COMPOSE_TEXT_MAX,
+  GUEST_FILE_CONTENT_MAX,
+  GUEST_FILE_ENTRY_KINDS,
+  GUEST_FILE_LIST_MAX,
+  GUEST_FILE_PATH_MAX,
+  GUEST_FILE_STAT_KINDS,
   GUEST_REQUEST_BODY_MAX,
   GUEST_REQUEST_PATH_MAX,
   GUEST_REQUEST_RESPONSE_MAX,
@@ -23,6 +28,7 @@ import {
   SESSION_LIFECYCLE_PHASES,
   SETTING_KEY,
   START_SESSION_SENT,
+  isGuestFilePath,
   isGuestRequestPath,
   resolveHostRequestErrorCode,
   type GuestMessage,
@@ -95,11 +101,36 @@ const serviceStatusResultPayloadSchema = z.object({
   status: z.enum(SERVICE_STATUS_VALUES),
 });
 
+const fileReadResultPayloadSchema = z.object({
+  content: z.string().max(GUEST_FILE_CONTENT_MAX),
+});
+
+const fileWriteResultPayloadSchema = z.object({
+  written: z.literal(true),
+});
+
+const fileListResultPayloadSchema = z.object({
+  entries: z.array(z.object({
+    name: z.string().min(1),
+    kind: z.enum(GUEST_FILE_ENTRY_KINDS),
+  })).max(GUEST_FILE_LIST_MAX),
+});
+
+const fileStatResultPayloadSchema = z.object({
+  kind: z.enum(GUEST_FILE_STAT_KINDS),
+  size: z.number().int().min(0),
+  mtime: z.number().int().min(0),
+});
+
 const hostResultPayloadSchema = z.union([
   startSessionResultPayloadSchema,
   requestResultPayloadSchema,
   promptResultPayloadSchema,
   serviceStatusResultPayloadSchema,
+  fileReadResultPayloadSchema,
+  fileWriteResultPayloadSchema,
+  fileListResultPayloadSchema,
+  fileStatResultPayloadSchema,
 ]);
 
 const readyPayloadSchema = z.object({
@@ -216,6 +247,8 @@ const attachPayloadSchema = z.object({
     base: z.string().trim().min(1).max(GUEST_ATTACH_BRANCH_MAX),
   }).optional(),
 });
+
+const filePathSchema = z.string().min(1).max(GUEST_FILE_PATH_MAX).refine(isGuestFilePath);
 
 export const guestMessageSchema = z.discriminatedUnion('type', [
   z.object({
@@ -334,6 +367,33 @@ export const guestMessageSchema = z.discriminatedUnion('type', [
     ...envelope,
     type: z.literal('service-status'),
     id: z.string().min(1),
+  }),
+  z.object({
+    ...envelope,
+    type: z.literal('file-read'),
+    id: z.string().min(1),
+    payload: z.object({ path: filePathSchema }),
+  }),
+  z.object({
+    ...envelope,
+    type: z.literal('file-write'),
+    id: z.string().min(1),
+    payload: z.object({
+      path: filePathSchema,
+      content: z.string().max(GUEST_FILE_CONTENT_MAX),
+    }),
+  }),
+  z.object({
+    ...envelope,
+    type: z.literal('file-list'),
+    id: z.string().min(1),
+    payload: z.object({ path: filePathSchema }),
+  }),
+  z.object({
+    ...envelope,
+    type: z.literal('file-stat'),
+    id: z.string().min(1),
+    payload: z.object({ path: filePathSchema }),
   }),
 ]);
 

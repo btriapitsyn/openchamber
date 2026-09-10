@@ -10,7 +10,10 @@ const GUEST_SOURCES = ['path', 'zip', 'git'];
 const storeSchema = z.object({
   paths: z.array(z.string().min(1).refine((entry) => !entry.includes('\0'))),
   sources: z.record(z.string(), z.enum(GUEST_SOURCES)).optional(),
-  capabilityGrants: z.record(z.string(), z.array(z.enum(GUEST_CAPABILITIES))).optional(),
+  // Grants are stored as plain strings and filtered on read: a capability
+  // that this build no longer knows (renamed, removed) must not invalidate the
+  // whole store and hide every installed extension.
+  capabilityGrants: z.record(z.string(), z.array(z.string())).optional(),
   disabledGuests: z.record(z.string(), z.literal(true)).optional(),
   serviceSocketOverrides: z.record(
     z.string(),
@@ -63,6 +66,12 @@ const emptyStore = () => ({
   serviceSocketOverrides: {},
 });
 
+const knownCapabilities = new Set(GUEST_CAPABILITIES);
+
+const knownGrantsOnly = (grants) => Object.fromEntries(
+  Object.entries(grants).map(([guestId, list]) => [guestId, list.filter((capability) => knownCapabilities.has(capability))]),
+);
+
 export const readExtensionStore = async (persistPath) => {
   try {
     const raw = await fs.readFile(persistPath, 'utf8');
@@ -73,7 +82,7 @@ export const readExtensionStore = async (persistPath) => {
     return {
       paths: parsed.paths,
       sources: parsed.sources ?? {},
-      capabilityGrants: parsed.capabilityGrants ?? {},
+      capabilityGrants: knownGrantsOnly(parsed.capabilityGrants ?? {}),
       disabledGuests: parsed.disabledGuests ?? {},
       serviceSocketOverrides: parsed.serviceSocketOverrides ?? {},
     };

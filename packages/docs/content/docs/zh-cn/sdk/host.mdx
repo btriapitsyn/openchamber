@@ -53,6 +53,10 @@ const host = connectHost();
 | `request({ method, path, query?, body? })` | 调用你的集成的 `apiOrigin`，并附上用户的令牌 |
 | `serviceRequest({ method, path, query?, body? })` | 调用你的扩展的本地服务（见 `GUEST_SERVICES.md`） |
 | `serviceStatus()` | `stopped`、`starting`、`ready` 或 `failed` |
+| `readFile(path)` | 读取文本文件。返回 `{ content }`。 |
+| `writeFile(path, content)` | 原子地写入文本文件，并创建父文件夹。返回 `{ written: true }`。 |
+| `listDir(path)` | 列出文件夹。返回 `{ entries: [{ name, kind }] }`，`kind` 为 `file`、`directory` 或 `other`。 |
+| `stat(path)` | `{ kind, size, mtime }`，`kind` 为 `file`、`directory`、`other` 或 `missing`。 |
 
 ## attach、startSession 和 sessionLink
 
@@ -153,6 +157,19 @@ const result = await host.serviceRequest({ method: "GET", path: "/containers" })
 
 `path` 遵循与 `request` 相同的规则。声明本地服务会把 `service` 加入用户在安装时批准的能力；在批准之前，每次 `serviceRequest` 都是 `NO_SERVICE`。完整约定见包内文件 `GUEST_SERVICES.md`。
 
+## 文件
+
+相对路径位于打开的项目中，需要 `files` 能力。以 `/` 或 `~/` 开头的路径必须匹配已声明的 `contributes.filesystem` 模式，需要 `filesystem` 能力。规则见[构建扩展](/sdk/#文件)。
+
+```ts
+const { content } = await host.readFile("package.json");
+await host.writeFile("notes/today.md", "# Today\n");
+const { entries } = await host.listDir("src");
+const info = await host.stat("~/.config/opencode/opencode.json");
+```
+
+限制：路径最长 1024 个字符，内容最多 2,000,000 个字符，列表最多 2000 项。内容超出限制为 `FILE_TOO_LARGE`。
+
 ## 错误码
 
 失败的调用会抛出 `HostRequestError`。`code` 是下列之一；`message` 提供更多说明。
@@ -171,6 +188,10 @@ const result = await host.serviceRequest({ method: "GET", path: "/containers" })
 | `NO_SERVICE` | 未声明本地服务、未批准或未运行 |
 | `NOT_GRANTED` | 用户尚未批准此调用所需的能力 |
 | `SERVICE_FAILED` | 本地服务崩溃或从未就绪 |
+| `NO_DIRECTORY` | 在没有打开项目的情况下使用了相对文件路径 |
+| `NOT_FOUND` | 对不存在的文件调用 `readFile` |
+| `FILE_TOO_LARGE` | 读取或写入时文件内容超出限制 |
+| `DENIED` | 操作系统拒绝了该文件操作 |
 
 ## 相关页面
 

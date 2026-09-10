@@ -112,6 +112,10 @@ Access tokens never appear in `ready` or in request results.
 | `request`         | `{ method, path, query?, body? }` | `Promise<{ status, body }>`    | HTTPS call on declared `apiOrigin`. Host attaches auth                                |
 | `serviceRequest`    | same shape as `request`           | `Promise<{ status, body }>`    | Proxy to this guest's local service on loopback                                         |
 | `serviceStatus`     | —                                 | `Promise<{ status }>`          | `stopped`                                                                             |
+| `readFile`        | `path: string`                    | `Promise<{ content }>`         | UTF-8 text. Relative = inside the open project (`files`); `/…` or `~/…` = declared `filesystem` pattern |
+| `writeFile`       | `path: string, content: string`   | `Promise<{ written: true }>`   | Atomic (temp + rename), creates parent folders. Same path rules                        |
+| `listDir`         | `path: string`                    | `Promise<{ entries }>`         | `{ name, kind: 'file' \| 'directory' \| 'other' }[]`, sorted, capped at 2 000. Same path rules |
+| `stat`            | `path: string`                    | `Promise<{ kind, size, mtime }>` | `kind` adds `'missing'`; a missing path is not an error. Same path rules              |
 | `dispose`         | —                                 | `void`                         | Remove listener, reject pending RPCs                                                  |
 
 
@@ -134,6 +138,8 @@ Access tokens never appear in `ready` or in request results.
 
 `sent` **values** (`startSession` / `prompt`): `sent` | `no-model` | `skipped` | `failed`. After `no-model` / `failed` on `startSession`, the session still exists.
 
+**File path rules** (`readFile` / `writeFile` / `listDir` / `stat`): a relative path (`README.md`, `src/x.ts`, `.`) is joined to the project that is open when the call runs and needs the `files` capability; no open project is `NO_DIRECTORY`. A path starting with `/` or `~/` is outside the project, must match one of the package's `contributes.filesystem` globs, and needs the `filesystem` capability. Any `..` segment, a backslash, or a symlink that leads out of the allowed tree is `BAD_PATH`. The host compares canonical (realpath) paths, so `/tmp/x` on macOS is checked as `/private/tmp/x` and a pattern's literal prefix is canonicalized the same way. Content over 2 000 000 characters is `FILE_TOO_LARGE` in both directions; an OS permission refusal is `DENIED`.
+
 `request` **/** `serviceRequest` **rules:** `method` is `GET` | `POST` | `PUT` | `PATCH` | `DELETE`. `path` must start with `/`, no scheme, stay on the declared origin (cloud API or service loopback). Guest parses `body` as JSON when needed.
 
 ### 1.3 Error codes (`HostRequestError.code`)
@@ -152,6 +158,10 @@ Access tokens never appear in `ready` or in request results.
 | `SESSION_BUSY`     | `prompt({ send: true })` while busy           |
 | `NO_SERVICE`         | No service, not approved, or not running        |
 | `NOT_GRANTED`      | The user has not approved this capability     |
+| `NO_DIRECTORY`     | Relative file path with no open project       |
+| `NOT_FOUND`        | `readFile` / `listDir` on a path that does not exist |
+| `FILE_TOO_LARGE`   | File or content over 2 000 000 characters     |
+| `DENIED`           | The operating system refused the file access  |
 | `SERVICE_FAILED`     | Service crashed or never became ready           |
 
 
@@ -171,6 +181,9 @@ Access tokens never appear in `ready` or in request results.
 | Request body                     | 64 000    |
 | Request response                 | 256 000   |
 | Request timeout                  | 20 000 ms |
+| File path                        | 1 024     |
+| File content (read and write)    | 2 000 000 |
+| `listDir` entries                | 2 000     |
 
 
 ---
@@ -259,6 +272,8 @@ Used by the OpenChamber host and by tools that validate packages. Guests rarely 
         "entry": "panel/index.html"
       },
       "attach": "dialog",
+      "capabilities": ["prompt", "sessions", "files"],
+      "filesystem": ["~/.config/opencode/opencode.json", "/tmp/acme/**"],
       "integration": { /* oauth | token | host */ },
       "service": { /* optional local process */ }
     }
@@ -276,6 +291,8 @@ Used by the OpenChamber host and by tools that validate packages. Guests rarely 
 | `panel.icon`          | Remixicon kebab name (`window`) **or** package `.svg` path. Remixicon needs no file. An `.svg` path must exist on disk or install fails (`invalid-manifest`). No URLs/absolute paths |
 | `panel.entry`         | Path inside package. No `..`, absolute, or URL. HTML must exist; its relative `.js` scripts must exist (`missing-build` if not)                                                      |
 | `attach`              | `true` / `"panel"` → + menu opens rail; `"dialog"` → host window; omit/`false` → off menus                                                                                           |
+| `capabilities`        | Optional list of `prompt`, `sessions`, `files`. `files` is read **and** write inside the open project. Approved once at install                                                     |
+| `filesystem`          | Optional, 1–16 globs, each 1–256 chars, starting with `/` or `~/`; `**` spans folders, `*` / `?` stay in one segment; no `..`, empty segment, or backslash (`invalid-filesystem`). Declaring it adds the `filesystem` capability and the dialog lists the globs |
 | `integration`         | Optional. Exactly one of `oauth`, `token`, or `host` (`provider: "linear"` only)                                                                                                     |
 | `service`               | Optional. `entry` must be a built `.js` file on disk. See [GUEST_SERVICES.md](https://github.com/openchamber/openchamber/blob/sdk/packages/sdk/GUEST_SERVICES.md)                        |
 
@@ -349,7 +366,7 @@ Frozen on `apiVersion` 1 — named in docs, no host hole yet:
 - Public OAuth broker
 - Commands, shortcuts, raw git remotes, magic prompts
 - Second `host.provider` beyond Linear
-- Filesystem, terminal, pairing, or host React components from the guest
+- Arbitrary filesystem access (only the open project with `files`, or declared `contributes.filesystem` globs), terminal, pairing, or host React components from the guest
 
 Do not go around the guest contract through `RuntimeAPIs`.
 

@@ -101,8 +101,9 @@ OpenChamber 会读取清单，并弹出一个对话框列出扩展所请求的�
 | --- | --- |
 | `prompt` | 向用户的会话发送消息（`prompt({ send: true })`、带 `text` 的 `startSession`） |
 | `sessions` | 创建会话和 worktree（`startSession`） |
+| `files` | 读写打开项目中的文件（使用相对路径的 `readFile`、`writeFile`、`listDir`、`stat`） |
 
-另有两项会自动为你加上：声明了 `integration` 时加上 `network`，声明了 `service` 时加上 `service`。
+另有三项会自动为你加上：声明了 `integration` 时加上 `network`，声明了 `service` 时加上 `service`，声明了 `filesystem` 模式时加上 `filesystem`。
 
 用户在安装扩展时会看到完整列表一次，然后批准或移除扩展。如果新版本请求更多权限，对话框会再次出现。调用需要用户尚未批准的能力时，会以 `NOT_GRANTED` 失败。
 
@@ -123,6 +124,27 @@ OpenChamber 会读取清单，并弹出一个对话框列出扩展所请求的�
 | `"basic"` | `Authorization: Basic base64(username:token)` | API 文档中要求使用用户名(通常是邮箱)加 API 令牌的 HTTP Basic 认证;卡片会要求填写两者,`usernameLabel` 指定第一个字段的名称 |
 
 `settings` 会在卡片上添加纯文本字段。它们的值会通过 `ctx.settings` 传给你。
+
+## 文件
+
+你的页面无法直接访问磁盘。OpenChamber 替它读写，并限制在用户批准的范围内。
+
+- 相对路径（`README.md`、`src/index.ts`、`.`）指打开的项目。需要 `files` 能力。没有打开的项目时为 `NO_DIRECTORY`。
+- 以 `/` 或 `~/` 开头的路径指其他任何位置。它必须匹配你在 `contributes.filesystem` 中声明的某个模式，用户会在批准对话框中看到这些原样的模式：
+
+```json
+"filesystem": ["~/.config/opencode/opencode.json", "~/notes/**"]
+```
+
+模式中 `*` 匹配一个路径段，`**` 匹配任意深度。超出模式范围的一律为 `BAD_PATH`，即使已获批准也是如此。`..` 永远不允许。
+
+```ts
+const config = await host.readFile("~/.config/opencode/opencode.json");
+await host.writeFile("~/.config/opencode/opencode.json", nextJson);
+const { entries } = await host.listDir(".");
+```
+
+写入是原子的：OpenChamber 先写入临时文件再重命名，读取方永远不会看到写了一半的文件。文件以 UTF-8 文本读写，最大 2 MB。
 
 ## 面板里的前几行代码
 

@@ -101,8 +101,9 @@ Panel çizmek ve geçerli oturumu okumak izin gerektirmez. Kullanıcı adına bi
 | --- | --- |
 | `prompt` | kullanıcının oturumuna mesaj göndermek (`prompt({ send: true })`, `text` ile `startSession`) |
 | `sessions` | oturum ve worktree oluşturmak (`startSession`) |
+| `files` | açık projedeki dosyaları okuyup yazmak (göreli yol ile `readFile`, `writeFile`, `listDir`, `stat`) |
 
-İki tanesi sizin için otomatik eklenir: bir `integration` tanımladığınızda `network`, bir `service` tanımladığınızda `service`.
+Üç tanesi sizin için otomatik eklenir: bir `integration` tanımladığınızda `network`, bir `service` tanımladığınızda `service`, `filesystem` desenleri tanımladığınızda `filesystem`.
 
 Kullanıcı tam listeyi bir kez, eklentiyi kurarken görür ve ya onaylar ya da eklentiyi kaldırır. Yeni bir sürüm daha fazlasını isterse pencere yeniden görünür. Kullanıcının onaylamadığı bir yeteneği gerektiren çağrı `NOT_GRANTED` ile başarısız olur.
 
@@ -123,6 +124,27 @@ Her `scheme` ne gönderir:
 | `"basic"` | `Authorization: Basic base64(username:token)` | API kullanıcı adı (çoğunlukla e-posta) ve API token'ı ile HTTP Basic auth belgeliyorsa; kart ikisini de sorar ve `usernameLabel` ilk alanı adlandırır |
 
 `settings` karta düz metin alanları ekler. Değerleri `ctx.settings` içinde gelir.
+
+## Dosyalar
+
+Sayfanız diske kendisi dokunamaz. OpenChamber onun yerine, kullanıcının onayladığı sınırlar içinde okur ve yazar.
+
+- Göreli bir yol (`README.md`, `src/index.ts`, `.`) açık projeyi ifade eder. `files` yeteneği gerektirir. Açık proje yoksa `NO_DIRECTORY` olur.
+- `/` veya `~/` ile başlayan bir yol başka herhangi bir yeri ifade eder. `contributes.filesystem` içinde tanımladığınız desenlerden biriyle eşleşmelidir ve kullanıcı onay penceresinde tam olarak bu desenleri görür:
+
+```json
+"filesystem": ["~/.config/opencode/opencode.json", "~/notes/**"]
+```
+
+Desenlerde `*` tek bir yol parçasını, `**` herhangi bir derinliği karşılar. Bunların dışındaki her şey, onaydan sonra bile `BAD_PATH` olur. `..` hiçbir zaman izinli değildir.
+
+```ts
+const config = await host.readFile("~/.config/opencode/opencode.json");
+await host.writeFile("~/.config/opencode/opencode.json", nextJson);
+const { entries } = await host.listDir(".");
+```
+
+Yazmalar atomiktir: OpenChamber geçici bir dosya yazıp yeniden adlandırır, böylece okuyan taraf hiçbir zaman yarım yazılmış bir dosya görmez. Dosyalar UTF-8 metin olarak, en fazla 2 MB'a kadar okunur ve yazılır.
 
 ## Paneldeki ilk satırlar
 

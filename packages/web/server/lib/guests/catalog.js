@@ -180,6 +180,9 @@ export const inspectGuestPackage = async (packageRoot, { openchamberVersion, ski
   if (parsed.manifest.contributes.integration) {
     guest.integration = parsed.manifest.contributes.integration;
   }
+  if (parsed.manifest.contributes.filesystem?.length) {
+    guest.filesystem = [...parsed.manifest.contributes.filesystem];
+  }
   if (parsed.manifest.contributes.service) {
     const serviceEntry = await resolveGuestAssetPath(packageRoot, parsed.manifest.contributes.service.entry);
     if (!serviceEntry) {
@@ -221,6 +224,9 @@ export const toPublicGuest = (guest) => {
   }
   if (guest.integration) {
     row.integration = toPublicIntegration(guest.integration);
+  }
+  if (Array.isArray(guest.filesystem) && guest.filesystem.length > 0) {
+    row.filesystem = [...guest.filesystem];
   }
   const granted = Array.isArray(guest.capabilityGrants) ? guest.capabilityGrants : [];
   row.capabilities = {

@@ -1,8 +1,16 @@
 import express from 'express';
 import fs from 'node:fs/promises';
+import os from 'node:os';
 import { z } from 'zod';
 
-import { GUEST_CAPABILITIES, isGuestRequestPath, requestedGuestCapabilities, resolveIntegrationAuth } from '@openchamber/sdk';
+import {
+  GUEST_CAPABILITIES,
+  GUEST_FILE_CONTENT_MAX,
+  GUEST_FILE_PATH_MAX,
+  isGuestRequestPath,
+  requestedGuestCapabilities,
+  resolveIntegrationAuth,
+} from '@openchamber/sdk';
 
 import {
   findInstalledGuest,
@@ -11,6 +19,7 @@ import {
   resolveGuestServedFile,
   toPublicGuest,
 } from './catalog.js';
+import { runGuestFileOperation } from './files.js';
 import { injectGuestAssetTokens, parseGuestUrlToken } from './html-tokens.js';
 import { installGuest, parseInstallRequest, uninstallGuest } from './install.js';
 import { extensionsPersistPath, readExtensionStore, setCapabilityGrants } from './persist.js';
@@ -41,6 +50,8 @@ import {
 
 const json16 = express.json({ limit: '16kb' });
 const json80 = express.json({ limit: '80kb' });
+// GUEST_FILE_CONTENT_MAX characters can be several bytes each once JSON-escaped.
+const jsonFiles = express.json({ limit: '12mb' });
 
 const clientBodySchema = z.object({
   clientId: z.string().trim().min(1).max(400),
@@ -62,6 +73,12 @@ const requestBodySchema = z.object({
   query: z.record(z.string().min(1).max(128), z.string().max(2000)).optional(),
   body: z.string().max(64_000).optional(),
 });
+
+const fileBodySchema = z.object({
+  op: z.enum(['read', 'write', 'list', 'stat']),
+  path: z.string().min(1).max(GUEST_FILE_PATH_MAX),
+  content: z.string().max(GUEST_FILE_CONTENT_MAX).optional(),
+}).refine((value) => value.op !== 'write' || typeof value.content === 'string', { path: ['content'] });
 
 const socketOverrideBodySchema = z.object({
   id: z.string().trim().regex(/^[a-z][a-z0-9-]*$/).max(64),
@@ -133,7 +150,12 @@ const declaredSettings = (guest) => {
   return new Map(fields.map((field) => [field.id, field]));
 };
 
-export const registerGuestRoutes = (app, { openchamberDataDir, openchamberVersion, resolveGitBinaryForSpawn }) => {
+export const registerGuestRoutes = (app, {
+  openchamberDataDir,
+  openchamberVersion,
+  resolveGitBinaryForSpawn,
+  resolveOptionalProjectDirectory,
+}) => {
   const persistPath = extensionsPersistPath(openchamberDataDir);
   const authPath = guestAuthPersistPath(openchamberDataDir);
   const versionOptions = { openchamberVersion };
@@ -443,6 +465,43 @@ export const registerGuestRoutes = (app, { openchamberDataDir, openchamberVersio
       }
       console.error('Failed to proxy guest service request:', error);
       res.status(500).json({ error: 'Failed to proxy guest service request' });
+    }
+  });
+
+  app.post('/api/guests/:id/files', jsonFiles, async (req, res) => {
+    try {
+      const guest = await loadGuest(req.params.id);
+      if (!guest) {
+        return res.status(404).json({ error: 'not-found' });
+      }
+      const store = await readExtensionStore(persistPath);
+      if (store.disabledGuests?.[guest.id]) {
+        return res.status(400).json({ error: 'DISABLED', message: `${guest.name} is disabled in Settings → Extensions.` });
+      }
+      const parsed = fileBodySchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: 'invalid-request' });
+      }
+      // No project header is a valid state (a filesystem-scope call); the
+      // runner answers NO_DIRECTORY for a relative path in that case.
+      const { directory } = await resolveOptionalProjectDirectory(req);
+      const result = await runGuestFileOperation({
+        op: parsed.data.op,
+        path: parsed.data.path,
+        content: parsed.data.content,
+        projectDirectory: directory,
+        patterns: guest.filesystem ?? [],
+        grants: store.capabilityGrants?.[guest.id] ?? [],
+        homeDir: os.homedir(),
+      });
+      if (!result.ok) {
+        return res.status(result.code === 'NOT_FOUND' ? 404 : 400).json({ error: result.code, message: result.message });
+      }
+      res.json({ ok: true, result: result.result });
+    } catch (error) {
+      // Only the failure class is logged: never the path or the file content.
+      console.error('Failed to run guest file operation:', error?.code ?? error?.name ?? 'error');
+      res.status(500).json({ error: 'Failed to run guest file operation' });
     }
   });
 

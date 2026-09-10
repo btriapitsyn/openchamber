@@ -101,8 +101,9 @@ Drawing a panel and reading the current session need no permission. Anything tha
 | --- | --- |
 | `prompt` | send messages into the user's session (`prompt({ send: true })`, `startSession` with `text`) |
 | `sessions` | create sessions and worktrees (`startSession`) |
+| `files` | read and write files inside the open project (`readFile`, `writeFile`, `listDir`, `stat` with a relative path) |
 
-Two more are added for you: `network` when you declare an `integration`, and `service` when you declare a `service`.
+Three more are added for you: `network` when you declare an `integration`, `service` when you declare a `service`, and `filesystem` when you declare `filesystem` patterns.
 
 The user sees the full list once, when they install the extension, and approves it or removes the extension. If a new version asks for more, the dialog appears again. A call that needs a capability the user has not approved fails with `NOT_GRANTED`.
 
@@ -123,6 +124,27 @@ What each `scheme` sends:
 | `"basic"` | `Authorization: Basic base64(username:token)` | the API documents HTTP Basic auth with a username (often an email) and an API token; the card asks for both, and `usernameLabel` names the first field |
 
 `settings` adds plain text fields to the card. Their values arrive in `ctx.settings`.
+
+## Files
+
+Your page cannot touch the disk itself. OpenChamber reads and writes for it, inside limits the user approved.
+
+- A relative path (`README.md`, `src/index.ts`, `.`) means the open project. Needs the `files` capability. No open project is `NO_DIRECTORY`.
+- A path starting with `/` or `~/` means anywhere else. It must match one of the patterns you declare in `contributes.filesystem`, and the user sees those exact patterns in the approval dialog:
+
+```json
+"filesystem": ["~/.config/opencode/opencode.json", "~/notes/**"]
+```
+
+Patterns use `*` for one path segment and `**` for any depth. Anything outside them is `BAD_PATH`, even after approval. `..` is never allowed.
+
+```ts
+const config = await host.readFile("~/.config/opencode/opencode.json");
+await host.writeFile("~/.config/opencode/opencode.json", nextJson);
+const { entries } = await host.listDir(".");
+```
+
+Writes are atomic: OpenChamber writes a temporary file and renames it, so a reader never sees a half-written file. Files are read and written as UTF-8 text, up to 2 MB.
 
 ## First lines in the panel
 

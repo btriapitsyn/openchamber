@@ -53,6 +53,10 @@ Les tokens d'accès n'apparaissent jamais ici ni dans un résultat de `request`.
 | `request({ method, path, query?, body? })` | appelle l'`apiOrigin` de votre intégration avec le token de l'utilisateur attaché |
 | `serviceRequest({ method, path, query?, body? })` | appelle le service local de votre extension (voir `GUEST_SERVICES.md`) |
 | `serviceStatus()` | `stopped`, `starting`, `ready` ou `failed` |
+| `readFile(path)` | lit un fichier texte. Renvoie `{ content }`. |
+| `writeFile(path, content)` | écrit un fichier texte de façon atomique, en créant les dossiers parents. Renvoie `{ written: true }`. |
+| `listDir(path)` | liste un dossier. Renvoie `{ entries: [{ name, kind }] }`, `kind` vaut `file`, `directory` ou `other`. |
+| `stat(path)` | `{ kind, size, mtime }`, `kind` vaut `file`, `directory`, `other` ou `missing`. |
 
 ## attach, startSession et sessionLink
 
@@ -153,6 +157,19 @@ const result = await host.serviceRequest({ method: "GET", path: "/containers" })
 
 `path` suit les mêmes règles que `request`. Déclarer un service local ajoute `service` aux capacités que l'utilisateur approuve à l'installation ; tant que ce n'est pas fait, chaque `serviceRequest` donne `NO_SERVICE`. Contrat complet : le fichier `GUEST_SERVICES.md` du package.
 
+## Fichiers
+
+Un chemin relatif se trouve dans le projet ouvert et nécessite la capacité `files`. Un chemin qui commence par `/` ou `~/` doit correspondre à un motif `contributes.filesystem` déclaré et nécessite la capacité `filesystem`. Voir [Créer une extension](/sdk/#fichiers) pour les règles.
+
+```ts
+const { content } = await host.readFile("package.json");
+await host.writeFile("notes/today.md", "# Today\n");
+const { entries } = await host.listDir("src");
+const info = await host.stat("~/.config/opencode/opencode.json");
+```
+
+Limites : chemin jusqu'à 1024 caractères, contenu jusqu'à 2 000 000 caractères, listing jusqu'à 2000 entrées. Au-delà de la limite de contenu, c'est `FILE_TOO_LARGE`.
+
 ## Codes d'erreur
 
 Les appels en échec lèvent `HostRequestError`. `code` est l'un des suivants ; `message` en dit plus.
@@ -171,6 +188,10 @@ Les appels en échec lèvent `HostRequestError`. `code` est l'un des suivants ; 
 | `NO_SERVICE` | pas de service local déclaré, non approuvé, ou pas en cours d'exécution |
 | `NOT_GRANTED` | l'utilisateur n'a pas approuvé la capacité dont cet appel a besoin |
 | `SERVICE_FAILED` | le service local a planté ou n'est jamais devenu prêt |
+| `NO_DIRECTORY` | un chemin de fichier relatif a été utilisé sans projet ouvert |
+| `NOT_FOUND` | `readFile` sur un fichier qui n'existe pas |
+| `FILE_TOO_LARGE` | contenu du fichier au-delà de la limite, en lecture ou en écriture |
+| `DENIED` | le système d'exploitation a refusé l'opération sur le fichier |
 
 ## Voir aussi
 

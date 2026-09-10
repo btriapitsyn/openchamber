@@ -284,6 +284,27 @@ describe('parseHostMessage', () => {
     });
   });
 
+  test('accepts the four file result payloads', () => {
+    const result = (payload: unknown) => parseHostMessage({
+      channel: OPENCHAMBER_SDK_CHANNEL,
+      v: 1,
+      type: 'result',
+      id: 'oc-1',
+      ok: true,
+      // Untrusted wire value on purpose.
+      payload: payload as { status: number; body: string },
+    });
+    expect(result({ content: 'hello' })).toMatchObject({ ok: true, payload: { content: 'hello' } });
+    expect(result({ written: true })).toMatchObject({ ok: true, payload: { written: true } });
+    expect(result({ entries: [{ name: 'a', kind: 'file' }, { name: 'b', kind: 'directory' }] })).toMatchObject({
+      ok: true,
+      payload: { entries: [{ name: 'a', kind: 'file' }, { name: 'b', kind: 'directory' }] },
+    });
+    expect(result({ kind: 'missing', size: 0, mtime: 0 })).toMatchObject({ ok: true, payload: { kind: 'missing', size: 0, mtime: 0 } });
+    expect(result({ written: false })).toBeNull();
+    expect(result({ entries: [{ name: 'a', kind: 'symlink' }] })).toBeNull();
+  });
+
   test('drops ready without a session field', () => {
     expect(hostMessageSchema.safeParse({
       channel: OPENCHAMBER_SDK_CHANNEL,
@@ -554,6 +575,17 @@ describe('parseGuestMessage', () => {
       id: 'oc-12',
       payload: { method: 'GET', path: '/api/v2/user' },
     })?.type).toBe('request');
+  });
+
+  test('accepts file messages and drops an empty or backslash path', () => {
+    const base = { channel: OPENCHAMBER_SDK_CHANNEL, v: 1 as const, id: 'oc-20' };
+    expect(parseGuestMessage({ ...base, type: 'file-read', payload: { path: 'README.md' } })?.type).toBe('file-read');
+    expect(parseGuestMessage({ ...base, type: 'file-write', payload: { path: '~/.config/x.json', content: '{}' } })?.type).toBe('file-write');
+    expect(parseGuestMessage({ ...base, type: 'file-list', payload: { path: '.' } })?.type).toBe('file-list');
+    expect(parseGuestMessage({ ...base, type: 'file-stat', payload: { path: '/tmp/x' } })?.type).toBe('file-stat');
+    expect(parseGuestMessage({ ...base, type: 'file-read', payload: { path: '' } })).toBeNull();
+    expect(parseGuestMessage({ ...base, type: 'file-read', payload: { path: 'a\\b' } })).toBeNull();
+    expect(parseGuestMessage({ ...base, type: 'file-write', payload: { path: 'a' } })).toBeNull();
   });
 
   test('drops a request path that escapes the api origin', () => {

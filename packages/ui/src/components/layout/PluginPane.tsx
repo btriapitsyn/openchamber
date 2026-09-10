@@ -2,6 +2,7 @@ import React from 'react';
 import { toast } from 'sonner';
 import {
   EMPTY_GUEST_CONNECTION,
+  guestFileScope,
   type AttachIssueRequest,
   type GuestHostSurface,
   type GuestMessage,
@@ -27,6 +28,7 @@ import {
   toGuestSessionSnapshot,
 } from '@/lib/guests/host-bridge';
 import { guestMay, isGuestActive } from '@/lib/guests/capabilities';
+import { guestFileOperation } from '@/lib/guests/files';
 import { resolveGuestFrameUrl } from '@/lib/guests/frame-url';
 import { fetchHostLinearIssueGet } from '@/lib/guests/host-linear-request';
 import { loadGuestServiceStatus, proxyGuestServiceRequest } from '@/lib/guests/service';
@@ -393,6 +395,25 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
           return proxyGuestServiceRequest(guestIdRef.current, request);
         },
         serviceStatus: () => loadGuestServiceStatus(guestIdRef.current),
+        file: (request) => {
+          if (!guestEnabledRef.current) {
+            return Promise.resolve({
+              ok: false as const,
+              code: 'DISABLED' as const,
+              message: 'This extension is disabled in Settings → Extensions.',
+            });
+          }
+          // Mirrors the server: the answer it would give comes back without a round trip.
+          const scope = guestFileScope(request.path);
+          if (!guestMay(guestRef.current, scope === 'project' ? 'files' : 'filesystem')) {
+            return Promise.resolve({ ok: false as const, code: 'NOT_GRANTED' as const, message: NOT_GRANTED_MESSAGE });
+          }
+          const directory = directoryRef.current || null;
+          if (scope === 'project' && !directory) {
+            return Promise.resolve({ ok: false as const, code: 'NO_DIRECTORY' as const, message: 'No project is open.' });
+          }
+          return guestFileOperation(guestIdRef.current, request, directory);
+        },
       }).then((reply) => {
         if (reply) postToGuest(reply);
       });

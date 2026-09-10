@@ -53,6 +53,10 @@ Erişim token'ları burada da, `request` sonucunda da asla görünmez.
 | `request({ method, path, query?, body? })` | entegrasyonunuzun `apiOrigin` adresini kullanıcının token'ı ekli olarak çağırır |
 | `serviceRequest({ method, path, query?, body? })` | eklentinizin yerel servisini çağırır (bkz. `GUEST_SERVICES.md`) |
 | `serviceStatus()` | `stopped`, `starting`, `ready` veya `failed` |
+| `readFile(path)` | metin dosyası okur. `{ content }` döndürür. |
+| `writeFile(path, content)` | metin dosyasını atomik olarak yazar, üst klasörleri oluşturur. `{ written: true }` döndürür. |
+| `listDir(path)` | klasörü listeler. `{ entries: [{ name, kind }] }` döndürür, `kind` `file`, `directory` veya `other` olur. |
+| `stat(path)` | `{ kind, size, mtime }`, `kind` `file`, `directory`, `other` veya `missing` olur. |
 
 ## attach, startSession ve sessionLink
 
@@ -153,6 +157,19 @@ const result = await host.serviceRequest({ method: "GET", path: "/containers" })
 
 `path` için `request` ile aynı kurallar geçerlidir. Bir yerel servis tanımlamak, kullanıcının kurulumda onayladığı yeteneklere `service` ekler; o zamana kadar her `serviceRequest` `NO_SERVICE` olur. Tam sözleşme: paket dosyası `GUEST_SERVICES.md`.
 
+## Dosyalar
+
+Göreli bir yol açık projenin içindedir ve `files` yeteneği gerektirir. `/` veya `~/` ile başlayan bir yol, tanımlanmış bir `contributes.filesystem` deseniyle eşleşmeli ve `filesystem` yeteneği gerektirir. Kurallar için bkz. [Eklenti oluşturma](/sdk/#dosyalar).
+
+```ts
+const { content } = await host.readFile("package.json");
+await host.writeFile("notes/today.md", "# Today\n");
+const { entries } = await host.listDir("src");
+const info = await host.stat("~/.config/opencode/opencode.json");
+```
+
+Sınırlar: yol en fazla 1024 karakter, içerik en fazla 2,000,000 karakter, listeleme en fazla 2000 kayıt. İçerik sınırını aşmak `FILE_TOO_LARGE` olur.
+
 ## Hata kodları
 
 Başarısız çağrılar `HostRequestError` fırlatır. `code` şunlardan biridir; `message` daha fazlasını söyler.
@@ -171,6 +188,10 @@ Başarısız çağrılar `HostRequestError` fırlatır. `code` şunlardan biridi
 | `NO_SERVICE` | yerel servis tanımlanmamış, onaylanmamış veya çalışmıyor |
 | `NOT_GRANTED` | kullanıcı bu çağrının gerektirdiği yeteneği onaylamadı |
 | `SERVICE_FAILED` | yerel servis çöktü veya hiç hazır olmadı |
+| `NO_DIRECTORY` | açık proje yokken göreli bir dosya yolu kullanıldı |
+| `NOT_FOUND` | var olmayan bir dosyada `readFile` |
+| `FILE_TOO_LARGE` | okuma veya yazmada dosya içeriği sınırın üzerinde |
+| `DENIED` | işletim sistemi dosya işlemini reddetti |
 
 ## İlgili sayfalar
 

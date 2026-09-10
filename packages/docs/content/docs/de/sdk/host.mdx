@@ -53,6 +53,10 @@ Zugriffstokens tauchen hier nie auf, auch nicht in einem `request`-Ergebnis.
 | `request({ method, path, query?, body? })` | den `apiOrigin` deiner Integration mit dem Token des Nutzers aufrufen |
 | `serviceRequest({ method, path, query?, body? })` | den lokalen Dienst deiner Erweiterung aufrufen (siehe `GUEST_SERVICES.md`) |
 | `serviceStatus()` | `stopped`, `starting`, `ready` oder `failed` |
+| `readFile(path)` | eine Textdatei lesen. Liefert `{ content }`. |
+| `writeFile(path, content)` | eine Textdatei atomar schreiben, übergeordnete Ordner werden angelegt. Liefert `{ written: true }`. |
+| `listDir(path)` | einen Ordner auflisten. Liefert `{ entries: [{ name, kind }] }`, `kind` ist `file`, `directory` oder `other`. |
+| `stat(path)` | `{ kind, size, mtime }`, `kind` ist `file`, `directory`, `other` oder `missing`. |
 
 ## attach, startSession und sessionLink
 
@@ -153,6 +157,19 @@ const result = await host.serviceRequest({ method: "GET", path: "/containers" })
 
 `path` folgt denselben Regeln wie bei `request`. Einen Dienst zu deklarieren fügt `service` zu den Berechtigungen hinzu, die der Nutzer bei der Installation bestätigt; bis dahin ist jeder `serviceRequest` ein `NO_SERVICE`. Vollständiger Vertrag: die Paketdatei `GUEST_SERVICES.md`.
 
+## Dateien
+
+Ein relativer Pfad liegt innerhalb des offenen Projekts und braucht die Berechtigung `files`. Ein Pfad, der mit `/` oder `~/` beginnt, muss zu einem deklarierten `contributes.filesystem`-Muster passen und braucht die Berechtigung `filesystem`. Die Regeln stehen unter [Eine Erweiterung bauen](/sdk/#dateien).
+
+```ts
+const { content } = await host.readFile("package.json");
+await host.writeFile("notes/today.md", "# Today\n");
+const { entries } = await host.listDir("src");
+const info = await host.stat("~/.config/opencode/opencode.json");
+```
+
+Grenzen: Pfad bis 1024 Zeichen, Inhalt bis 2.000.000 Zeichen, Auflistung bis 2000 Einträge. Über der Inhaltsgrenze ist `FILE_TOO_LARGE`.
+
 ## Fehlercodes
 
 Fehlgeschlagene Aufrufe werfen `HostRequestError`. `code` ist einer der folgenden; `message` sagt mehr.
@@ -171,6 +188,10 @@ Fehlgeschlagene Aufrufe werfen `HostRequestError`. `code` ist einer der folgende
 | `NO_SERVICE` | kein Dienst deklariert, nicht bestätigt oder nicht gestartet |
 | `NOT_GRANTED` | der Nutzer hat die für diesen Aufruf nötige Berechtigung nicht bestätigt |
 | `SERVICE_FAILED` | der Dienst ist abgestürzt oder nie bereit geworden |
+| `NO_DIRECTORY` | ein relativer Dateipfad wurde ohne offenes Projekt verwendet |
+| `NOT_FOUND` | `readFile` auf eine Datei, die nicht existiert |
+| `FILE_TOO_LARGE` | Dateiinhalt über der Grenze, beim Lesen oder Schreiben |
+| `DENIED` | das Betriebssystem hat die Dateioperation verweigert |
 
 ## Verwandt
 

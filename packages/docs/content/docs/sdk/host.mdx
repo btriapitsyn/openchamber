@@ -53,6 +53,10 @@ Access tokens never appear here or in a `request` result.
 | `request({ method, path, query?, body? })` | call your integration's `apiOrigin` with the user's token attached |
 | `serviceRequest({ method, path, query?, body? })` | call your extension's local service (see `GUEST_SERVICES.md`) |
 | `serviceStatus()` | `stopped`, `starting`, `ready`, or `failed` |
+| `readFile(path)` | read a text file. Returns `{ content }`. |
+| `writeFile(path, content)` | write a text file atomically, creating parent folders. Returns `{ written: true }`. |
+| `listDir(path)` | list a folder. Returns `{ entries: [{ name, kind }] }`, `kind` is `file`, `directory`, or `other`. |
+| `stat(path)` | `{ kind, size, mtime }`, `kind` is `file`, `directory`, `other`, or `missing`. |
 
 ## attach, startSession, and sessionLink
 
@@ -153,6 +157,19 @@ const result = await host.serviceRequest({ method: "GET", path: "/containers" })
 
 `path` follows the same rules as `request`. Declaring a service adds `service` to the capabilities the user approves at install; until then every `serviceRequest` is `NO_SERVICE`. Full contract: the package file `GUEST_SERVICES.md`.
 
+## Files
+
+A relative path is inside the open project and needs the `files` capability. A path starting with `/` or `~/` must match a declared `contributes.filesystem` pattern and needs the `filesystem` capability. See [Build an extension](/sdk/#files) for the rules.
+
+```ts
+const { content } = await host.readFile("package.json");
+await host.writeFile("notes/today.md", "# Today\n");
+const { entries } = await host.listDir("src");
+const info = await host.stat("~/.config/opencode/opencode.json");
+```
+
+Limits: path up to 1024 characters, content up to 2,000,000 characters, listing up to 2000 entries. Over the content limit is `FILE_TOO_LARGE`.
+
 ## Error codes
 
 Failed calls throw `HostRequestError`. `code` is one of these; `message` says more.
@@ -171,6 +188,10 @@ Failed calls throw `HostRequestError`. `code` is one of these; `message` says mo
 | `NO_SERVICE` | no service declared, not approved, or not running |
 | `NOT_GRANTED` | the user has not approved the capability this call needs |
 | `SERVICE_FAILED` | the service crashed or never became ready |
+| `NO_DIRECTORY` | a relative file path was used with no open project |
+| `NOT_FOUND` | `readFile` on a file that does not exist |
+| `FILE_TOO_LARGE` | file content over the limit, on read or write |
+| `DENIED` | the operating system refused the file operation |
 
 ## Related
 

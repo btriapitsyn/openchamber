@@ -22,6 +22,7 @@ import {
   type ToastKind,
 } from '@openchamber/sdk';
 
+import type { GuestFileProxyResult, GuestFileRequest } from '@/lib/guests/files';
 import type { GuestRequestProxyResult } from '@/lib/guests/oauth';
 
 import { isContextPanelMode, type ContextPanelMode } from '@/lib/surfaces/modes';
@@ -55,6 +56,8 @@ type HostBridgeEffects = {
     | { ok: true; result: { status: import('@openchamber/sdk').ServiceStatus } }
     | { ok: false; code: HostRequestErrorCode; message: string }
   >;
+  /** One handler for read, write, list, and stat; the pane checks scope and grant, the server does the rest. */
+  file: (request: GuestFileRequest) => Promise<GuestFileProxyResult>;
 };
 
 export const buildReadyMessage = (payload: HostReadyContext): HostMessage => ({
@@ -178,6 +181,10 @@ const errorResult = (id: string, error: string, code: HostRequestErrorCode = 'HO
   code,
 });
 
+const fileResult = (id: string, result: GuestFileProxyResult): HostMessage => (
+  result.ok ? okResult(id, result.result) : errorResult(id, result.message, result.code)
+);
+
 const isHttpUrl = (url: string): boolean => {
   try {
     const parsed = new URL(url);
@@ -287,5 +294,13 @@ export const answerGuestMessage = async (
       }
       return okResult(message.id, result.result);
     }
+    case 'file-read':
+      return fileResult(message.id, await effects.file({ op: 'read', path: message.payload.path }));
+    case 'file-write':
+      return fileResult(message.id, await effects.file({ op: 'write', path: message.payload.path, content: message.payload.content }));
+    case 'file-list':
+      return fileResult(message.id, await effects.file({ op: 'list', path: message.payload.path }));
+    case 'file-stat':
+      return fileResult(message.id, await effects.file({ op: 'stat', path: message.payload.path }));
   }
 };

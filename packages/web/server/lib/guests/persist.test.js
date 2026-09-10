@@ -156,6 +156,22 @@ describe('extension persist', () => {
     }
   });
 
+  test('drops grants this build no longer knows instead of refusing the store', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'oc-ext-'));
+    const persistPath = extensionsPersistPath(dir);
+    await fs.writeFile(persistPath, JSON.stringify({
+      paths: ['/tmp/old-echo', '/tmp/tasks'],
+      capabilityGrants: { 'old-echo': ['agent'], tasks: ['prompt', 'made-up', 'sessions'] },
+    }));
+    try {
+      const store = await readExtensionStore(persistPath);
+      expect(store.paths).toEqual(['/tmp/old-echo', '/tmp/tasks']);
+      expect(store.capabilityGrants).toEqual({ 'old-echo': [], tasks: ['prompt', 'sessions'] });
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  });
+
   test('refuses a corrupt store', async () => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'oc-ext-'));
     const file = extensionsPersistPath(dir);

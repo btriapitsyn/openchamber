@@ -1,6 +1,9 @@
 import { OPENCHAMBER_SDK_API_VERSION, OPENCHAMBER_SDK_CHANNEL } from './api-version.ts';
 import {
+  GUEST_FILE_CONTENT_MAX,
+  GUEST_FILE_PATH_MAX,
   GUEST_REQUEST_TIMEOUT_MS,
+  isGuestFilePath,
   isGuestRequestPath,
   clampAttachRequest,
   clampPromptRequest,
@@ -24,6 +27,14 @@ import {
   type StartSessionResult,
   type ToastRequest,
   type ServiceStatusResult,
+  type FileListResult,
+  type FileReadResult,
+  type FileStatResult,
+  type FileWriteResult,
+  isFileListResult,
+  isFileReadResult,
+  isFileStatResult,
+  isFileWriteResult,
   isServiceStatusResult,
   isGuestRequestResult,
   isPromptResult,
@@ -69,6 +80,24 @@ export type HostClient = {
   request: (request: GuestRequest) => Promise<GuestRequestResult>;
   serviceRequest: (request: GuestRequest) => Promise<GuestRequestResult>;
   serviceStatus: () => Promise<ServiceStatusResult>;
+  /**
+   * Read a UTF-8 text file. A relative path is inside the open project
+   * (capability `files`); `/…` or `~/…` must match a declared
+   * `contributes.filesystem` pattern (capability `filesystem`). Over
+   * `GUEST_FILE_CONTENT_MAX` characters is `FILE_TOO_LARGE`; a missing file
+   * is `NOT_FOUND`.
+   */
+  readFile: (path: string) => Promise<FileReadResult>;
+  /**
+   * Write a UTF-8 text file atomically, creating parent directories. Same
+   * path rules as `readFile`. Content over `GUEST_FILE_CONTENT_MAX` is
+   * refused before sending.
+   */
+  writeFile: (path: string, content: string) => Promise<FileWriteResult>;
+  /** Entries of a directory, sorted by name, capped at `GUEST_FILE_LIST_MAX`. Same path rules as `readFile`. */
+  listDir: (path: string) => Promise<FileListResult>;
+  /** Kind, size, and mtime of a path. A missing path is `kind: 'missing'`, not an error. Same path rules as `readFile`. */
+  stat: (path: string) => Promise<FileStatResult>;
   dispose: () => void;
 };
 
@@ -92,6 +121,10 @@ type Pending = {
 // path would otherwise surface only as HOST_TIMEOUT twenty seconds later.
 const rejectBadPath = (): Promise<never> => Promise.reject(
   new HostRequestError('BAD_PATH', 'Request path must start with "/" and stay on the declared origin.'),
+);
+
+const rejectBadFilePath = (): Promise<never> => Promise.reject(
+  new HostRequestError('BAD_PATH', `File path must be 1 to ${GUEST_FILE_PATH_MAX} characters without NUL or backslash.`),
 );
 
 const nextId = (n: { value: number }): string => {
@@ -409,6 +442,62 @@ export const connectHost = (options: HostClientOptions = {}): HostClient => {
     }).then((result) => {
       if (!isServiceStatusResult(result)) {
         throw new HostRequestError('HOST_REJECTED', 'Host did not return service status.');
+      }
+      return result;
+    }),
+    readFile: (path) => (isGuestFilePath(path) ? send({
+      channel: OPENCHAMBER_SDK_CHANNEL,
+      v: OPENCHAMBER_SDK_API_VERSION,
+      type: 'file-read',
+      id: nextId(ids),
+      payload: { path },
+    }) : rejectBadFilePath()).then((result) => {
+      if (!isFileReadResult(result)) {
+        throw new HostRequestError('HOST_REJECTED', 'Host did not return file content.');
+      }
+      return result;
+    }),
+    writeFile: (path, content) => {
+      if (!isGuestFilePath(path)) {
+        return rejectBadFilePath();
+      }
+      if (content.length > GUEST_FILE_CONTENT_MAX) {
+        return Promise.reject(new HostRequestError('FILE_TOO_LARGE', `Content is over ${GUEST_FILE_CONTENT_MAX} characters.`));
+      }
+      return send({
+        channel: OPENCHAMBER_SDK_CHANNEL,
+        v: OPENCHAMBER_SDK_API_VERSION,
+        type: 'file-write',
+        id: nextId(ids),
+        payload: { path, content },
+      }).then((result) => {
+        if (!isFileWriteResult(result)) {
+          throw new HostRequestError('HOST_REJECTED', 'Host did not confirm the write.');
+        }
+        return result;
+      });
+    },
+    listDir: (path) => (isGuestFilePath(path) ? send({
+      channel: OPENCHAMBER_SDK_CHANNEL,
+      v: OPENCHAMBER_SDK_API_VERSION,
+      type: 'file-list',
+      id: nextId(ids),
+      payload: { path },
+    }) : rejectBadFilePath()).then((result) => {
+      if (!isFileListResult(result)) {
+        throw new HostRequestError('HOST_REJECTED', 'Host did not return directory entries.');
+      }
+      return result;
+    }),
+    stat: (path) => (isGuestFilePath(path) ? send({
+      channel: OPENCHAMBER_SDK_CHANNEL,
+      v: OPENCHAMBER_SDK_API_VERSION,
+      type: 'file-stat',
+      id: nextId(ids),
+      payload: { path },
+    }) : rejectBadFilePath()).then((result) => {
+      if (!isFileStatResult(result)) {
+        throw new HostRequestError('HOST_REJECTED', 'Host did not return file status.');
       }
       return result;
     }),

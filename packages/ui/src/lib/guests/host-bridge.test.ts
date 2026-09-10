@@ -2,6 +2,8 @@ import { describe, expect, test } from 'bun:test';
 
 import { OPENCHAMBER_SDK_CHANNEL, type GuestMessage, type GuestRequest } from '@openchamber/sdk';
 
+import type { GuestFileProxyResult, GuestFileRequest } from './files.ts';
+
 import {
   answerGuestMessage,
   guestSessionLifecyclePhase,
@@ -50,6 +52,7 @@ const effects = (overrides: {
     | { ok: true; result: { status: 'stopped' | 'starting' | 'ready' | 'failed' } }
     | { ok: false; code: 'HOST_REJECTED' | 'NO_SERVICE'; message: string }
   >;
+  file?: (request: GuestFileRequest) => Promise<GuestFileProxyResult>;
 } = {}) => ({
   toast: overrides.toast ?? (() => {}),
   openUrl: overrides.openUrl ?? (async () => true),
@@ -66,6 +69,7 @@ const effects = (overrides: {
   request: overrides.request ?? (async () => ({ ok: true, result: { status: 200, body: '{}' } })),
   serviceRequest: overrides.serviceRequest ?? (async () => ({ ok: true, result: { status: 200, body: '{}' } })),
   serviceStatus: overrides.serviceStatus ?? (async () => ({ ok: true, result: { status: 'ready' as const } })),
+  file: overrides.file ?? (async () => ({ ok: true, result: { written: true as const } })),
 });
 
 describe('answerGuestMessage', () => {
@@ -478,6 +482,32 @@ describe('answerGuestMessage', () => {
       ok: true,
       payload: { status: 'ready' },
     });
+  });
+
+  test('routes the four file messages to one effect and forwards its answer', async () => {
+    const seen: GuestFileRequest[] = [];
+    const file = async (request: GuestFileRequest): Promise<GuestFileProxyResult> => {
+      seen.push(request);
+      if (request.op === 'read') return { ok: true, result: { content: '# hi' } };
+      if (request.op === 'write') return { ok: true, result: { written: true } };
+      if (request.op === 'list') return { ok: true, result: { entries: [{ name: 'a', kind: 'file' }] } };
+      return { ok: false, code: 'NO_DIRECTORY', message: 'No project is open.' };
+    };
+    const base = { channel: OPENCHAMBER_SDK_CHANNEL, v: 1 } as const;
+    const read = await answerGuestMessage({ ...base, type: 'file-read', id: 'oc-20', payload: { path: 'README.md' } }, effects({ file }));
+    expect(read).toMatchObject({ id: 'oc-20', ok: true, payload: { content: '# hi' } });
+    const write = await answerGuestMessage({ ...base, type: 'file-write', id: 'oc-21', payload: { path: 'a.txt', content: 'x' } }, effects({ file }));
+    expect(write).toMatchObject({ id: 'oc-21', ok: true, payload: { written: true } });
+    const list = await answerGuestMessage({ ...base, type: 'file-list', id: 'oc-22', payload: { path: '.' } }, effects({ file }));
+    expect(list).toMatchObject({ id: 'oc-22', ok: true, payload: { entries: [{ name: 'a', kind: 'file' }] } });
+    const stat = await answerGuestMessage({ ...base, type: 'file-stat', id: 'oc-23', payload: { path: 'b' } }, effects({ file }));
+    expect(stat).toMatchObject({ id: 'oc-23', ok: false, code: 'NO_DIRECTORY', error: 'No project is open.' });
+    expect(seen).toEqual([
+      { op: 'read', path: 'README.md' },
+      { op: 'write', path: 'a.txt', content: 'x' },
+      { op: 'list', path: '.' },
+      { op: 'stat', path: 'b' },
+    ]);
   });
 
   test('forwards NO_SERVICE from serviceRequest', async () => {

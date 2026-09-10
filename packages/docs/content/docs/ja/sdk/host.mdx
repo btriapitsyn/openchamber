@@ -53,6 +53,10 @@ const host = connectHost();
 | `request({ method, path, query?, body? })` | ユーザーのトークンを付けて連携の `apiOrigin` を呼ぶ |
 | `serviceRequest({ method, path, query?, body? })` | 拡張機能のローカルサービスを呼ぶ(`GUEST_SERVICES.md` を参照) |
 | `serviceStatus()` | `stopped`、`starting`、`ready`、`failed` のいずれか |
+| `readFile(path)` | テキストファイルを読む。`{ content }` を返す。 |
+| `writeFile(path, content)` | テキストファイルをアトミックに書き、親フォルダも作成する。`{ written: true }` を返す。 |
+| `listDir(path)` | フォルダを一覧する。`{ entries: [{ name, kind }] }` を返し、`kind` は `file`、`directory`、`other` のいずれか。 |
+| `stat(path)` | `{ kind, size, mtime }`。`kind` は `file`、`directory`、`other`、`missing` のいずれか。 |
 
 ## attach、startSession、sessionLink
 
@@ -153,6 +157,19 @@ const result = await host.serviceRequest({ method: "GET", path: "/containers" })
 
 `path` は `request` と同じ規則に従います。ローカルサービスを宣言すると、インストール時にユーザーが承認する権限に `service` が加わります。承認されるまで、すべての `serviceRequest` は `NO_SERVICE` です。完全な契約はパッケージ内のファイル `GUEST_SERVICES.md` にあります。
 
+## ファイル
+
+相対パスは開いているプロジェクトの中を指し、`files` 権限が必要です。`/` または `~/` で始まるパスは、宣言済みの `contributes.filesystem` パターンに一致する必要があり、`filesystem` 権限が必要です。規則は [拡張機能を作る](/sdk/#ファイル) を参照してください。
+
+```ts
+const { content } = await host.readFile("package.json");
+await host.writeFile("notes/today.md", "# Today\n");
+const { entries } = await host.listDir("src");
+const info = await host.stat("~/.config/opencode/opencode.json");
+```
+
+上限: パスは 1024 文字まで、内容は 2,000,000 文字まで、一覧は 2000 件まで。内容の上限を超えると `FILE_TOO_LARGE` です。
+
 ## エラーコード
 
 失敗した呼び出しは `HostRequestError` を throw します。`code` は次のいずれかで、`message` に詳細が入ります。
@@ -171,6 +188,10 @@ const result = await host.serviceRequest({ method: "GET", path: "/containers" })
 | `NO_SERVICE` | ローカルサービスが未宣言、未承認、または未起動 |
 | `NOT_GRANTED` | この呼び出しに必要な権限をユーザーが承認していない |
 | `SERVICE_FAILED` | ローカルサービスがクラッシュした、または ready にならなかった |
+| `NO_DIRECTORY` | 開いているプロジェクトがない状態で相対ファイルパスを使った |
+| `NOT_FOUND` | 存在しないファイルに対する `readFile` |
+| `FILE_TOO_LARGE` | 読み込みまたは書き込み時にファイル内容が上限を超えた |
+| `DENIED` | オペレーティングシステムがファイル操作を拒否した |
 
 ## 関連
 

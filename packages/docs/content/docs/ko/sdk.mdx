@@ -101,8 +101,9 @@ OpenChamber가 매니페스트를 읽고, 확장이 요구하는 항목을 나�
 | --- | --- |
 | `prompt` | 사용자의 세션에 메시지 보내기(`prompt({ send: true })`, `text`가 있는 `startSession`) |
 | `sessions` | 세션과 worktree 만들기(`startSession`) |
+| `files` | 열린 프로젝트 안의 파일 읽고 쓰기(상대 경로를 쓰는 `readFile`, `writeFile`, `listDir`, `stat`) |
 
-두 가지가 자동으로 추가됩니다. `integration`을 선언하면 `network`, `service`를 선언하면 `service`입니다.
+세 가지가 자동으로 추가됩니다. `integration`을 선언하면 `network`, `service`를 선언하면 `service`, `filesystem` 패턴을 선언하면 `filesystem`입니다.
 
 사용자는 확장을 설치할 때 전체 목록을 한 번 보고, 승인하거나 확장을 제거합니다. 새 버전이 더 많은 권한을 요구하면 대화상자가 다시 나타납니다. 사용자가 승인하지 않은 권한이 필요한 호출은 `NOT_GRANTED`로 실패합니다.
 
@@ -123,6 +124,27 @@ OpenChamber가 매니페스트를 읽고, 확장이 요구하는 항목을 나�
 | `"basic"` | `Authorization: Basic base64(username:token)` | API가 사용자 이름(흔히 이메일)과 API 토큰을 쓰는 HTTP Basic 인증을 문서화한 경우. 카드는 둘 다 묻고, `usernameLabel`이 첫 번째 입력란의 이름이 됩니다 |
 
 `settings`는 카드에 일반 텍스트 입력란을 추가합니다. 그 값은 `ctx.settings`로 전달됩니다.
+
+## 파일
+
+페이지 자체는 디스크를 건드릴 수 없습니다. OpenChamber가 사용자가 승인한 범위 안에서 대신 읽고 씁니다.
+
+- 상대 경로(`README.md`, `src/index.ts`, `.`)는 열린 프로젝트를 뜻합니다. `files` 권한이 필요합니다. 열린 프로젝트가 없으면 `NO_DIRECTORY`입니다.
+- `/` 또는 `~/`로 시작하는 경로는 그 밖의 어디든 뜻합니다. `contributes.filesystem`에 선언한 패턴 중 하나와 일치해야 하며, 사용자는 승인 대화상자에서 그 패턴을 그대로 봅니다:
+
+```json
+"filesystem": ["~/.config/opencode/opencode.json", "~/notes/**"]
+```
+
+패턴에서 `*`는 경로 세그먼트 하나, `**`는 임의의 깊이를 뜻합니다. 패턴 밖의 것은 승인 후에도 `BAD_PATH`입니다. `..`는 절대 허용되지 않습니다.
+
+```ts
+const config = await host.readFile("~/.config/opencode/opencode.json");
+await host.writeFile("~/.config/opencode/opencode.json", nextJson);
+const { entries } = await host.listDir(".");
+```
+
+쓰기는 원자적입니다. OpenChamber가 임시 파일에 쓴 뒤 이름을 바꾸므로, 읽는 쪽이 반쯤 쓰인 파일을 보는 일은 없습니다. 파일은 UTF-8 텍스트로 읽고 쓰며, 최대 2 MB입니다.
 
 ## 패널의 첫 줄
 

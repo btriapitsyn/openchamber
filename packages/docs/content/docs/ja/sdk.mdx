@@ -101,8 +101,9 @@ OpenChamber がマニフェストを読み、拡張機能が求めているも�
 | --- | --- |
 | `prompt` | ユーザーのセッションにメッセージを送る(`prompt({ send: true })`、`text` 付きの `startSession`) |
 | `sessions` | セッションと worktree を作る(`startSession`) |
+| `files` | 開いているプロジェクト内のファイルを読み書きする(相対パス付きの `readFile`、`writeFile`、`listDir`、`stat`) |
 
-さらに 2 つが自動で追加されます。`integration` を宣言すると `network`、`service` を宣言すると `service` です。
+さらに 3 つが自動で追加されます。`integration` を宣言すると `network`、`service` を宣言すると `service`、`filesystem` パターンを宣言すると `filesystem` です。
 
 ユーザーは拡張機能をインストールするときに一覧を一度だけ見て、承認するか拡張機能を削除するかを選びます。新しいバージョンがより多くを求める場合、ダイアログが再び表示されます。ユーザーが承認していない権限を必要とする呼び出しは `NOT_GRANTED` で失敗します。
 
@@ -123,6 +124,27 @@ OpenChamber がマニフェストを読み、拡張機能が求めているも�
 | `"basic"` | `Authorization: Basic base64(username:token)` | API がユーザー名 (多くはメール) と API トークンによる HTTP Basic 認証を記載している。カードは両方を尋ね、`usernameLabel` が最初の欄のラベルになる |
 
 `settings` はカードにプレーンテキストの入力欄を追加します。その値は `ctx.settings` に届きます。
+
+## ファイル
+
+ページ自体はディスクに触れません。OpenChamber がユーザーの承認した範囲内で、代わりに読み書きします。
+
+- 相対パス(`README.md`、`src/index.ts`、`.`)は開いているプロジェクトを指します。`files` 権限が必要です。開いているプロジェクトがない場合は `NO_DIRECTORY` です。
+- `/` または `~/` で始まるパスはそれ以外の場所を指します。`contributes.filesystem` で宣言したパターンのいずれかに一致する必要があり、ユーザーは承認ダイアログでそのパターンをそのまま目にします:
+
+```json
+"filesystem": ["~/.config/opencode/opencode.json", "~/notes/**"]
+```
+
+パターンでは `*` がパスの 1 セグメント、`**` が任意の深さを表します。パターンの外にあるものは、承認後であっても `BAD_PATH` です。`..` は決して許可されません。
+
+```ts
+const config = await host.readFile("~/.config/opencode/opencode.json");
+await host.writeFile("~/.config/opencode/opencode.json", nextJson);
+const { entries } = await host.listDir(".");
+```
+
+書き込みはアトミックです。OpenChamber は一時ファイルに書いてからリネームするので、読み手が書きかけのファイルを見ることはありません。ファイルは UTF-8 テキストとして読み書きされ、上限は 2 MB です。
 
 ## パネルの最初の数行
 

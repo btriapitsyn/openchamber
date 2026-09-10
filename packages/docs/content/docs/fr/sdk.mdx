@@ -101,8 +101,9 @@ Dessiner un panneau et lire la session en cours ne demandent aucune permission. 
 | --- | --- |
 | `prompt` | envoyer des messages dans la session de l'utilisateur (`prompt({ send: true })`, `startSession` avec `text`) |
 | `sessions` | créer des sessions et des worktrees (`startSession`) |
+| `files` | lire et écrire des fichiers dans le projet ouvert (`readFile`, `writeFile`, `listDir`, `stat` avec un chemin relatif) |
 
-Deux autres sont ajoutées pour vous : `network` quand vous déclarez une `integration`, et `service` quand vous déclarez un `service`.
+Trois autres sont ajoutées pour vous : `network` quand vous déclarez une `integration`, `service` quand vous déclarez un `service`, et `filesystem` quand vous déclarez des motifs `filesystem`.
 
 L'utilisateur voit la liste complète une seule fois, à l'installation de l'extension, et l'approuve ou supprime l'extension. Si une nouvelle version demande davantage, la boîte de dialogue réapparaît. Un appel qui a besoin d'une capacité non approuvée par l'utilisateur échoue avec `NOT_GRANTED`.
 
@@ -123,6 +124,27 @@ Ce que chaque `scheme` envoie :
 | `"basic"` | `Authorization: Basic base64(username:token)` | l'API documente HTTP Basic auth avec un nom d'utilisateur (souvent un e-mail) et un token d'API ; la carte demande les deux, et `usernameLabel` nomme le premier champ |
 
 `settings` ajoute des champs texte simples à la carte. Leurs valeurs arrivent dans `ctx.settings`.
+
+## Fichiers
+
+Votre page ne peut pas toucher le disque elle-même. OpenChamber lit et écrit pour elle, dans les limites approuvées par l'utilisateur.
+
+- Un chemin relatif (`README.md`, `src/index.ts`, `.`) désigne le projet ouvert. Nécessite la capacité `files`. Sans projet ouvert, c'est `NO_DIRECTORY`.
+- Un chemin qui commence par `/` ou `~/` désigne n'importe quel autre endroit. Il doit correspondre à l'un des motifs que vous déclarez dans `contributes.filesystem`, et l'utilisateur voit exactement ces motifs dans la boîte de dialogue d'approbation :
+
+```json
+"filesystem": ["~/.config/opencode/opencode.json", "~/notes/**"]
+```
+
+Les motifs utilisent `*` pour un segment de chemin et `**` pour n'importe quelle profondeur. Tout ce qui est en dehors donne `BAD_PATH`, même après approbation. `..` n'est jamais autorisé.
+
+```ts
+const config = await host.readFile("~/.config/opencode/opencode.json");
+await host.writeFile("~/.config/opencode/opencode.json", nextJson);
+const { entries } = await host.listDir(".");
+```
+
+Les écritures sont atomiques : OpenChamber écrit un fichier temporaire puis le renomme, donc un lecteur ne voit jamais un fichier à moitié écrit. Les fichiers sont lus et écrits en texte UTF-8, jusqu'à 2 Mo.
 
 ## Premières lignes dans le panneau
 

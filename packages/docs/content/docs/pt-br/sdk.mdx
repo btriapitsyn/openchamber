@@ -101,8 +101,9 @@ Desenhar um painel e ler a sessão atual não exige permissão. Tudo que age em 
 | --- | --- |
 | `prompt` | enviar mensagens para a sessão do usuário (`prompt({ send: true })`, `startSession` com `text`) |
 | `sessions` | criar sessões e worktrees (`startSession`) |
+| `files` | ler e escrever arquivos dentro do projeto aberto (`readFile`, `writeFile`, `listDir`, `stat` com um caminho relativo) |
 
-Outras duas são adicionadas por você automaticamente: `network` quando você declara uma `integration`, e `service` quando declara um `service`.
+Outras três são adicionadas por você automaticamente: `network` quando você declara uma `integration`, `service` quando declara um `service`, e `filesystem` quando declara padrões `filesystem`.
 
 O usuário vê a lista completa uma vez, ao instalar a extensão, e aprova ou remove a extensão. Se uma versão nova pedir mais, o diálogo aparece de novo. Uma chamada que precisa de uma capacidade que o usuário não aprovou falha com `NOT_GRANTED`.
 
@@ -123,6 +124,27 @@ O que cada `scheme` envia:
 | `"basic"` | `Authorization: Basic base64(username:token)` | a API documenta HTTP Basic auth com um usuário (geralmente um email) e um token de API; o card pede os dois, e `usernameLabel` dá nome ao primeiro campo |
 
 `settings` adiciona campos de texto simples ao card. Os valores chegam em `ctx.settings`.
+
+## Arquivos
+
+Sua página não consegue tocar o disco por conta própria. O OpenChamber lê e escreve por ela, dentro dos limites que o usuário aprovou.
+
+- Um caminho relativo (`README.md`, `src/index.ts`, `.`) significa o projeto aberto. Precisa da capacidade `files`. Sem projeto aberto é `NO_DIRECTORY`.
+- Um caminho que começa com `/` ou `~/` significa qualquer outro lugar. Ele precisa bater com um dos padrões que você declara em `contributes.filesystem`, e o usuário vê exatamente esses padrões no diálogo de aprovação:
+
+```json
+"filesystem": ["~/.config/opencode/opencode.json", "~/notes/**"]
+```
+
+Os padrões usam `*` para um segmento do caminho e `**` para qualquer profundidade. Tudo que ficar fora deles é `BAD_PATH`, mesmo depois da aprovação. `..` nunca é permitido.
+
+```ts
+const config = await host.readFile("~/.config/opencode/opencode.json");
+await host.writeFile("~/.config/opencode/opencode.json", nextJson);
+const { entries } = await host.listDir(".");
+```
+
+As escritas são atômicas: o OpenChamber escreve um arquivo temporário e o renomeia, então quem lê nunca vê um arquivo pela metade. Os arquivos são lidos e escritos como texto UTF-8, até 2 MB.
 
 ## Primeiras linhas no painel
 

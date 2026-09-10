@@ -11,6 +11,8 @@ export type InstalledGuest = {
   version?: string;
   attach?: AttachContribution;
   integration?: PublicIntegration;
+  /** Declared `contributes.filesystem` patterns, shown on the approval dialog. */
+  filesystem?: string[];
   service?: PublicService;
   /** What the package asks for and what the user approved at install. */
   capabilities: PublicGuestCapabilities;

@@ -177,16 +177,43 @@ export type PublicService = {
 /**
  * What a guest may do beyond drawing its own panel. The user approves the
  * full list once, when the package is installed; a later package that asks
- * for more is re-approved. `prompt` and `sessions` are declared under
- * `contributes.capabilities`; `service` and `network` follow from
- * `contributes.service` and `contributes.integration`.
+ * for more is re-approved. `prompt`, `sessions`, and `files` are declared
+ * under `contributes.capabilities`; `service`, `network`, and `filesystem`
+ * follow from `contributes.service`, `contributes.integration`, and
+ * `contributes.filesystem`.
  */
-export const GUEST_CAPABILITIES = ['prompt', 'sessions', 'service', 'network'] as const;
+export const GUEST_CAPABILITIES = ['prompt', 'sessions', 'files', 'service', 'network', 'filesystem'] as const;
 
 export type GuestCapability = (typeof GUEST_CAPABILITIES)[number];
 
+export const DECLARED_GUEST_CAPABILITIES = ['prompt', 'sessions', 'files'] as const;
+
 /** The capabilities a manifest may ask for directly. */
-export type DeclaredGuestCapability = 'prompt' | 'sessions';
+export type DeclaredGuestCapability = (typeof DECLARED_GUEST_CAPABILITIES)[number];
+
+/** How many `contributes.filesystem` patterns a package may declare. */
+export const GUEST_FILESYSTEM_PATTERNS_MAX = 16;
+/** Characters in one `contributes.filesystem` pattern. */
+export const GUEST_FILESYSTEM_PATTERN_MAX = 256;
+
+/**
+ * A `contributes.filesystem` entry: an absolute glob (`/…`) or one under the
+ * user's home (`~/…`). `**` spans directories, `*` and `?` stay inside one
+ * segment. No `..`, no empty segment, no NUL, no backslash.
+ */
+export const isGuestFilesystemPattern = (value: string): boolean => {
+  if (value.length === 0 || value.length > GUEST_FILESYSTEM_PATTERN_MAX) {
+    return false;
+  }
+  if (value.includes('\0') || value.includes('\\')) {
+    return false;
+  }
+  if (!value.startsWith('/') && !value.startsWith('~/')) {
+    return false;
+  }
+  const segments = value.split('/').slice(1);
+  return !segments.some((segment) => segment === '' || segment === '..');
+};
 
 export type OpenChamberContributes = {
   panel: PanelContribution;
@@ -194,6 +221,8 @@ export type OpenChamberContributes = {
   capabilities?: DeclaredGuestCapability[];
   integration?: IntegrationContribution;
   service?: ServiceContribution;
+  /** Paths outside the project the panel may read and write. Grants `filesystem`. */
+  filesystem?: string[];
 };
 
 /** Catalog view of the approval: what the package asks for and what the user allowed. */
@@ -203,11 +232,12 @@ export type PublicGuestCapabilities = {
 };
 
 export const requestedGuestCapabilities = (
-  contributes: Pick<OpenChamberContributes, 'capabilities' | 'integration' | 'service'>,
+  contributes: Pick<OpenChamberContributes, 'capabilities' | 'integration' | 'service' | 'filesystem'>,
 ): GuestCapability[] => {
   const declared = new Set<GuestCapability>(contributes.capabilities ?? []);
   if (contributes.service) declared.add('service');
   if (contributes.integration) declared.add('network');
+  if (contributes.filesystem && contributes.filesystem.length > 0) declared.add('filesystem');
   return GUEST_CAPABILITIES.filter((capability) => declared.has(capability));
 };
 
@@ -250,7 +280,8 @@ export type ParseManifestErrorCode =
   | 'invalid-attach'
   | 'invalid-capabilities'
   | 'invalid-integration'
-  | 'invalid-service';
+  | 'invalid-service'
+  | 'invalid-filesystem';
 
 export type ParseManifestFailure = {
   ok: false;

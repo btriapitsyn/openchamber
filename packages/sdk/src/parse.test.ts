@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { OPENCHAMBER_SDK_API_VERSION } from './api-version.ts';
-import { resolveAttachMode, resolveIntegrationApi, toPublicIntegration } from './manifest.ts';
+import { requestedGuestCapabilities, resolveAttachMode, resolveIntegrationApi, toPublicIntegration } from './manifest.ts';
 import { parseManifest, parseManifestJson } from './parse.ts';
 
 const validBlock = {
@@ -149,6 +149,42 @@ describe('parseManifest', () => {
           exec: ['docker'],
         },
       });
+    }
+  });
+
+  test('accepts files in capabilities and a filesystem list, and derives the filesystem grant', () => {
+    const result = parseManifest({
+      apiVersion: 1,
+      contributes: {
+        panel: validBlock.contributes.panel,
+        capabilities: ['files'],
+        filesystem: ['~/.config/opencode/opencode.json', '/tmp/probe/**'],
+      },
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.manifest.contributes.capabilities).toEqual(['files']);
+      expect(result.manifest.contributes.filesystem).toEqual(['~/.config/opencode/opencode.json', '/tmp/probe/**']);
+      expect(requestedGuestCapabilities(result.manifest.contributes)).toEqual(['files', 'filesystem']);
+    }
+    expect(requestedGuestCapabilities({ capabilities: ['files'] })).toEqual(['files']);
+  });
+
+  test('rejects filesystem patterns that are relative, escape, or are empty', () => {
+    const attempt = (filesystem: unknown) => parseManifest({
+      apiVersion: 1,
+      contributes: {
+        panel: validBlock.contributes.panel,
+        // Junk on purpose: this is what an untrusted package.json may carry.
+        filesystem: filesystem as string[],
+      },
+    });
+    for (const bad of [['relative/path'], ['~/../etc/passwd'], ['/a//b'], ['/a/'], [], ['/x\\y'], ['~'], new Array(17).fill('/ok')]) {
+      const result = attempt(bad);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.code).toBe('invalid-filesystem');
+      }
     }
   });
 

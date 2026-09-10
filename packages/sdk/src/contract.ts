@@ -98,11 +98,44 @@ export type SessionLifecycleEvent = {
   phase: SessionLifecyclePhase;
 };
 
+export const GUEST_FILE_ENTRY_KINDS = ['file', 'directory', 'other'] as const;
+
+/** What a directory entry or an existing path is. */
+export type GuestFileEntryKind = (typeof GUEST_FILE_ENTRY_KINDS)[number];
+
+export const GUEST_FILE_STAT_KINDS = ['file', 'directory', 'other', 'missing'] as const;
+
+/** `stat` answer: an entry kind, or `missing` when nothing is at that path. */
+export type GuestFileStatKind = (typeof GUEST_FILE_STAT_KINDS)[number];
+
+/**
+ * Where a guest file path points. A relative path is inside the open project
+ * (capability `files`). A path starting with `/` or `~/` is outside it and
+ * must match one of the manifest's `contributes.filesystem` patterns
+ * (capability `filesystem`).
+ */
+export type GuestFileScope = 'project' | 'filesystem';
+
+export type FileReadRequest = { path: string };
+export type FileWriteRequest = { path: string; content: string };
+export type FileListRequest = { path: string };
+export type FileStatRequest = { path: string };
+
+export type FileReadResult = { content: string };
+export type FileWriteResult = { written: true };
+export type FileListEntry = { name: string; kind: GuestFileEntryKind };
+export type FileListResult = { entries: FileListEntry[] };
+export type FileStatResult = { kind: GuestFileStatKind; size: number; mtime: number };
+
 export type HostResultPayload =
   | GuestRequestResult
   | StartSessionResult
   | PromptResult
-  | ServiceStatusResult;
+  | ServiceStatusResult
+  | FileReadResult
+  | FileWriteResult
+  | FileListResult
+  | FileStatResult;
 
 export const isStartSessionResult = (
   value: HostResultPayload | undefined,
@@ -178,6 +211,12 @@ export const GUEST_REQUEST_PATH_MAX = 2_000;
 export const GUEST_REQUEST_BODY_MAX = 64_000;
 export const GUEST_REQUEST_RESPONSE_MAX = 256_000;
 export const GUEST_REQUEST_TIMEOUT_MS = 20_000;
+/** Guest file path, in characters. */
+export const GUEST_FILE_PATH_MAX = 1_024;
+/** File content in characters, read and write alike. */
+export const GUEST_FILE_CONTENT_MAX = 2_000_000;
+/** Entries a `listDir` answer carries; longer directories are truncated. */
+export const GUEST_FILE_LIST_MAX = 2_000;
 
 export const HOST_REQUEST_ERROR_CODES = [
   'HOST_UNAVAILABLE',
@@ -192,6 +231,10 @@ export const HOST_REQUEST_ERROR_CODES = [
   'NO_SESSION',
   'SESSION_BUSY',
   'NOT_GRANTED',
+  'NO_DIRECTORY',
+  'NOT_FOUND',
+  'FILE_TOO_LARGE',
+  'DENIED',
 ] as const;
 
 export const SERVICE_STATUS_VALUES = ['stopped', 'starting', 'ready', 'failed'] as const;
@@ -270,6 +313,27 @@ export const clampPromptRequest = (request: PromptRequest): PromptRequest => {
   return next;
 };
 
+/**
+ * Which grant a file path needs. `/…` and `~/…` are outside the project and
+ * go through the declared `filesystem` patterns; anything else is joined to
+ * the open project directory.
+ */
+export const guestFileScope = (path: string): GuestFileScope => (
+  path.startsWith('/') || path === '~' || path.startsWith('~/') ? 'filesystem' : 'project'
+);
+
+/**
+ * What the host schema accepts as a file path. Semantics (`..`, symlinks,
+ * declared patterns) are the server's call and come back as `BAD_PATH`; this
+ * only keeps a message from being dropped unanswered.
+ */
+export const isGuestFilePath = (value: string): boolean => (
+  value.length > 0
+  && value.length <= GUEST_FILE_PATH_MAX
+  && !value.includes('\0')
+  && !value.includes('\\')
+);
+
 export const ATTACH_PROVIDER_ID = /^[a-z][a-z0-9-]*$/;
 export const SETTING_KEY = /^[a-z][a-z0-9-]*$/;
 
@@ -333,6 +397,10 @@ export type GuestOauthDisconnectMessage = GuestCall<'oauth-disconnect'>;
 export type GuestRequestMessage = GuestCall<'request', GuestRequest>;
 export type GuestServiceRequestMessage = GuestCall<'service-request', GuestRequest>;
 export type GuestServiceStatusMessage = GuestCall<'service-status'>;
+export type GuestFileReadMessage = GuestCall<'file-read', FileReadRequest>;
+export type GuestFileWriteMessage = GuestCall<'file-write', FileWriteRequest>;
+export type GuestFileListMessage = GuestCall<'file-list', FileListRequest>;
+export type GuestFileStatMessage = GuestCall<'file-stat', FileStatRequest>;
 
 export type GuestMessage =
   | GuestHelloMessage
@@ -350,7 +418,11 @@ export type GuestMessage =
   | GuestOauthDisconnectMessage
   | GuestRequestMessage
   | GuestServiceRequestMessage
-  | GuestServiceStatusMessage;
+  | GuestServiceStatusMessage
+  | GuestFileReadMessage
+  | GuestFileWriteMessage
+  | GuestFileListMessage
+  | GuestFileStatMessage;
 
 const serviceStatusSet: ReadonlySet<string> = new Set(SERVICE_STATUS_VALUES);
 
@@ -361,6 +433,26 @@ export const isServiceStatusResult = (
 export const isGuestRequestResult = (
   value: HostResultPayload | undefined,
 ): value is GuestRequestResult => Boolean(value && 'status' in value && 'body' in value && Number.isInteger(value.status));
+
+export const isFileReadResult = (
+  value: HostResultPayload | undefined,
+): value is FileReadResult => Boolean(value && 'content' in value && String(value.content) === value.content);
+
+export const isFileWriteResult = (
+  value: HostResultPayload | undefined,
+): value is FileWriteResult => Boolean(value && 'written' in value && value.written === true);
+
+export const isFileListResult = (
+  value: HostResultPayload | undefined,
+): value is FileListResult => Boolean(value && 'entries' in value && Array.isArray(value.entries));
+
+const fileStatKindSet: ReadonlySet<string> = new Set(GUEST_FILE_STAT_KINDS);
+
+export const isFileStatResult = (
+  value: HostResultPayload | undefined,
+): value is FileStatResult => Boolean(
+  value && 'kind' in value && 'size' in value && fileStatKindSet.has(String(value.kind)) && Number.isFinite(value.size),
+);
 
 const HOST_PUSH_TYPES: ReadonlySet<string> = new Set([
   'ready', 'directory', 'session', 'connection', 'settings', 'session-lifecycle',

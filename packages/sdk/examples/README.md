@@ -1,6 +1,6 @@
 # Example extensions
 
-Four small extensions that exercise the SDK contract end to end. They are built
+Five small extensions that exercise the SDK contract end to end. They are built
 and checked in so they install as-is; edit `main.ts` and rebuild with the command
 below when you change one.
 
@@ -10,6 +10,7 @@ below when you change one.
 | `tasks-demo` | `prompt`, `sessions` | A fake task list. Attach a task as a chip, link it to the current session, start a session (optionally on a worktree), send a prompt. Appears in the composer + menu as a dialog. Exercises the approval dialog and `NOT_GRANTED` when you decline. |
 | `service-echo` | `service` | A local service process (Node HTTP server on loopback). The panel calls it through `host.serviceRequest` and shows status. Exercises the service approval and spawn/stop lifecycle. |
 | `github-token` | `network` | A token integration against `https://api.github.com`. Paste a GitHub token in Settings → Integrations, then the panel lists your repositories through `host.request`. Exercises the OAuth/token store and the request proxy. |
+| `config-editor` | `filesystem` | Reads `~/.config/opencode/opencode.json` (declared under `contributes.filesystem`), parses it, and shows it as a browsable tree (Explore tab: keys, types, drill into objects and arrays) next to a raw editor (Raw tab) that saves back atomically. Exercises the outside-project file scope, the missing-file and invalid-JSON states, and the approval dialog's pattern list. |
 
 ## Install
 
@@ -19,6 +20,7 @@ below when you change one.
    - `<repo>/packages/sdk/examples/tasks-demo`
    - `<repo>/packages/sdk/examples/service-echo`
    - `<repo>/packages/sdk/examples/github-token`
+   - `<repo>/packages/sdk/examples/config-editor`
 3. Approve what the dialog lists (or Remove to see the refusal path). The icon appears on the context rail.
 
 ## Rebuild after editing
@@ -28,4 +30,5 @@ From the repo root:
 ```bash
 bun packages/sdk/scripts/bundle-guest.ts packages/sdk/examples/hello-kit/panel/main.ts packages/sdk/examples/hello-kit/panel/main.js
 bun packages/sdk/scripts/bundle-guest.ts --node packages/sdk/examples/service-echo/service/main.ts packages/sdk/examples/service-echo/service/main.js
+bun packages/sdk/scripts/bundle-guest.ts packages/sdk/examples/config-editor/panel/main.ts packages/sdk/examples/config-editor/panel/main.js
 ```
