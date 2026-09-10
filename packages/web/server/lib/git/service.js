@@ -4084,6 +4084,7 @@ export async function getWorktrees(directory) {
 // ---------------------------------------------------------------------------
 
 const MAX_TRACKED_WORKTREE_DIRECTORIES = 500;
+const MAX_TRACKED_WORKTREE_REPOSITORIES = 200;
 const MAX_DIRECTORIES_PER_WORKTREE_REPOSITORY = 100;
 const worktreeTopologyListeners = new Set();
 const worktreeRepositoryKeyByDirectory = new Map();
@@ -4154,7 +4155,15 @@ const trackWorktreeTopologyDirectory = (repositoryKey, directoryPath) => {
   let entry = worktreeTopologyByRepository.get(repositoryKey);
   if (!entry) {
     entry = { directories: new Set(), fingerprint: null };
-    worktreeTopologyByRepository.set(repositoryKey, entry);
+  }
+  // Re-insert so the map stays ordered by last use; the least recently used
+  // repository is dropped first once the bound is reached.
+  worktreeTopologyByRepository.delete(repositoryKey);
+  worktreeTopologyByRepository.set(repositoryKey, entry);
+  while (worktreeTopologyByRepository.size > MAX_TRACKED_WORKTREE_REPOSITORIES) {
+    const oldest = worktreeTopologyByRepository.keys().next().value;
+    if (oldest === undefined) break;
+    worktreeTopologyByRepository.delete(oldest);
   }
   if (entry.directories.size < MAX_DIRECTORIES_PER_WORKTREE_REPOSITORY) {
     entry.directories.add(directoryPath);
