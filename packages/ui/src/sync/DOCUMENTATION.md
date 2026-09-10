@@ -138,11 +138,18 @@ runtime switch stops the batch and prevents writing its cooldown into the new
 runtime. Automatic attempts are limited to once per day while the app is open;
 manual runs bypass the cooldown and enabled checkbox.
 
-Retention targets unarchived sessions by last activity. It preserves the five
-most recent sessions, the selected session, shared sessions, and sessions with
-observed live activity. Parents with an attached `/btw` conversation also stay,
+Retention targets unarchived sessions by last activity by default. The opt-in
+`sessionRetentionOnlyArchived` setting switches both the preview and execution
+to archived sessions and measures their retention period from `time.archived`.
+It forces Delete in the store and cleanup runner; Archive is disabled in Settings.
+Turning it off leaves Delete selected and makes Archive available again. The
+setting uses the instance settings registry across web, desktop, VS Code and mobile.
+
+Both modes preserve the five most recent sessions in the selected scope, ranked
+by that scope's retention timestamp, plus the selected session, shared sessions,
+and sessions with observed live activity. Parents with an attached `/btw` conversation also stay,
 because the canonical archive/delete actions remove that temporary fork.
-Archived sessions remain outside retention. Because
+Sessions outside the selected scope remain protected. Because
 OpenCode cascades deletion, every ancestor of a retained session is protected
 too. Eligible deletions run children first and recheck current selection,
 activity, sharing, age, and child membership before each request. A failed child

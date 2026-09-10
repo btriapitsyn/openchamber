@@ -20,7 +20,8 @@ export const useSessionAutoCleanup = ({ autoRun = true, enabled = true }: Cleanu
   const isLoading = useSessionUIStore((state) => state.isLoading);
   const autoDeleteEnabled = useUIStore((state) => state.autoDeleteEnabled);
   const autoDeleteAfterDays = useUIStore((state) => state.autoDeleteAfterDays);
-  const action = useUIStore((state) => state.sessionRetentionAction);
+  const onlyArchived = useUIStore((state) => state.sessionRetentionOnlyArchived);
+  const action = useUIStore((state) => state.sessionRetentionOnlyArchived ? 'delete' : state.sessionRetentionAction);
   const autoDeleteLastRunAt = useUIStore((state) => state.autoDeleteLastRunAt);
   const needsGlobalSessions = enabled && (!autoRun || autoDeleteEnabled);
   const activeSessions = useGlobalSessionsStore((state) => needsGlobalSessions ? state.activeSessions : EMPTY_SESSIONS);
@@ -38,8 +39,9 @@ export const useSessionAutoCleanup = ({ autoRun = true, enabled = true }: Cleanu
     currentSessionId,
     cutoffDays: autoDeleteAfterDays,
     action,
+    onlyArchived,
     activeSessionIds,
-  }), [activeSessions, archivedSessions, currentSessionId, autoDeleteAfterDays, action, activeSessionIds]);
+  }), [activeSessions, archivedSessions, currentSessionId, autoDeleteAfterDays, action, onlyArchived, activeSessionIds]);
 
   React.useEffect(() => {
     if (!enabled || !autoRun || !autoDeleteEnabled || autoDeleteAfterDays <= 0

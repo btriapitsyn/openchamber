@@ -12,9 +12,13 @@ const DAY_MS = 86_400_000;
 export const RETENTION_KEEP_RECENT = 5;
 export const RETENTION_INTERVAL_MS = DAY_MS;
 
-const isOlderThanCutoff = (session: Session, cutoff: number): boolean => {
-  const lastActivity = session.time.updated ?? session.time.created;
-  return Number.isFinite(lastActivity) && lastActivity > 0 && lastActivity < cutoff;
+const retentionTimestamp = (session: Session, onlyArchived: boolean): number => (
+  onlyArchived ? session.time.archived ?? 0 : session.time.updated ?? session.time.created
+);
+
+const isOlderThanCutoff = (session: Session, cutoff: number, onlyArchived: boolean): boolean => {
+  const timestamp = retentionTimestamp(session, onlyArchived);
+  return Number.isFinite(timestamp) && timestamp > 0 && timestamp < cutoff;
 };
 
 type CandidateOptions = {
@@ -22,27 +26,28 @@ type CandidateOptions = {
   currentSessionId: string | null;
   cutoffDays: number;
   action: SessionRetentionAction;
+  onlyArchived?: boolean;
   activeSessionIds: ReadonlySet<string>;
   now?: number;
 };
 
-/** Archived sessions are retained, including when deletion would reach them through a parent. */
+/** The unselected scope stays protected, including from cascading parent deletion. */
 export function buildSessionRetentionCandidates({
-  sessions, currentSessionId, cutoffDays, action, activeSessionIds, now = Date.now(),
+  sessions, currentSessionId, cutoffDays, action, onlyArchived = false, activeSessionIds, now = Date.now(),
 }: CandidateOptions): string[] {
   if (!Number.isFinite(cutoffDays) || cutoffDays < 1) return [];
   const cutoff = now - cutoffDays * DAY_MS;
   const byId = new Map(sessions.map((session) => [session.id, session]));
-  const sorted = sessions.filter((session) => !session.time.archived)
-    .sort((a, b) => b.time.updated - a.time.updated);
+  const sorted = sessions.filter((session) => Boolean(session.time.archived) === onlyArchived)
+    .sort((a, b) => retentionTimestamp(b, onlyArchived) - retentionTimestamp(a, onlyArchived));
   const protectedIds = new Set(sorted.slice(0, RETENTION_KEEP_RECENT).map((session) => session.id));
   for (const session of sessions) {
-    if (session.time.archived || session.share || getBtwSessionID(session) || session.id === currentSessionId
-      || activeSessionIds.has(session.id) || !isOlderThanCutoff(session, cutoff)) {
+    if (Boolean(session.time.archived) !== onlyArchived || session.share || getBtwSessionID(session) || session.id === currentSessionId
+      || activeSessionIds.has(session.id) || !isOlderThanCutoff(session, cutoff, onlyArchived)) {
       protectedIds.add(session.id);
     }
   }
-  if (action === 'delete') {
+  if (action === 'delete' || onlyArchived) {
     // OpenCode deletes the whole subtree. Protect every ancestor of a retained session.
     for (const id of protectedIds) {
       const parentId = byId.get(id)?.parentID;
@@ -50,7 +55,7 @@ export function buildSessionRetentionCandidates({
     }
   }
   const candidates = sorted.filter((session) => !protectedIds.has(session.id));
-  if (action === 'archive') return candidates.map((session) => session.id);
+  if (action === 'archive' && !onlyArchived) return candidates.map((session) => session.id);
 
   // Children first: each request deletes one eligible session, and a failed child
   // can prevent its parent from bypassing that failure with a cascading delete.
@@ -85,7 +90,8 @@ export const useSessionRetentionRunStore = create(() => ({ isRunning: false }));
 
 export async function runSessionRetentionCleanup({ force = false } = {}): Promise<SessionRetentionResult> {
   const settings = useUIStore.getState();
-  const action = settings.sessionRetentionAction;
+  const onlyArchived = settings.sessionRetentionOnlyArchived;
+  const action = onlyArchived ? 'delete' : settings.sessionRetentionAction;
   const result: SessionRetentionResult = { completedIds: [], failedIds: [], action };
   if (useSessionRetentionRunStore.getState().isRunning) return { ...result, skippedReason: 'running' };
   if (!Number.isFinite(settings.autoDeleteAfterDays) || settings.autoDeleteAfterDays < 1
@@ -112,6 +118,7 @@ export async function runSessionRetentionCleanup({ force = false } = {}): Promis
       currentSessionId: useSessionUIStore.getState().currentSessionId,
       cutoffDays: settings.autoDeleteAfterDays,
       action,
+      onlyArchived,
       activeSessionIds: useGlobalSessionStatusStore.getState().activeSessionIds,
       now,
     });
@@ -119,7 +126,7 @@ export async function runSessionRetentionCleanup({ force = false } = {}): Promis
 
     const failedIds = new Set<string>();
     let archivedSnapshot: readonly Session[] | undefined;
-    let archivedParentIds = new Set<string>();
+    let archivedChildrenByParentId = new Map<string, string[]>();
     for (const [index, id] of candidateIds.entries()) {
       if (!isCurrentRuntime()) {
         result.failedIds.push(...candidateIds.slice(index));
@@ -128,18 +135,27 @@ export async function runSessionRetentionCleanup({ force = false } = {}): Promis
       const state = useGlobalSessionsStore.getState();
       const session = state.entityById.get(id);
       if (!session) continue;
-      if (session.time.archived || session.share || getBtwSessionID(session) || session.id === useSessionUIStore.getState().currentSessionId
+      if (Boolean(session.time.archived) !== onlyArchived || session.share || getBtwSessionID(session) || session.id === useSessionUIStore.getState().currentSessionId
         || useGlobalSessionStatusStore.getState().activeSessionIds.has(id)
-        || !isOlderThanCutoff(session, now - settings.autoDeleteAfterDays * DAY_MS)) continue;
+        || !isOlderThanCutoff(session, now - settings.autoDeleteAfterDays * DAY_MS, onlyArchived)) continue;
       if (action === 'delete') {
         if (archivedSnapshot !== state.archivedSessions) {
           archivedSnapshot = state.archivedSessions;
-          archivedParentIds = new Set(archivedSnapshot.flatMap((archived) => archived.parentID ? [archived.parentID] : []));
+          archivedChildrenByParentId = new Map();
+          for (const archived of archivedSnapshot) {
+            if (!archived.parentID) continue;
+            const children = archivedChildrenByParentId.get(archived.parentID);
+            if (children) children.push(archived.id);
+            else archivedChildrenByParentId.set(archived.parentID, [archived.id]);
+          }
         }
         // Planned children ran first. Any child still present either failed,
         // became protected, or arrived mid-run. Never delete it via its parent.
-        const children = state.structure.activeChildrenByParentId.get(id) ?? [];
-        if (children.length > 0 || archivedParentIds.has(id)) {
+        const children = [
+          ...(state.structure.activeChildrenByParentId.get(id) ?? []),
+          ...(archivedChildrenByParentId.get(id) ?? []),
+        ];
+        if (children.length > 0) {
           if (children.some((childId) => failedIds.has(childId))) {
             failedIds.add(id);
             result.failedIds.push(id);

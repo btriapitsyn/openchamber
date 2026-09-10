@@ -17,6 +17,10 @@ const session = (id: string, patch: Partial<Session> = {}): Session => ({
 const recent = Array.from({ length: 5 }, (_, index) => session(`recent-${index}`, {
   time: { created: now - day, updated: now - day },
 }));
+const archived = (id: string, patch: Partial<Session> = {}): Session => session(id, {
+  time: { created: now - 60 * day, updated: now - 40 * day, archived: now - 40 * day }, ...patch,
+});
+const recentArchived = recent.map((item) => ({ ...item, id: `archived-${item.id}`, time: { ...item.time, archived: now - day } }));
 const candidates = (sessions: Session[], action: 'archive' | 'delete' = 'delete') => buildSessionRetentionCandidates({
   sessions: [...recent, ...sessions], cutoffDays: 30, currentSessionId: null, action, activeSessionIds: new Set(), now,
 });
@@ -30,7 +34,7 @@ beforeEach(() => {
   useGlobalSessionsStore.getState().resetForRuntimeSwitch();
   useSessionUIStore.setState({ currentSessionId: null, isLoading: false });
   replaceGlobalSessionStatusById(new Map());
-  useUIStore.setState({ autoDeleteEnabled: true, autoDeleteAfterDays: 30, sessionRetentionAction: 'delete', autoDeleteLastRunAt: 0 });
+  useUIStore.setState({ autoDeleteEnabled: true, autoDeleteAfterDays: 30, sessionRetentionAction: 'delete', sessionRetentionOnlyArchived: false, autoDeleteLastRunAt: 0 });
   spyOn(useGlobalSessionsStore.getState(), 'loadSessions').mockImplementation(async () => {
     const state = useGlobalSessionsStore.getState();
     return { activeSessions: state.activeSessions, archivedSessions: state.archivedSessions };
@@ -217,5 +221,83 @@ describe('retention execution', () => {
     expect(remove.mock.calls).toHaveLength(850);
     expect(existing.size).toBe(0);
     expect(useGlobalSessionsStore.getState().activeSessions).toHaveLength(5);
+  });
+});
+
+describe('archived-only retention', () => {
+  const archivedCandidates = (sessions: Session[]) => buildSessionRetentionCandidates({
+    sessions: [...recentArchived, ...sessions], cutoffDays: 30, currentSessionId: null,
+    action: 'archive', onlyArchived: true, activeSessionIds: new Set(), now,
+  });
+
+  test('filters only archived sessions and uses archive time instead of last activity', () => {
+    expect(archivedCandidates([
+      archived('old-archive', { time: { created: 1, updated: now, archived: now - 40 * day } }),
+      archived('new-archive', { time: { created: 1, updated: 2, archived: now - 2 * day } }),
+      session('unarchived'),
+      session('restored', { time: { created: 1, updated: 2, archived: 0 } }),
+    ])).toEqual(['old-archive']);
+  });
+
+  test('preserves the five most recently archived sessions even when all are expired', () => {
+    const sessions = Array.from({ length: 7 }, (_, index) => archived(`archived-${index}`, {
+      time: { created: 1, updated: now, archived: now - (40 + index) * day },
+    }));
+    expect(buildSessionRetentionCandidates({
+      sessions, cutoffDays: 30, currentSessionId: null, action: 'delete', onlyArchived: true, activeSessionIds: new Set(), now,
+    })).toEqual(['archived-5', 'archived-6']);
+  });
+
+  test('protects shared archives and parents of unarchived or recently archived descendants', () => {
+    expect(archivedCandidates([
+      archived('parent'), session('active-child', { parentID: 'parent' }),
+      archived('recent-parent'), { ...recentArchived[0], parentID: 'recent-parent' },
+      archived('shared', { share: { url: 'https://share.test' } }),
+      archived('unrelated'),
+    ])).toEqual(['unrelated']);
+  });
+
+  test('forces deletion in core even if a stale setting still requests archive', async () => {
+    seed([...recentArchived, archived('parent'), archived('child', { parentID: 'parent' }), session('unarchived')]);
+    useUIStore.setState({ sessionRetentionOnlyArchived: true, sessionRetentionAction: 'archive' });
+    const remove = spyOn(opencodeClient, 'deleteSession').mockResolvedValue(true);
+    const update = spyOn(opencodeClient, 'updateSession');
+    const result = await runSessionRetentionCleanup({ force: true });
+    expect(result.action).toBe('delete');
+    expect(result.completedIds).toEqual(['child', 'parent']);
+    expect(result.failedIds).toEqual([]);
+    expect(remove.mock.calls.map(([id]) => id)).toEqual(['child', 'parent']);
+    expect(update.mock.calls).toHaveLength(0);
+    expect(useGlobalSessionsStore.getState().entityById.has('unarchived')).toBe(true);
+    expect(useGlobalSessionsStore.getState().archivedSessions).toHaveLength(5);
+  });
+
+  test('keeps failed archived descendants and reports their blocked ancestors', async () => {
+    seed([...recentArchived, archived('parent'), archived('child', { parentID: 'parent' }), archived('other')]);
+    useUIStore.getState().setSessionRetentionOnlyArchived(true);
+    const remove = spyOn(opencodeClient, 'deleteSession').mockImplementation(async (id) => id !== 'child');
+    const result = await runSessionRetentionCleanup({ force: true });
+    expect(result.completedIds).toEqual(['other']);
+    expect(result.failedIds).toEqual(['child', 'parent']);
+    expect(remove.mock.calls.map(([id]) => id)).toEqual(['child', 'other']);
+    expect(useGlobalSessionsStore.getState().entityById.has('parent')).toBe(true);
+  });
+
+  test('skips sessions restored during cleanup and parents with newly archived children', async () => {
+    seed([...recentArchived, archived('first'), archived('restored'), archived('parent')]);
+    useUIStore.getState().setSessionRetentionOnlyArchived(true);
+    const remove = spyOn(opencodeClient, 'deleteSession').mockImplementation(async () => {
+      useGlobalSessionsStore.getState().upsertSessions([
+        session('restored', { time: { created: 1, updated: 2, archived: 0 } }),
+        archived('new-child', { parentID: 'parent', time: { created: now, updated: now, archived: now } }),
+      ]);
+      return true;
+    });
+    const result = await runSessionRetentionCleanup({ force: true });
+    expect(result.completedIds).toEqual(['first']);
+    expect(result.failedIds).toEqual([]);
+    expect(remove.mock.calls).toHaveLength(1);
+    expect(useGlobalSessionsStore.getState().entityById.has('parent')).toBe(true);
+    expect(useGlobalSessionsStore.getState().entityById.has('restored')).toBe(true);
   });
 });

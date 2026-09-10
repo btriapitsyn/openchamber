@@ -39,6 +39,20 @@ const createRuntime = async ({ mergePersistedSettings = (_current, changes) => c
 };
 
 describe('settings runtime', () => {
+  it('round-trips both archived-only retention states through instance settings', async () => {
+    const { runtime, settingsFilePath, cleanup } = await createRuntime();
+    try {
+      for (const sessionRetentionOnlyArchived of [true, false]) {
+        const settings = { sessionRetentionOnlyArchived, sessionRetentionAction: 'delete', autoDeleteAfterDays: 30 };
+        await runtime.persistSettings(settings);
+        expect(await runtime.readSettingsFromDisk()).toEqual(settings);
+        expect(JSON.parse(await fsPromises.readFile(settingsFilePath, 'utf8'))).toEqual(settings);
+      }
+    } finally {
+      await cleanup();
+    }
+  });
+
   it('uses OpenChamber themes when a new install has no theme preferences', async () => {
     const { runtime, cleanup } = await createRuntime();
     try {
