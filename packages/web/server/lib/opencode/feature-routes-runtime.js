@@ -341,6 +341,7 @@ export const createFeatureRoutesRuntime = (dependencies) => {
     registerFsRoutes(app, {
       os,
       path,
+      fs,
       fsPromises,
       spawn,
       crypto,
@@ -350,6 +351,7 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       resolveGitBinaryForSpawn,
       openchamberUserConfigRoot,
       managedChatsRoot,
+      writeSseEvent,
     });
   };
 
