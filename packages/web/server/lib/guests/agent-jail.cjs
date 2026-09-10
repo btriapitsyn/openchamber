@@ -49,6 +49,8 @@ for (const entry of parseList(process.env.OPENCHAMBER_AGENT_SOCKET_ALLOW)) {
 const denied = (message) => {
   const error = new Error(message);
   error.code = 'OPENCHAMBER_AGENT_JAIL';
+  error.stdout = '';
+  error.stderr = '';
   return error;
 };
 
@@ -138,7 +140,7 @@ if (jailOn) {
     return original.spawnSync.call(this, normalized.file, normalized.args, normalized.options);
   };
 
-  childProcess.execFile = function jailExecFile(file, args, options, callback) {
+  const jailExecFile = function jailExecFile(file, args, options, callback) {
     let nextArgs = args;
     let nextOptions = options;
     let nextCallback = callback;
@@ -158,13 +160,33 @@ if (jailOn) {
       assertExecAllowed(file, nextOptions || {});
     } catch (error) {
       if (typeof nextCallback === 'function') {
-        process.nextTick(() => nextCallback(error));
+        process.nextTick(() => nextCallback(error, '', ''));
         return /** @type {any} */ ({});
       }
       throw error;
     }
     return original.execFile.call(this, file, nextArgs, nextOptions, nextCallback);
   };
+
+  const customPromisify = require('node:util').promisify?.custom;
+  if (customPromisify && original.execFile[customPromisify]) {
+    jailExecFile[customPromisify] = function jailExecFilePromisified(file, args, options) {
+      let nextArgs = args;
+      let nextOptions = options;
+      if (nextArgs && !Array.isArray(nextArgs) && typeof nextArgs === 'object') {
+        nextOptions = nextArgs;
+        nextArgs = [];
+      }
+      try {
+        assertExecAllowed(file, nextOptions || {});
+      } catch (error) {
+        return Promise.reject(error);
+      }
+      return original.execFile[customPromisify].call(this, file, nextArgs, nextOptions);
+    };
+  }
+
+  childProcess.execFile = jailExecFile;
 
   childProcess.execFileSync = function jailExecFileSync(file, args, options) {
     const normalized = normalizeSpawnArgs(file, args, options);

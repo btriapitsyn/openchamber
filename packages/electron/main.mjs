@@ -5139,7 +5139,7 @@ ipcMain.handle('openchamber:dialog:open', async (event, options) => {
           }))
       : undefined,
     properties: [
-      options?.directory ? 'openDirectory' : 'openFile',
+      ...(options?.allowFilesAndDirectories ? ['openFile', 'openDirectory'] : [options?.directory ? 'openDirectory' : 'openFile']),
       options?.multiple ? 'multiSelections' : null,
       'createDirectory',
     ].filter(Boolean),

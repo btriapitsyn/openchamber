@@ -32,6 +32,13 @@ const createResponse = () => {
       headers.set(name.toLowerCase(), value);
       return this;
     },
+    type() {
+      return this;
+    },
+    send(payload) {
+      body = payload;
+      return this;
+    },
     get statusCode() {
       return statusCode;
     },
@@ -278,6 +285,19 @@ describe('ui auth client credential seam', () => {
       expect(writeCalled).toBe(false);
       expect(writeRes.statusCode).toBe(401);
     }
+
+    const guestScopedRes = createResponse();
+    await auth.handleUrlAuthToken({ method: 'POST', url: '/auth/url-token?scope=guests', headers: { authorization: 'Bearer client-token' }, query: { scope: 'guests' } }, guestScopedRes);
+    const guestScopedToken = guestScopedRes.body.token;
+
+    const guestScopedOkReq = { method: 'GET', path: '/api/guests/demo/panel.js', url: `/api/guests/demo/panel.js?oc_url_token=${encodeURIComponent(guestScopedToken)}`, headers: {} };
+    const guestScopedOkAuth = await auth.resolveAuthContext(guestScopedOkReq, null);
+    expect(guestScopedOkAuth?.token).toBe('client:device-1');
+
+    const guestScopedDeniedReq = { method: 'GET', path: '/api/fs/raw', url: `/api/fs/raw?path=/etc/passwd&oc_url_token=${encodeURIComponent(guestScopedToken)}`, headers: {} };
+    const clientOnlyAuth = createUiAuth({ requireClientAuth: true, clientAuthController: { authenticateBearerToken: async () => null } });
+    const guestScopedDeniedAuth = await clientOnlyAuth.resolveAuthContext(guestScopedDeniedReq, null);
+    expect(guestScopedDeniedAuth).toBe(null);
   });
 
   it('issues desktop client tokens with the UI session expiry', async () => {

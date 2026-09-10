@@ -427,12 +427,12 @@ export const createUiAuth = ({
     }
   };
 
-  const issueUrlAuthTokenForSession = (sessionToken) => {
+  const issueUrlAuthTokenForSession = (sessionToken, { guestOnly = false } = {}) => {
     sweepUrlAuthTokens();
     const token = `${URL_AUTH_TOKEN_PREFIX}${crypto.randomBytes(24).toString('base64url')}`;
     const expiresAt = Date.now() + URL_AUTH_TOKEN_TTL_MS;
-    urlAuthTokens.set(token, { sessionToken, expiresAt });
-    return { token, expiresAt };
+    urlAuthTokens.set(token, { sessionToken, expiresAt, guestOnly });
+    return { token, expiresAt, guestOnly };
   };
 
   const authenticateUrlAuthToken = (req) => {
@@ -443,6 +443,12 @@ export const createUiAuth = ({
     if (!entry || entry.expiresAt <= Date.now()) {
       urlAuthTokens.delete(token);
       return null;
+    }
+    if (entry.guestOnly) {
+      const pathname = getRequestPathname(req);
+      if (!pathname.startsWith('/api/guests/') || pathname === '/api/guests') {
+        return null;
+      }
     }
     return { ok: true, sessionToken: entry.sessionToken || 'url:authenticated' };
   };
@@ -568,17 +574,20 @@ export const createUiAuth = ({
         res.status(400).json({ error: 'UI password not configured' });
       },
       handleUrlAuthToken: async (req, res) => {
+        const urlStr = String(req?.originalUrl || req?.url || '');
+        const queryScope = String(req?.query?.scope || '');
+        const guestOnly = queryScope === 'guests' || urlStr.includes('scope=guests');
         const clientAuth = await authenticateClientRequest(req, { allowUrlToken: false });
         if (clientAuth) {
           res.setHeader('Cache-Control', 'no-store');
-          return res.json(issueUrlAuthTokenForSession(clientSessionToken(clientAuth)));
+          return res.json(issueUrlAuthTokenForSession(clientSessionToken(clientAuth), { guestOnly }));
         }
         if (requireClientAuth) {
           return res.status(401).json({ error: 'Client authentication required', locked: true, clientAuthRequired: true });
         }
         const sessionToken = await ensureSessionToken(req, res);
         res.setHeader('Cache-Control', 'no-store');
-        return res.json(issueUrlAuthTokenForSession(sessionToken));
+        return res.json(issueUrlAuthTokenForSession(sessionToken, { guestOnly }));
       },
       handlePasskeyStatus: (_req, res) => {
         res.json({ enabled: false, hasPasskeys: false, passkeyCount: 0, rpID: null });

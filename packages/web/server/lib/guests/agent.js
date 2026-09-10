@@ -3,6 +3,10 @@ import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import net from 'node:net';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const JAIL_PATH = path.resolve(path.dirname(__filename), 'agent-jail.cjs');
 
 import {
   GUEST_REQUEST_RESPONSE_MAX,
@@ -265,6 +269,7 @@ const collectProcessOutput = (child, maxChars = 2_000) => {
  *   entry: string,
  *   socketBindings?: Array<{ id: string, candidatesByPlatform?: Partial<Record<'linux' | 'darwin' | 'win32', string[]>> }>,
  *   socketOverrides?: Record<string, string>,
+ *   execPermissions?: string[],
  * }} params
  */
 const startGuestAgent = async ({
@@ -273,6 +278,7 @@ const startGuestAgent = async ({
   entry,
   socketBindings = [],
   socketOverrides = {},
+  execPermissions = [],
 }) => {
   const existing = runtimes.get(guestId);
   if (existing?.status === 'ready' && existing.child.exitCode === null && !existing.child.signalCode) {
@@ -298,8 +304,12 @@ const startGuestAgent = async ({
   const socketEnv = socketBindings.length > 0
     ? await resolveAgentSocketEnv(socketBindings, socketOverrides)
     : {};
+  const socketAllows = Object.values(socketEnv);
   const env = {
     ...process.env,
+    OPENCHAMBER_AGENT_JAIL: '1',
+    OPENCHAMBER_AGENT_EXEC_ALLOW: JSON.stringify(execPermissions),
+    OPENCHAMBER_AGENT_SOCKET_ALLOW: JSON.stringify(socketAllows),
     OPENCHAMBER_AGENT_PORT: String(port),
     OPENCHAMBER_AGENT_TOKEN: token,
     ELECTRON_RUN_AS_NODE: '1',
@@ -307,7 +317,7 @@ const startGuestAgent = async ({
   if (Object.keys(socketEnv).length > 0) {
     env.OPENCHAMBER_AGENT_SOCKETS = JSON.stringify(socketEnv);
   }
-  const child = spawn(process.execPath, [absoluteEntry], {
+  const child = spawn(process.execPath, ['-r', JAIL_PATH, absoluteEntry], {
     cwd: packageRoot,
     env,
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -424,6 +434,7 @@ export const proxyGuestAgentRequest = async ({
 
   const socketOverrides = store.agentSocketOverrides?.[guestId] ?? {};
   const socketBindings = agent.permissions?.sockets ?? [];
+  const execPermissions = agent.permissions?.exec ?? [];
 
   let runtime = runtimes.get(guestId);
   if (!runtime || runtime.status !== 'ready' || runtime.child.exitCode !== null || runtime.child.signalCode) {
@@ -433,6 +444,7 @@ export const proxyGuestAgentRequest = async ({
       entry: agent.entry,
       socketBindings,
       socketOverrides,
+      execPermissions,
     });
   }
 

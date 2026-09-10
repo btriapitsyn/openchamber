@@ -31,6 +31,7 @@ import { getRuntimeUrlResolver } from '@/lib/runtime-url';
 import { pluginModeFromId } from '@/lib/surfaces/modes';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/stores/useUIStore';
+import { canRequestNativeDirectoryAccess, requestDirectoryAccess, requestFileAccess } from '@/lib/desktop';
 import type { PublicSocketBinding } from '@openchamber/sdk';
 
 const errorToastKey = (code: InstallGuestErrorCode): I18nKey => {
@@ -403,6 +404,32 @@ export const ExtensionsPage: React.FC = () => {
     await finishInstall(result, trimmed);
   };
 
+  const browseFolder = async () => {
+    if (canRequestNativeDirectoryAccess()) {
+      const res = await requestDirectoryAccess('');
+      if (res.success && res.path) {
+        setInstallValue(res.path);
+        setBusy(true);
+        const result = await installGuest(res.path);
+        setBusy(false);
+        await finishInstall(result, res.path);
+      }
+    }
+  };
+
+  const browseZip = async () => {
+    const fileRes = await requestFileAccess({
+      filters: [{ name: 'ZIP Archive', extensions: ['zip'] }],
+    });
+    if (fileRes.success && fileRes.path) {
+      setInstallValue(fileRes.path);
+      setBusy(true);
+      const result = await installGuest(fileRes.path);
+      setBusy(false);
+      await finishInstall(result, fileRes.path);
+    }
+  };
+
   const confirmReinstall = async () => {
     if (!reinstall) {
       return;
@@ -506,20 +533,53 @@ export const ExtensionsPage: React.FC = () => {
             settingsItem="extensions.add"
             controlClassName="w-full max-w-none"
           >
-            <Input
-              value={installValue}
-              onChange={(event) => setInstallValue(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault();
-                  void add();
-                }
-              }}
-              placeholder={t('settings.extensions.add.placeholder')}
-              aria-label={t('settings.extensions.add.label')}
-              className="h-8 min-w-0 flex-1 rounded-md px-3"
-              disabled={busy}
-            />
+            <div className="relative flex min-w-0 flex-1 items-center">
+              <Input
+                value={installValue}
+                onChange={(event) => setInstallValue(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    void add();
+                  }
+                }}
+                placeholder={t('settings.extensions.add.placeholder')}
+                aria-label={t('settings.extensions.add.label')}
+                className={cn(
+                  'h-8 min-w-0 flex-1 rounded-md pl-3',
+                  canRequestNativeDirectoryAccess() ? 'pr-14' : 'pr-3',
+                )}
+                disabled={busy}
+              />
+              {canRequestNativeDirectoryAccess() ? (
+                <div className="absolute right-1 top-1/2 flex -translate-y-1/2 items-center gap-0.5">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                    title="Browse folder"
+                    aria-label="Browse folder"
+                    disabled={busy}
+                    onClick={() => void browseFolder()}
+                  >
+                    <Icon name="folder" className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                    title="Browse ZIP archive"
+                    aria-label="Browse ZIP archive"
+                    disabled={busy}
+                    onClick={() => void browseZip()}
+                  >
+                    <Icon name="archive" className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : null}
+            </div>
             <Button
               type="button"
               size="sm"

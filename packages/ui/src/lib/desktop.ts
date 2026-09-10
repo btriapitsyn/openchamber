@@ -458,15 +458,20 @@ const desktopExistingFileGrantSchema = z.object({
 });
 
 export const requestFileAccess = async (
-  options?: { filters?: Array<{ name: string; extensions: string[] }>; defaultPath?: string }
+  options?: {
+    filters?: Array<{ name: string; extensions: string[] }>;
+    defaultPath?: string;
+    allowFilesAndDirectories?: boolean;
+  }
 ): Promise<{ success: boolean; path?: string; outsideFileGrant?: string; error?: string }> => {
   if (hasDesktopInvoke() && isDesktopLocalOriginActive()) {
     try {
       const selected = await getDesktopBridge()?.openDialog?.({
         directory: false,
         multiple: false,
-        title: 'Select File',
+        title: 'Select File or Folder',
         returnGrant: true,
+        ...(options?.allowFilesAndDirectories ? { allowFilesAndDirectories: true } : {}),
         ...(options?.filters ? { filters: options.filters } : {}),
         ...(options?.defaultPath ? { defaultPath: options.defaultPath } : {}),
       });
