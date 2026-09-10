@@ -1,5 +1,7 @@
 import { linearIntegrationI18n } from './linear-integration.i18n';
 export const settingsDict = {
+  'settings.openchamber.visual.field.alwaysShowScrollbars': 'Завжди показувати смуги прокручування',
+  'settings.openchamber.visual.field.alwaysShowScrollbarsHint': 'Залишати смуги прокручування видимими, навіть коли курсор поза областю прокручування. Лише на цьому пристрої.',
   'settings.providers.page.openCodeGo.title': 'Відстеження використання OpenCode Go',
   'settings.providers.page.openCodeGo.description': 'Підключіть панель OpenCode Go, щоб бачити ковзну, тижневу та місячну квоту.',
   'settings.providers.page.openCodeGo.workspaceId': 'ID робочого простору',
@@ -59,7 +61,6 @@ export const settingsDict = {
   "settings.view.pendingRestart.confirm.dontShowAgain": "Більше не показувати",
   "settings.view.pendingRestart.confirm.cancel": "Скасувати",  "settings.view.actions.backToSettings": "Назад до налаштувань",
   "settings.view.actions.closeSettings": "Закрити налаштування",
-  "settings.view.actions.openSectionList": "Відкрити список розділів",
   "settings.view.actions.closeSettingsWithShortcut": "Закрити налаштування ({shortcut}+,)",
   "settings.view.actions.back": "Назад",
   "settings.view.actions.resizeNavigation": "Змінити розмір навігації налаштувань",

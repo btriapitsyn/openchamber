@@ -29,7 +29,51 @@ These are the most performance-sensitive.
 
 These stores act like centralized keyed caches. UI should consume narrow slices from them instead of re-fetching the same data in multiple places.
 
+`useQuotaStore` keeps the last authoritative provider results separately from
+`refreshErrors`. Transport failures and configured-provider errors preserve the
+last usage sample and its timestamp. An explicit unconfigured response replaces
+old configuration; a first-load transport failure leaves it unknown. Concurrent
+refreshes share one request per provider. Runtime reset aborts those requests,
+and generation checks prevent their completions from changing the next runtime.
+`lib/quota/fetchQuota.ts` validates response payloads and bounds the complete
+request, including JSON body delivery. Compact usage cards and Settings display
+refresh errors alongside retained data. The mobile popover makes at most one
+refresh attempt per opening, so a failed first load cannot create a retry loop.
+
 ### UI state stores
+
+Sidebar visibility and its persisted width are independent. Opening or closing
+the sidebar never writes a width; only resizing changes the saved choice.
+The initial width is separate from the component's minimum resize width.
+
+`useCommitSelectionStore.ts` shares the selected commit between desktop/mobile
+Changes and walkthrough. Choices are session-only and keyed by runtime, directory, and
+checked-out branch, with at most 100 remembered choices. The picker history
+belongs to `useCommitComparison`, loads only while Commit mode is active, and
+is limited to the latest 50 commits. History failure stays distinct from an
+empty list; stale directory/runtime requests cannot replace current history or
+selection. A refreshed list preserves an explicit selection even when newer
+commits have pushed it beyond the latest 50.
+
+`hooks/useGitComparison.ts` owns the local file-list state used by desktop and
+mobile comparisons. Its key contains runtime, directory, and the complete
+branch/commit/PR source. A source change hides the old list immediately; failed
+reads remain errors, and manual retries cannot publish into a superseded scope.
+The hook also resolves per-file patch requests, including a commit rename's
+previous path. Views own their lazy patch caches through `useRangeKeyedCache`.
+Mobile requests only the active detail path and suspends reads while its
+keep-alive workspace pane is hidden.
+
+`usePullRequestSelectionStore.ts` shares session-only PR choices across desktop,
+mobile Changes and walkthrough, keyed by runtime, directory and checked-out
+branch. Explicit selection bounds remembered choices to 100 entries. A choice
+contains the PR number and its repository, so fork and upstream PRs with equal
+numbers remain distinct. `usePullRequestComparison` owns the searchable,
+paginated list while PR mode is active. The shared GitHub PR status store's
+fork/remote-aware resolver supplies the initial choice, independently of list
+pagination. An absent match requires selection. External walkthrough handoffs
+apply once, and later picker changes
+remain authoritative when a retained panel becomes visible again.
 
 Examples:
 
@@ -64,7 +108,27 @@ These stores coordinate persistent project/session metadata across multiple view
 
 `useProjectContextStore.ts` caches server-owned project notes, todos, and plan links, keyed by the path-derived project id. It replaced a pair of `window` CustomEvents that made every mounted notes panel re-read the whole project config. Writes are optimistic and roll back on failure; they are serialized per project, because the server's own store does a read-modify-write and two concurrent saves would otherwise race it. A load that resolves while a write is in flight keeps the local value for that field group only, so a slow snapshot cannot undo newer typing while still delivering the plan list it fetched. A failed load sets `error` and preserves the cached snapshot — an unreachable server must never render as "this project has no notes". Note and plan creation are deliberately not optimistic, since ids and timestamps are assigned by the server. Notes, todos, and plans are written through separate routes and tracked by separate in-flight flags, so a todo toggle cannot clobber a note edit in the same window. Pinned notes and plans are assembled into a synthetic context part by `lib/projectContextPinning.ts` at send time; that module tracks per-session what it already sent so an unchanged pinned set is not re-sent every turn.
 
-`messageQueueStore.ts` has two owners, decided by `isServerOwnedMessageQueue()`. On web, desktop, and mobile the OpenChamber server owns the queue (`packages/web/server/lib/message-queue/`): it delivers queued messages when the session goes idle whether or not any UI is open, and the store is a projection of it — `hydrate()` loads the server snapshot for the active runtime, `openchamber:message-queue.updated` broadcasts keep it current, and every mutation is optimistic locally then settled on the server's copy of that session (a failed round-trip re-reads the server instead of guessing). A per-key server revision rejects stale snapshots. An empty session that arrives without a directory (servers before 1.22.2 dropped it once the queue emptied) clears every projection of that session id in the runtime, because a session id is unique across directories. Projection items carry attachment metadata only and no captured context; `popToInput()`/`takeForSend()` remove the message on the server and get the full payload back, which is why both are async.
+`messageQueueStore.ts` has two owners, decided by `isServerOwnedMessageQueue()`.
+On web, desktop, and mobile the server delivers the queue independently of the
+UI. The store projects authoritative snapshots and revisioned session updates.
+`sync/message-queue-sync.ts` receives queue events through the shared control SSE
+stream at `/api/openchamber/events`, including while OpenCode uses SSE fallback.
+It adds no poller or per-session connection. Either stream reconnecting requests
+`resync()`, independently of directory-bootstrap suppression.
+
+Hydration and recovery share one in-flight request per runtime. A recovery edge
+during its snapshot read earns one trailing read; legacy uploads are attempted
+once per runtime rather than repeated on reconnect or snapshot failure. Snapshot
+reads have a 15-second deadline. Failure preserves the projection and runtime
+switches reject stale completions. Full-snapshot revisions also cover omitted
+sessions, so a delayed mutation response cannot resurrect a cleared queue;
+session events newer than that snapshot survive reconciliation.
+
+Mutations are optimistic and then settled on the server's copy; failed
+round-trips re-read instead of guessing. Empty legacy events without a directory
+clear all projections of their session in that runtime. Projection items carry
+attachment metadata only, so `popToInput()` and `takeForSend()` asynchronously
+remove the message on the server and retrieve its complete captured payload.
 
 A queued message is captured whole, so whoever delivers it sends exactly what the composer would have: `text` (the content with its agent mention stripped and `@file` mentions already resolved into `attachments`), `agentMention`, and `context` — every chip the composer had attached (inline comments, terminal selections, browser annotations, PR comments/checks, quotes, linked issue/PR/Linear references, pending synthetic parts) plus the skill instruction derived from the text. `QueuedContextPart` distinguishes attached items (restored to the chips when the message is edited) from derived instructions (re-derived on send, never restored) and from synthetic parts other surfaces handed the composer (restored as pending). Context is captured by `buildComposerContext` and delivered by `queuedContextToParts` (`components/chat/composer/submit/buildOutgoingMessage.ts`), the same functions the composer uses for its own send. Nothing is re-resolved at delivery: the server has no agent list, no confirmed mentions, and no draft store. Messages a previous build left in this browser are uploaded once on the first hydration of a runtime and then dropped from persistence for that runtime (`partialize` skips server-owned runtime keys). VS Code has no server and keeps the local queue with the foreground auto-send hook (`useQueuedMessageAutoSend`, enabled only there); `useMessageQueueHoldSync` tells the server to hold a session's queue while a UI-driven auto-review run is going.
 
@@ -190,6 +254,8 @@ Important properties:
 - branch persistence is versioned, bounded, runtime-scoped, and claims the ambiguous legacy cache once
 - diff data has per-directory and aggregate count/UTF-8-byte limits; oversized single entries are rejected
 
+Diff prefetch admits at most two outstanding transport requests per runtime and directory across overlapping batches. Its 15-second deadline stops waiting for a result; it does not cancel server work. A timed-out request retains its path and concurrency slot until the transport settles, including across cache resets, so later batches cannot repeat it or exceed the limit. Saturated prefetch skips further work instead of queueing retries. Late timed-out results never enter the cache, and successful or rejected transport completion releases capacity. Duplicate or saturated demand does not invalidate a batch already running. The Git view schedules prefetch only while active; explicit file opens remain independent of background prefetch capacity.
+
 ### `useGitHubPrStatusStore.ts`
 
 `useGitHubPrStatusStore` is a centralized PR cache keyed by a collision-safe tuple of runtime, directory, branch, and requested remote.
@@ -281,6 +347,14 @@ project in Settings cannot change what chat sees. Components select through
 `selectAgentsForDirectory` / `selectCommandsForDirectory` /
 `selectSkillsForDirectory` / `selectMcpServersForDirectory` /
 `selectProvidersForDirectory`, which return stored arrays.
+
+Command discovery compares responses only with the requested directory's cache.
+A first successful response always creates that entry, even when empty or
+identical to another project's commands. Cached and unchanged loads restore the
+active-project mirror; asynchronous completions check the active directory at
+commit time. Failed loads leave the current cache untouched. Discovery passes
+its directory directly to the SDK wrapper without changing the client's shared
+directory context.
 
 Settings resolves its directory through `useSettingsDirectory`, backed by
 `useUIStore.settingsProjectPath`. That selection is Settings-local and not

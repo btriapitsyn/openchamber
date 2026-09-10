@@ -296,8 +296,8 @@ export const SETTINGS_REGISTRY = {
     parse: parseWorkStatusHiddenSections,
     ui: {
       read: () => useUIStore.getState().workStatusHiddenSections,
-      // The explicit marker decides whether a legacy list implicitly hides
-      // telemetry; both land in one store update so subscribers never see the
+      // The explicit marker distinguishes chosen lists from the old telemetry
+      // default; both land in one store update so subscribers never see the
       // list without its marker.
       write: (value, snapshot) => {
         const explicit = snapshot.workStatusHiddenSectionsExplicit === true;
@@ -544,6 +544,7 @@ export const LOCAL_DEVICE_KEYS = [
   'linearIssueListPriority',
   'showTerminalQuickKeysOnDesktop',
   'dockBadgeEnabled',
+  'alwaysShowScrollbars',
   'agentMemoryViewedAt',
   'projectContextSidebarWidth',
 ] as const;

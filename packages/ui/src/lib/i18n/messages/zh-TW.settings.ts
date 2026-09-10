@@ -1,5 +1,7 @@
 import { linearIntegrationI18n } from './linear-integration.i18n';
 export const settingsDict = {
+  'settings.openchamber.visual.field.alwaysShowScrollbars': '一律顯示捲軸',
+  'settings.openchamber.visual.field.alwaysShowScrollbarsHint': '即使指標位於可捲動區域之外，也保持捲軸可見。僅在此裝置上生效。',
   'settings.providers.page.openCodeGo.title': 'OpenCode Go 用量追蹤',
   'settings.providers.page.openCodeGo.description': '連接 OpenCode Go 控制面板以顯示滾動、每週和每月配額。',
   'settings.providers.page.openCodeGo.workspaceId': '工作區 ID',
@@ -57,7 +59,6 @@ export const settingsDict = {
   'settings.view.pendingRestart.confirm.dontShowAgain': '不要再顯示',
   'settings.view.pendingRestart.confirm.cancel': '取消',  'settings.view.actions.backToSettings': '返回設定頁',
   'settings.view.actions.closeSettings': '關閉設定',
-  'settings.view.actions.openSectionList': '開啟群組清單',
   'settings.view.actions.closeSettingsWithShortcut': '關閉設定（{shortcut}+,）',
   'settings.view.actions.back': '返回',
   'settings.view.actions.resizeNavigation': '調整設定導覽寬度',

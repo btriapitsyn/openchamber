@@ -39,7 +39,6 @@ const renderPill = async (options: { hasContent: boolean; newSessionDraftOpen: b
                 stopIconSizeClass="stop-icon-size"
                 theme={getDefaultTheme(false)}
                 onExpand={() => {}}
-                onApplySuggestion={() => {}}
                 onPrimaryAction={() => { primaryActions += 1; }}
                 onQueueMessage={() => { queued += 1; }}
                 onNewSession={() => {}}

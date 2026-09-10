@@ -1,5 +1,7 @@
 import { linearIntegrationI18n } from './linear-integration.i18n';
 export const settingsDict = {
+  'settings.openchamber.visual.field.alwaysShowScrollbars': 'Always show scrollbars',
+  'settings.openchamber.visual.field.alwaysShowScrollbarsHint': 'Keep scrollbars visible even when the pointer is outside the scrollable area. Applies on this device only.',
   'settings.providers.page.openCodeGo.title': 'OpenCode Go usage tracking',
   'settings.providers.page.openCodeGo.description': 'Connect the OpenCode Go dashboard to show rolling, weekly, and monthly quota.',
   'settings.providers.page.openCodeGo.workspaceId': 'Workspace ID',
@@ -58,7 +60,6 @@ export const settingsDict = {
   'settings.view.pendingRestart.confirm.cancel': 'Cancel',
   'settings.view.actions.backToSettings': 'Back to Settings',
   'settings.view.actions.closeSettings': 'Close settings',
-  'settings.view.actions.openSectionList': 'Open section list',
   'settings.view.actions.closeSettingsWithShortcut': 'Close Settings ({shortcut}+,)',
   'settings.view.actions.back': 'Back',
   'settings.view.actions.resizeNavigation': 'Resize settings navigation',

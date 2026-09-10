@@ -1588,6 +1588,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                                 'pointer-events-none absolute bottom-full inset-x-0 mb-2 transition-opacity duration-100',
                                 userOwnsScroll && 'opacity-0',
                             )}
+                            style={{ transform: 'translateY(calc(-1 * var(--chat-floating-panel-clearance, 0px)))' }}
                         >
                             <div className="chat-input-column">
                                 {/* The glass chip itself is rendered inside

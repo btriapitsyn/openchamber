@@ -17,6 +17,34 @@ animation. Do not restore separate draft and session composer branches:
 remounting the editor loses focus and interrupts the transition. Keep the
 existing mobile fixed-position rules unchanged.
 
+`ComposerFloatingPanel` is the shared frame for `BtwPanel`, `QueuedMessageChips`,
+and `SessionSuggestionChip`. They mount inside the composer form, outside both
+the full editor and collapsed mobile pill, with one absolute `bottom-full`
+anchor, input-column width, gap, and glass surface. Appearing, disappearing,
+or collapsing a panel does not resize the transcript or composer.
+The frame also owns the header row through its `header` and `compact` props.
+Suggestion and collapsed queue/BTW use the same compact header sizing; callers
+supply controls and content, not their own header padding.
+
+Visibility priority is BTW, then a nonempty queue, then suggestion. Every BTW
+frame, including its collapsed strip, creation state, and pending draft, hides
+the other two. Composer content also hides suggestion; new-session drafts hide
+both queue and suggestion. Hiding the queue does not pause its delivery.
+
+The queue header toggles an `aria-expanded` disclosure with the current count.
+Its collapse state is local to the mounted runtime/directory/session queue key
+and survives temporary hiding behind BTW. Switching queue identity resets it.
+The expanded list retains its drag sensors, ordering, edit, send, and remove
+actions, and clamps to available space above the composer. It receives the
+composer's main-session queue target instead of resolving the global selection,
+so embedded chat columns address their own queue.
+
+The shared frame measures its height and gap into the chat column's
+`--chat-floating-panel-clearance`. The floating status row and
+`ScrollToBottomButton` translate upward by that amount. Transcript height,
+insets, and scroll position remain unchanged. Unmounting clears the offset;
+resizing or collapsing the frame updates it.
+
 ## Layers
 
 | Directory | Owns |
@@ -171,7 +199,7 @@ and the send path reading the same grammar.
   attached context is consumed. Commands that act on session or UI state
   (`/undo`, `/redo`, `/compact`, `/timeline`, `/handoff-review`) take only
   their command text and leave comments, files, and linked context attached;
-  commands that produce a prompt (`/btw` and the magic prompts) send that
+   magic prompt commands send that
   context with the prompt they produce. Session actions are planned only when
   a session exists, so typing one into a new-session draft stays on the normal
   send path. A local command is never queued as text: queueing runs it
@@ -231,6 +259,34 @@ sessions that predate the persisted store still recall, and the persisted
 session bucket, which adds attachments and keeps prompts a revert hid from the
 timeline. A prompt present in both collapses to the persisted entry. Global
 scope reads the persisted runtime bucket only.
+
+## BTW composer
+
+An empty `/btw` opens an unsent draft. `/btw <question>` opens BTW and sends
+that question immediately after its own draft and model selection are active.
+**By the way…** opens an unsent draft with Quote-formatted selection text.
+The first send creates the fork; Enter follows the user's preference. Pending text and references then
+move to the fork's draft identity. Normal and BTW drafts remain independent,
+including in memory when persistence is disabled.
+
+Both modes reuse `ComposerEditor` and `ModelControls`; BTW transitions put the
+caret at the end. BTW copies the main model/effort once, including explicit
+Default, and uses `plan` or the first selectable agent. Its controlled model
+path only writes BTW selections. Attachments, goals, expansion, shell, and
+agent selection and file/agent mention autocomplete are unavailable. Auto-accept is applied before the first send.
+On mobile, model and effort controls sit in the input's upper-left row; the
+footer only contains auto-accept and send/stop controls.
+
+Escape closes menus first. Otherwise it returns to normal: an unsent BTW is
+discarded with its text, references, selections and panel; a creating or real
+fork is only collapsed. Neither exit sends, aborts, or deletes a server session,
+nor consumes the main draft's files, queue, or linked context. Pending snippet
+expansion belongs to the unsent panel. Discarding that panel invalidates the
+send, and a runtime change prevents fork creation and stale UI recovery.
+
+The unsent panel shows "Ask your question" until fork creation starts.
+Existing panels hide titles. Promotion retains the existing internal title, without
+transcript fetching or Small Model generation.
 
 ## Mobile
 

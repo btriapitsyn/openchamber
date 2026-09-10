@@ -1,5 +1,7 @@
 import { linearIntegrationI18n } from './linear-integration.i18n';
 export const settingsDict = {
+  'settings.openchamber.visual.field.alwaysShowScrollbars': '스크롤바 항상 표시',
+  'settings.openchamber.visual.field.alwaysShowScrollbarsHint': '포인터가 스크롤 영역 밖에 있어도 스크롤바를 표시합니다. 이 기기에만 적용됩니다.',
   'settings.providers.page.openCodeGo.title': 'OpenCode Go 사용량 추적',
   'settings.providers.page.openCodeGo.description': 'OpenCode Go 대시보드를 연결하여 롤링, 주간 및 월간 할당량을 표시합니다.',
   'settings.providers.page.openCodeGo.workspaceId': '워크스페이스 ID',
@@ -59,7 +61,6 @@ export const settingsDict = {
   'settings.view.pendingRestart.confirm.dontShowAgain': '다시 표시하지 않음',
   'settings.view.pendingRestart.confirm.cancel': '취소',  'settings.view.actions.backToSettings': '설정으로 돌아가기',
   'settings.view.actions.closeSettings': '설정 닫기',
-  'settings.view.actions.openSectionList': '섹션 목록 열기',
   'settings.view.actions.closeSettingsWithShortcut': '설정 닫기 ({shortcut}+,)',
   'settings.view.actions.back': '뒤로',
   'settings.view.actions.resizeNavigation': '설정 내비게이션 크기 조정',

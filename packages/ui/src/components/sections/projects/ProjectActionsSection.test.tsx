@@ -7,7 +7,6 @@ import { I18nProvider } from '@/lib/i18n';
 
 const desktopSshState = { instances: [], load: async () => undefined };
 
-mock.module('@/lib/desktop', () => ({ isDesktopShell: () => false }));
 mock.module('@/stores/useDesktopSshStore', () => ({
   useDesktopSshStore: <T,>(selector: (state: typeof desktopSshState) => T): T => selector(desktopSshState),
 }));

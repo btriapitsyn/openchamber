@@ -87,11 +87,11 @@ describe('settings registry', () => {
   });
 
   test('applies the hidden-sections list together with its explicit marker', () => {
-    applySettingsToStores({ workStatusHiddenSections: ['mcp'] });
-    expect(useUIStore.getState().workStatusHiddenSections).toEqual(['mcp', 'telemetry']);
-    expect(useUIStore.getState().workStatusHiddenSectionsExplicit).toBe(false);
-    applySettingsToStores({ workStatusHiddenSections: ['mcp'], workStatusHiddenSectionsExplicit: true });
+    applySettingsToStores({ workStatusHiddenSections: ['mcp', 'telemetry'] });
     expect(useUIStore.getState().workStatusHiddenSections).toEqual(['mcp']);
+    expect(useUIStore.getState().workStatusHiddenSectionsExplicit).toBe(false);
+    applySettingsToStores({ workStatusHiddenSections: ['mcp', 'telemetry'], workStatusHiddenSectionsExplicit: true });
+    expect(useUIStore.getState().workStatusHiddenSections).toEqual(['mcp', 'telemetry']);
     expect(useUIStore.getState().workStatusHiddenSectionsExplicit).toBe(true);
   });
 

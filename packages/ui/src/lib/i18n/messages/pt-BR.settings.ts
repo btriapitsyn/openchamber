@@ -1,5 +1,7 @@
 import { linearIntegrationI18n } from './linear-integration.i18n';
 export const settingsDict = {
+  'settings.openchamber.visual.field.alwaysShowScrollbars': 'Sempre mostrar barras de rolagem',
+  'settings.openchamber.visual.field.alwaysShowScrollbarsHint': 'Mantenha as barras de rolagem visíveis mesmo quando o ponteiro estiver fora da área de rolagem. Aplica-se apenas a este dispositivo.',
   'settings.providers.page.openCodeGo.title': 'Monitoramento de uso do OpenCode Go',
   'settings.providers.page.openCodeGo.description': 'Conecte o painel do OpenCode Go para exibir as cotas móvel, semanal e mensal.',
   'settings.providers.page.openCodeGo.workspaceId': 'ID do workspace',
@@ -59,7 +61,6 @@ export const settingsDict = {
   "settings.view.pendingRestart.confirm.dontShowAgain": "Não mostrar novamente",
   "settings.view.pendingRestart.confirm.cancel": "Cancelar",  "settings.view.actions.backToSettings": "Voltar às configurações",
   "settings.view.actions.closeSettings": "Fechar configurações",
-  "settings.view.actions.openSectionList": "Abrir lista de seções",
   "settings.view.actions.closeSettingsWithShortcut": "Fechar configurações ({shortcut}+,)",
   "settings.view.actions.back": "Voltar",
   "settings.view.actions.resizeNavigation": "Ajustar tamanho da navegação",

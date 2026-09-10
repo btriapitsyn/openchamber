@@ -157,6 +157,44 @@
     font-family: var(--font-mono, ui-monospace, SFMono-Regular, 'Liberation Mono', Menlo, monospace) !important;
   }
 
+  .markdown-content details[data-md-details] {
+    margin-block: 0.75rem;
+    min-width: 0;
+  }
+
+  .markdown-content details[data-md-details] > summary {
+    display: flex;
+    align-items: baseline;
+    gap: 0.375rem;
+    list-style: none;
+    cursor: pointer;
+    padding-block: 0.375rem;
+    overflow-wrap: anywhere;
+    font-weight: 500;
+    border-radius: 0.25rem;
+  }
+
+  .markdown-content details[data-md-details] > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .markdown-content [data-md-disclosure-icon] {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-self: flex-start;
+    margin-top: 0.25em;
+    color: var(--surface-muted-foreground);
+  }
+
+  .markdown-content details[data-md-details][open] > summary > [data-md-disclosure-icon] {
+    transform: rotate(90deg);
+  }
+
+  .markdown-content details[data-md-details] > summary:focus-visible {
+    outline: 2px solid var(--interactive-focus-ring);
+    outline-offset: 2px;
+  }
+
   /* Restore list styling inside markdown content - override Tailwind preflight.
      Native markers with a compact gutter; nesting cycles the marker shape so
      depth stays readable without extra indentation. */

@@ -140,6 +140,8 @@ const DOM_GLOBAL_NAMES = [
   'HTMLElement',
   'HTMLIFrameElement',
   'localStorage',
+  'requestAnimationFrame',
+  'cancelAnimationFrame',
   'IS_REACT_ACT_ENVIRONMENT',
 ] as const;
 
@@ -157,6 +159,8 @@ const installDom = () => {
     HTMLElement: happyWindow.HTMLElement,
     HTMLIFrameElement: happyWindow.HTMLIFrameElement,
     localStorage: happyWindow.localStorage,
+    requestAnimationFrame: happyWindow.requestAnimationFrame.bind(happyWindow),
+    cancelAnimationFrame: happyWindow.cancelAnimationFrame.bind(happyWindow),
     IS_REACT_ACT_ENVIRONMENT: true,
   };
   for (const name of DOM_GLOBAL_NAMES) {
@@ -168,6 +172,7 @@ const installDom = () => {
   return {
     container,
     restore: () => {
+      happyWindow.close();
       for (const [name, descriptor] of previous) {
         if (descriptor) Object.defineProperty(globalThis, name, descriptor);
         else Reflect.deleteProperty(globalThis, name);

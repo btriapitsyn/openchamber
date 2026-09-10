@@ -1,5 +1,5 @@
 import React, { act } from 'react';
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import { createRoot } from 'react-dom/client';
 import { Window } from 'happy-dom';
 import { create } from 'zustand';
@@ -122,9 +122,9 @@ type SelectionState = {
   getSessionAgentSelection: () => string | null;
   getAgentModelForSession: () => { providerId: string; modelId: string } | null;
   getAgentModelVariantForSession: () => VariantChoice;
-  saveSessionModelSelection: () => void;
+  saveSessionModelSelection: (sessionId: string, providerId: string, modelId: string) => void;
   saveSessionAgentSelection: () => void;
-  saveAgentModelForSession: () => void;
+  saveAgentModelForSession: (sessionId: string, agentName: string, providerId: string, modelId: string) => void;
   saveAgentModelVariantForSession: (
     sessionId: string,
     agentName: string,
@@ -206,9 +206,11 @@ mock.module('@/sync/use-sync', () => ({ useSync: () => ({ sessions: [] }) }));
 mock.module('@/sync/sync-refs', () => ({ getSyncParts: () => [] }));
 
 mock.module('@/components/ui/dropdown-menu', () => ({
-  DropdownMenu: passthrough,
+  DropdownMenu: ({ children, open }: React.PropsWithChildren<{ open?: boolean }>) => <div data-menu-open={open}>{children}</div>,
   DropdownMenuContent: passthrough,
-  DropdownMenuItem: passthrough,
+  DropdownMenuItem: ({ children, onSelect }: React.PropsWithChildren<{ onSelect?: () => void }>) => (
+    <button onClick={onSelect}>{children}</button>
+  ),
   DropdownMenuLabel: passthrough,
   DropdownMenuSeparator: () => null,
   DropdownMenuTrigger: passthrough,
@@ -216,7 +218,9 @@ mock.module('@/components/ui/dropdown-menu', () => ({
 mock.module('@/components/ui/input', () => ({
   Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => <input {...props} />,
 }));
-mock.module('@/components/ui/MobileOverlayPanel', () => ({ MobileOverlayPanel: passthrough }));
+mock.module('@/components/ui/MobileOverlayPanel', () => ({
+  MobileOverlayPanel: ({ open, children }: React.PropsWithChildren<{ open: boolean }>) => open ? <div>{children}</div> : null,
+}));
 mock.module('@/components/ui/ProviderLogo', () => ({ ProviderLogo: () => null }));
 mock.module('@/components/ui/ScrollableOverlay', () => ({ ScrollableOverlay: passthrough }));
 mock.module('@/components/ui/tooltip', () => ({
@@ -225,9 +229,13 @@ mock.module('@/components/ui/tooltip', () => ({
   TooltipTrigger: passthrough,
 }));
 mock.module('@/components/icon/Icon', () => ({ Icon: () => null }));
-mock.module('@/components/model-picker/ModelPickerList', () => ({ ModelPickerList: () => null }));
+mock.module('@/components/model-picker/ModelPickerList', () => ({
+  ModelPickerList: ({ onSelect }: React.ComponentProps<typeof import('@/components/model-picker/ModelPickerList').ModelPickerList>) => (
+    <button onClick={() => onSelect({ providerID: PROVIDER_ID, modelID: MODEL_ID, model })}>{MODEL_ID}</button>
+  ),
+}));
 mock.module('@/hooks/useRuntimeAPIs', () => ({ useIsVSCodeRuntime: () => false }));
-mock.module('@/hooks/useModelLists', () => ({ useModelLists: () => ({ favoriteModels: [], recentModels: [] }) }));
+mock.module('@/hooks/useModelLists', () => ({ useModelLists: () => ({ favoriteModelsList: [], recentModelsList: [] }) }));
 mock.module('@/hooks/useIsTextTruncated', () => ({ useIsTextTruncated: () => false }));
 mock.module('@/hooks/useOpenCodeReadiness', () => ({
   useOpenCodeReadiness: () => ({ isReady: true, isUnavailable: false }),
@@ -304,12 +312,12 @@ const installDom = () => {
   };
 };
 
-const renderModelControls = async () => {
+const renderModelControls = async (props: React.ComponentProps<typeof ModelControls> = {}) => {
   const dom = installDom();
   const root = createRoot(dom.container);
   await act(async () => root.render(
     <I18nProvider>
-      <ModelControls />
+      <ModelControls {...props} />
     </I18nProvider>,
   ));
   return {
@@ -327,6 +335,7 @@ describe('ModelControls effort restore', () => {
     overrideWrites.length = 0;
     latestUserChoice = null;
     forcePreserveManualOverride = null;
+    useUIStore.setState({ isMobile: false, isModelSelectorOpen: false });
     useSelectionStore.setState({ savedVariant: undefined });
     useConfigStore.setState({
       currentProviderId: PROVIDER_ID,
@@ -341,9 +350,11 @@ describe('ModelControls effort restore', () => {
 
   test('restores the concrete effort the session history carries', async () => {
     latestUserChoice = { id: 'msg-1', agent: AGENT, providerID: PROVIDER_ID, modelID: MODEL_ID, variant: 'low' };
+    useUIStore.setState({ isModelSelectorOpen: true });
 
-    const { cleanup } = await renderModelControls();
+    const { dom, cleanup } = await renderModelControls();
     try {
+      expect(dom.container.querySelector('.model-controls__model-trigger')?.closest('[data-menu-open]')?.getAttribute('data-menu-open')).toBe('true');
       expect(variantWrites).toContain('low');
       expect(variantWrites).not.toContain(null);
       expect(useSelectionStore.getState().savedVariant).toBe('low');
@@ -403,4 +414,55 @@ describe('ModelControls effort restore', () => {
       await cleanup();
     }
   });
+
+  for (const [isMobile, variant] of [
+    [false, 'low'], [true, null],
+  ] as const) {
+    test(`controlled BTW selection stays independent (mobile: ${isMobile}, effort: ${variant})`, async () => {
+      const btwSessionId = 'btw-pending:ses_restore';
+      latestUserChoice = { id: 'msg-main', agent: AGENT, providerID: PROVIDER_ID, modelID: MODEL_ID, variant: 'high' };
+      useUIStore.setState({ isMobile, isModelSelectorOpen: true });
+      useConfigStore.setState({
+        currentProviderId: 'main-provider', currentModelId: 'main-model',
+        currentVariant: 'low', currentVariantSelection: { override: undefined, inherited: 'low' },
+      });
+      const selections = useSelectionStore.getState();
+      const saveModel = spyOn(selections, 'saveSessionModelSelection');
+      const saveAgentModel = spyOn(selections, 'saveAgentModelForSession');
+      const saveVariant = spyOn(selections, 'saveAgentModelVariantForSession');
+      const { dom, cleanup } = await renderModelControls({
+        sessionId: btwSessionId,
+        selection: { model: { providerId: PROVIDER_ID, modelId: MODEL_ID }, agent: 'plan', variant },
+      });
+      try {
+        expect(overrideWrites).toEqual([]);
+        expect(variantWrites).toEqual([]);
+        expect(saveModel.mock.calls).toEqual([]);
+        expect(dom.container.querySelector('.model-controls__agent-label')).toBeNull();
+        expect(dom.container.querySelector('.model-controls__variant-label')?.textContent?.trim()).toBe(variant ?? 'Default');
+        if (!isMobile) {
+          expect(dom.container.querySelector('.model-controls__model-trigger')?.closest('[data-menu-open]')?.getAttribute('data-menu-open')).toBe('false');
+        }
+
+        await act(async () => dom.container.querySelector<HTMLButtonElement>('.model-controls__model-trigger')?.click());
+        const modelButton = Array.from(dom.container.querySelectorAll<HTMLButtonElement>('button:not(.model-controls__model-trigger)')).find((button) => button.textContent?.trim() === MODEL_ID);
+        await act(async () => modelButton?.click());
+        expect(saveModel.mock.calls.at(-1)).toEqual([btwSessionId, PROVIDER_ID, MODEL_ID]);
+        expect(saveAgentModel.mock.calls.at(-1)).toEqual([btwSessionId, 'plan', PROVIDER_ID, MODEL_ID]);
+
+        await act(async () => dom.container.querySelector<HTMLButtonElement>('.model-controls__variant-trigger')?.click());
+        const defaultButton = Array.from(dom.container.querySelectorAll('button')).find((button) => button.textContent?.trim() === 'Default');
+        await act(async () => defaultButton?.click());
+        expect(saveVariant.mock.calls.at(-1)).toEqual([btwSessionId, 'plan', PROVIDER_ID, MODEL_ID, null]);
+        const config = useConfigStore.getState();
+        expect([config.currentProviderId, config.currentModelId, config.currentAgentName, config.currentVariant])
+          .toEqual(['main-provider', 'main-model', AGENT, 'low']);
+        expect(overrideWrites).toEqual([]);
+      } finally {
+        await cleanup();
+        for (const write of [saveModel, saveAgentModel, saveVariant]) write.mockRestore();
+        useSelectionStore.setState(selections);
+      }
+    });
+  }
 });

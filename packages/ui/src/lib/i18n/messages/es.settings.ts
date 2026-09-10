@@ -1,5 +1,7 @@
 import { linearIntegrationI18n } from './linear-integration.i18n';
 export const settingsDict = {
+  'settings.openchamber.visual.field.alwaysShowScrollbars': 'Mostrar siempre las barras de desplazamiento',
+  'settings.openchamber.visual.field.alwaysShowScrollbarsHint': 'Mantén las barras de desplazamiento visibles incluso cuando el puntero esté fuera del área desplazable. Solo se aplica en este dispositivo.',
   'settings.providers.page.openCodeGo.title': 'Seguimiento de uso de OpenCode Go',
   'settings.providers.page.openCodeGo.description': 'Conecta el panel de OpenCode Go para ver las cuotas móvil, semanal y mensual.',
   'settings.providers.page.openCodeGo.workspaceId': 'ID del espacio de trabajo',
@@ -59,7 +61,6 @@ export const settingsDict = {
   "settings.view.pendingRestart.confirm.dontShowAgain": "No volver a mostrar",
   "settings.view.pendingRestart.confirm.cancel": "Cancelar",  "settings.view.actions.backToSettings": "Volver a Configuración",
   "settings.view.actions.closeSettings": "Cerrar configuración",
-  "settings.view.actions.openSectionList": "Abrir lista de secciones",
   "settings.view.actions.closeSettingsWithShortcut": "Cerrar configuración ({shortcut}+,)",
   "settings.view.actions.back": "Atrás",
   "settings.view.actions.resizeNavigation": "Ajustar tamaño de la navegación",

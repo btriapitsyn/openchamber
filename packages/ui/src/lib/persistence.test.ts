@@ -863,22 +863,22 @@ describe('updateDesktopSettings', () => {
     expect(saveCalls.some((changes) => changes.toolJsonViewMode === 'formatted')).toBe(true);
   });
 
-  test('legacy server lists keep telemetry hidden, while explicit opt-ins survive hydration', async () => {
+  test('legacy server lists show telemetry, while explicit hiding survives hydration', async () => {
     getWindow();
     for (const explicit of [undefined, false, true]) {
       invalidateSettingsCache();
       registerSettingsApi(async (changes) => changes, async () => ({
-        settings: { workStatusHiddenSections: ['mcp'], workStatusHiddenSectionsExplicit: explicit,
+        settings: { workStatusHiddenSections: ['mcp', 'telemetry'], workStatusHiddenSectionsExplicit: explicit,
           draftStartersCraftGoalAdded: true, draftStartersScheduleTaskAdded: true },
         source: 'web',
       }));
       await syncDesktopSettings();
-      expect(useUIStore.getState().workStatusHiddenSections).toEqual(explicit ? ['mcp'] : ['mcp', 'telemetry']);
+      expect(useUIStore.getState().workStatusHiddenSections).toEqual(explicit ? ['mcp', 'telemetry'] : ['mcp']);
       expect(useUIStore.getState().workStatusHiddenSectionsExplicit).toBe(explicit === true);
     }
   });
 
-  test('autosaves telemetry opt-in and its list together, then restores them through settings load', async () => {
+  test('autosaves telemetry hiding and its list together, then restores them through settings load', async () => {
     getWindow();
     invalidateSettingsCache();
     let server: SettingsPayload = { workStatusHiddenSections: [], draftStartersCraftGoalAdded: true, draftStartersScheduleTaskAdded: true };
@@ -886,23 +886,20 @@ describe('updateDesktopSettings', () => {
     registerSettingsApi(async (changes) => { saves.push(changes); server = { ...server, ...changes }; return changes; },
       async () => ({ settings: server, source: 'web' }));
     await syncDesktopSettings();
-    expect(useUIStore.getState().workStatusHiddenSections).toEqual(['telemetry']);
+    expect(useUIStore.getState().workStatusHiddenSections).toEqual([]);
     startAppearanceAutoSave();
-    useUIStore.getState().setWorkStatusSectionVisible('telemetry', true);
+    useUIStore.getState().setWorkStatusSectionVisible('telemetry', false);
     await delay(600);
-    // The list itself already matches the server ([]), so only the explicit
-    // marker needs to travel; the server merges per key, so the end state is
-    // the same as sending both.
     expect(saves.some((changes) => changes.workStatusHiddenSectionsExplicit === true)).toBe(true);
-    expect(server.workStatusHiddenSections).toEqual([]);
+    expect(server.workStatusHiddenSections).toEqual(['telemetry']);
     expect(server.workStatusHiddenSectionsExplicit).toBe(true);
     invalidateSettingsCache();
     await syncDesktopSettings();
-    expect(useUIStore.getState().workStatusHiddenSections).toEqual([]);
+    expect(useUIStore.getState().workStatusHiddenSections).toEqual(['telemetry']);
     expect(useUIStore.getState().workStatusHiddenSectionsExplicit).toBe(true);
-    // An unrelated partial save response must not turn an opt-in back off.
+    // An unrelated partial save response must not re-enable a hidden section.
     await updateDesktopSettings({ workStatusPanelEnabled: useUIStore.getState().workStatusPanelEnabled });
-    expect(useUIStore.getState().workStatusHiddenSections).toEqual([]);
+    expect(useUIStore.getState().workStatusHiddenSections).toEqual(['telemetry']);
   });
 
   test('applies persisted autoSaveEnabled from server settings', async () => {
@@ -1116,7 +1113,7 @@ describe('updateDesktopSettings', () => {
         favoriteModels: [{ providerID: 'anthropic', modelID: 'claude-sonnet-4' }],
         // A legacy list the client normalises on read: the normalised copy is
         // still not this window's change and must not be written back.
-        workStatusHiddenSections: ['mcp'],
+        workStatusHiddenSections: ['mcp', 'telemetry'],
         draftStartersCraftGoalAdded: true,
         draftStartersScheduleTaskAdded: true,
       },
@@ -1137,7 +1134,7 @@ describe('updateDesktopSettings', () => {
       expect(useUIStore.getState().showReasoningTraces).toBe(false);
       expect(useUIStore.getState().terminalShell).toBe('fish');
       expect(useUIStore.getState().favoriteModels).toHaveLength(1);
-      expect(useUIStore.getState().workStatusHiddenSections).toEqual(['mcp', 'telemetry']);
+      expect(useUIStore.getState().workStatusHiddenSections).toEqual(['mcp']);
       expect(saveCalls).toEqual([]);
     } finally {
       stopModelPrefs();

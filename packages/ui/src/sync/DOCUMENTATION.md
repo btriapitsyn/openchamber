@@ -185,6 +185,12 @@ Live activity/status indicators must not depend on this cache. They must use the
 
 ## Session message loading
 
+The event pipeline's reconnect callback carries `replayReset`. A global WS
+`ready` frame with that flag means the server's bounded replay suffix no longer
+covers the client cursor. The pipeline clears that cursor and the sync provider
+runs normal authoritative gap repair even during early boot. Ordinary reconnects
+retain their existing startup grace period.
+
 `SessionMessageLoader` is the shared authority for session message requests. Navigation, reactive chat loading, sidebar prefetch, pagination, reconnect/recovery, and optimistic reconciliation must delegate to it rather than issuing parallel initial requests.
 
 Rules:
@@ -201,6 +207,8 @@ Rules:
 9. Transcript arrays are chronological by `message.time.created`, with message ID used only as a deterministic equal-time tie-breaker. Message IDs are identity and reconciliation keys, not chronology: OpenCode's fixed-width sortable timestamp prefix rolls over, so a newer `msg_000...` can follow an older `msg_fff...`. Fetch, pagination, materialization, optimistic insertion, events, reconnect inspection, rendering, and revert/undo/redo must preserve this contract.
 10. Session-scoped ArrowUp and ArrowDown recall merges the visible transcript's user prompts (`useUserMessageHistory`) with the persisted input-history bucket for runtime + normalized directory + session identity. Revert markers hide prompts from the transcript source only; the persisted bucket still recalls them. Global scope reads the persisted runtime bucket alone.
 11. Part arrays preserve authoritative response/event order. Part IDs are identity keys and have the same rollover limitation; identity lookup/removal must not require a part array to be lexically ID-sorted.
+
+A successful local session creation publishes its session record and calls `SessionMessageLoader.initializeCreatedSession` before selection starts navigation loading. The create response establishes an empty transcript only if no transcript has arrived yet. Initialization supersedes an earlier unresolved history load, preserves any messages or metadata received before the create response, and uses the server-returned directory. Opening that new session needs no history read; forced recovery and later eviction still use normal fetching. Creation responses from a previous runtime cannot select or initialize a session in the current runtime.
 
 Initial loads use smaller pages on constrained VS Code/mobile surfaces. Prefetch resolves only the initial renderable page; it does not eagerly download older history. The mounted chat timeline requests older pages when its viewport is underfilled or the user scrolls toward history, while mobile uses its explicit load-older action. Timeline caches, pending work, prepend snapshots, and stale checks use runtime + directory + session identity so equal session IDs in different worktrees cannot share lifecycle state. Older pages are fetched through the same loader and merged with optimistic records before publication. The same chronology contract applies in the VS Code webview because it consumes this shared loader and sync store; the extension bridge must transport OpenCode records without introducing its own ID-based ordering.
 
@@ -272,11 +280,39 @@ The discriminator is whether the server confirmed the path, not whether the valu
 
 Rules:
 
-1. Ownership comes from the session record's own `directory`. `getSyncSessionDirectory()` reports *containment*, not ownership, and is only the fallback for a record without a directory: a project's session list includes the sessions of its worktrees so the sidebar can group them, so the parent repository holds worktree sessions too, and reading ownership from membership routes a worktree session to its parent. `null` means "not indexed yet", never "no directory".
+1. Ownership comes from the session record's own `directory`. When directory sync has no owning record yet, the global session index supplies that record's directory before local selection, worktree, or remembered hints. `getSyncSessionDirectory()` reports *containment*, not ownership, and is only the fallback for a record without a directory: a project's session list includes the sessions of its worktrees so the sidebar can group them, so the parent repository holds worktree sessions too, and reading ownership from membership routes a worktree session to its parent. `null` means "not indexed yet", never "no directory".
 2. `attachment` and `worktreeMetadata` hold the worktree path this client asked for, before the server canonicalized it. They are a hint for a session sync has not indexed yet, never a correction of a confirmed directory — otherwise a stale local path re-creates the very mismatch this precedence exists to prevent.
 3. Never persist or rank a guessed directory. `selectSession` may fall back to the active directory to keep routing usable, but that value is not written to runtime memory, not written to the last-active snapshot, and not passed as `selected` — a persisted guess outlives the race that produced it and survives reloads and restarts.
 4. Components must not read `currentSessionDirectory` to build request or queue keys; use `getDirectoryForSession()` so every consumer resolves identically.
 5. A disagreement between sources is logged once per session, and `__opencodeDebug.diagnoseSessionDirectory()` reports every source in precedence order.
+
+## AI session titles
+
+`use-session-ai-rename.ts` connects the shared menus to Small Model and the
+existing title action. `session-title-context.ts` uses `SessionMessageLoader`
+to page backward only until three completed user/final-answer pairs are covered.
+Opening a menu checks eligibility on demand; row mounts do not load history.
+The collector uses chronological records and assistant parent IDs, excludes
+unfinished, failed, summary, synthetic-only and reverted turns, and retains
+user-attached context even when its transport part is synthetic.
+
+`session-title-generation.ts` owns runtime/directory/session-scoped pending
+operations. Manual title saves cancel generation before sending their write.
+Runtime changes abort pending generation, including a switch away and back.
+After generation, a fresh session read rejects changed titles, directories,
+archive state and revert markers before the normal title action saves. Failure
+retains the old title and always releases pending state. The current OpenCode
+title endpoint has no compare-and-set operation, so another client's write
+after this final read cannot be guarded atomically.
+
+`lib/messages/messageMarkdown.ts` formats attached quotes and user comments for
+both title context and Markdown export. Export keeps full text; title input
+limits individual fields and each message while retaining head/tail excerpts.
+Web, Electron, hosted mobile and Capacitor use the existing Small Model route.
+Mobile session rows expose the same action beside manual rename when swiped
+open, with four 48px action slots and a session-scoped generation spinner.
+VS Code has no Small Model route and exposes a disabled action with an explicit
+explanation.
 
 ## Session action rules
 
@@ -422,6 +458,12 @@ Zustand skips re-renders when a selector returns the same reference (`Object.is`
 During streaming, `message.part.delta` fires ~60 times/sec. Eagerly cloning all fields caused every subscriber in the entire app to re-render 60/sec — a 10x overhead. Targeted cloning reduced MessageList renders from ~1972 to ~296 per session.
 
 ## Event → field mapping
+
+Queue recovery is independent of the directory-bootstrap debounce. The sync
+provider subscribes to `message-queue-sync.ts` for control-stream updates and
+requests a queue refresh on every main-stream connection or transport switch,
+including the first connection. The queue store coalesces these requests with
+bootstrap and owns snapshot ordering and legacy-upload lifetime.
 
 Keep this in sync with `handleDirectoryEvent` in `sync-context.tsx`:
 

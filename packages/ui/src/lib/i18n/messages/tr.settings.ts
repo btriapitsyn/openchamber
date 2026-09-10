@@ -1,5 +1,7 @@
 import { linearIntegrationI18n } from './linear-integration.i18n';
 export const settingsDict = {
+  'settings.openchamber.visual.field.alwaysShowScrollbars': 'Kaydırma çubuklarını her zaman göster',
+  'settings.openchamber.visual.field.alwaysShowScrollbarsHint': 'İşaretçi kaydırılabilir alanın dışındayken bile kaydırma çubuklarını görünür tutar. Yalnızca bu cihazda geçerlidir.',
   'settings.providers.page.openCodeGo.title': 'OpenCode Go kullanım takibi',
   'settings.providers.page.openCodeGo.description': 'Kayan, haftalık ve aylık kotayı göstermek için OpenCode Go kontrol panelini bağlayın.',
   'settings.providers.page.openCodeGo.workspaceId': 'Çalışma alanı ID\'si',
@@ -58,7 +60,6 @@ export const settingsDict = {
   'settings.view.pendingRestart.confirm.cancel': 'İptal',
   'settings.view.actions.backToSettings': 'Ayarlar\'a geri dön',
   'settings.view.actions.closeSettings': 'Ayarları kapat',
-  'settings.view.actions.openSectionList': 'Bölüm listesini aç',
   'settings.view.actions.closeSettingsWithShortcut': 'Ayarları kapat ({shortcut}+,)',
   'settings.view.actions.back': 'Geri',
   'settings.view.actions.resizeNavigation': 'Ayar gezinmesini yeniden boyutlandır',
@@ -1979,7 +1980,7 @@ export const settingsDict = {
   'settings.openchamber.visual.field.inputBarOffset': 'Giriş Çubuğu Ofseti',
   'settings.openchamber.visual.field.inputBarOffsetTooltip': 'Ana ekran çubuğu gibi işletim sistemi düzeyindeki ekran engellerinden kaçınmak için giriş çubuğunu yukarı kaldırır.',
   'settings.openchamber.visual.field.inputHistoryScope': 'Girdi geçmişi kapsamı',
-  'settings.openchamber.visual.field.inputHistoryScopeDescription': 'Gönderilen istemlerin bu çalışma zamanına bağlı tüm projelerde mi yoksa yalnızca geçerli oturumda mı geri çağrılacağını seçin.',
+  'settings.openchamber.visual.field.inputHistoryScopeDescription': 'Gönderilen promptların bu çalışma zamanına bağlı tüm projelerde mi yoksa yalnızca geçerli oturumda mı geri çağrılacağını seçin.',
   'settings.openchamber.visual.section.inputHistoryScopeAria': 'Girdi geçmişi kapsamı',
   'settings.openchamber.visual.option.inputHistoryScope.global.label': 'Tüm projeler',
   'settings.openchamber.visual.option.inputHistoryScope.session.label': 'Geçerli oturum',
