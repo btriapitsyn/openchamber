@@ -23,6 +23,7 @@ import {
   getStatus,
   getWorktrees,
   isGitRepository,
+  observeWorktreeTopology,
   populateWorktreeWithLockRecovery,
   removeWorktree,
   resolvePrimaryWorktreeRoot,
@@ -32,6 +33,7 @@ import {
   revertCommit,
   setLocalIdentity,
   stageFiles,
+  subscribeWorktreeTopologyChanges,
   unstageFiles,
   applyHunk,
   getDiff,
@@ -680,6 +682,78 @@ describe('getWorktrees', () => {
     expect(Array.isArray(result)).toBe(true);
     expect(warnSpy).not.toHaveBeenCalled();
   });
+  it('notifies subscribers only when another git process changes the worktree set', async () => {
+    if (!canRunGit()) return;
+
+    const repo = createTempDir();
+    runGit(repo, ['init', '-b', 'main']);
+    runGit(repo, ['config', 'user.email', 'test@example.com']);
+    runGit(repo, ['config', 'user.name', 'Test User']);
+    runGit(repo, ['commit', '--allow-empty', '-m', 'init']);
+    const worktreePath = path.join(createTempDir(), 'feature');
+
+    const events = [];
+    const unsubscribe = subscribeWorktreeTopologyChanges((event) => events.push(event));
+    try {
+      await observeWorktreeTopology(repo);
+      await observeWorktreeTopology(repo);
+      expect(events).toHaveLength(0);
+
+      runGit(repo, ['worktree', 'add', worktreePath, '-b', 'feature']);
+      await observeWorktreeTopology(worktreePath);
+      expect(events).toHaveLength(1);
+      expect(events[0].directories).toEqual(expect.arrayContaining([repo, worktreePath]));
+
+      await observeWorktreeTopology(repo);
+      expect(events).toHaveLength(1);
+
+      runGit(repo, ['worktree', 'remove', worktreePath]);
+      await observeWorktreeTopology(repo);
+      expect(events).toHaveLength(2);
+    } finally {
+      unsubscribe();
+    }
+  });
+
+  it('publishes worktrees this server creates and removes', async () => {
+    if (!canRunGit()) return;
+
+    const previousXdgDataHome = process.env.XDG_DATA_HOME;
+    process.env.XDG_DATA_HOME = createTempDir();
+    const events = [];
+    const unsubscribe = subscribeWorktreeTopologyChanges((event) => events.push(event));
+    try {
+      const repo = createTempDir();
+      runGit(repo, ['init', '-b', 'main']);
+      runGit(repo, ['config', 'user.email', 'test@example.com']);
+      runGit(repo, ['config', 'user.name', 'Test User']);
+      runGit(repo, ['commit', '--allow-empty', '-m', 'init']);
+      await observeWorktreeTopology(repo);
+
+      const created = await createWorktree(repo, {
+        mode: 'new',
+        worktreeName: 'published',
+        branchName: 'openchamber/published',
+      });
+      expect(events).toHaveLength(1);
+      expect(events[0].directories).toContain(repo);
+
+      // The publish refreshed the baseline, so the next observation is quiet.
+      await observeWorktreeTopology(repo);
+      expect(events).toHaveLength(1);
+
+      await removeWorktree(repo, { directory: created.path });
+      expect(events).toHaveLength(2);
+    } finally {
+      unsubscribe();
+      if (previousXdgDataHome === undefined) {
+        delete process.env.XDG_DATA_HOME;
+      } else {
+        process.env.XDG_DATA_HOME = previousXdgDataHome;
+      }
+    }
+  });
+
   it('flags a worktree whose directory was deleted outside git as prunable', async () => {
     const repo = createTempDir();
     runGit(repo, ['init', '-b', 'main']);

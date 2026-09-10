@@ -121,4 +121,29 @@ describe('openchamber events', () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  test('dispatches worktree topology changes', async () => {
+    const { subscribeOpenchamberEvents } = await import('./openchamberEvents');
+    const events: unknown[] = [];
+    const unsubscribe = subscribeOpenchamberEvents((event) => events.push(event));
+    const source = MockEventSource.instances[0];
+
+    source.onmessage?.({
+      data: JSON.stringify({
+        type: 'openchamber:worktree-changed',
+        properties: { directories: ['/repo', '/repo-linked'], at: 456 },
+      }),
+    });
+    source.onmessage?.({
+      data: JSON.stringify({
+        type: 'openchamber:worktree-changed',
+        properties: { directories: [], at: 789 },
+      }),
+    });
+
+    expect(events).toEqual([
+      { type: 'worktree-changed', directories: ['/repo', '/repo-linked'], changedAt: 456 },
+    ]);
+    unsubscribe();
+  });
 });
