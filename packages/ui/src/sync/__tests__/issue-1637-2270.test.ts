@@ -94,7 +94,7 @@ beforeEach(() => {
   // exercised by `createSession` itself, only the directory getter is.
   setActionRefs(
     {} as never,
-    { children: new Map(), ensureChild: () => ({}), getChild: () => undefined } as never,
+    { children: new Map(), ensureChild: () => ({ getState: () => ({ session: [] }), setState: mock() }), getChild: () => undefined } as never,
     () => currentDirectory ?? "",
   )
 })
