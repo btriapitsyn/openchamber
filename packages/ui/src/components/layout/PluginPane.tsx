@@ -39,6 +39,7 @@ import { useGuestOauthStore } from '@/lib/guests/oauth-store';
 import { linkGuestSession, promptGuestSession, startGuestSession } from '@/lib/guests/start-session';
 import { useGuestsStore } from '@/lib/guests/store';
 import { getRuntimeUrlResolver } from '@/lib/runtime-url';
+import { requestScopedUrlAuthToken } from '@/lib/runtime-auth';
 import { openExternalUrl } from '@/lib/url';
 import { cn } from '@/lib/utils';
 import { pluginIdFromMode, type PluginContextPanelMode } from '@/lib/surfaces/modes';
@@ -131,10 +132,29 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
     settings: oauthStatus?.settings ?? {},
   }), [currentTheme, directory, locale, oauthStatus, sessionSnapshot, surface]);
 
+  const [scopedToken, setScopedToken] = React.useState<string>('');
+
+  React.useEffect(() => {
+    if (!guest) return;
+    let active = true;
+    void requestScopedUrlAuthToken('guests').then((token) => {
+      if (active && token) {
+        setScopedToken(token);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [guest]);
+
   const src = React.useMemo(() => {
     if (!guest) return '';
-    return getRuntimeUrlResolver().authenticatedAsset(`/api/guests/${guest.id}/${guest.entry}?oc_ui=issue-page`);
-  }, [guest]);
+    const basePath = `/api/guests/${guest.id}/${guest.entry}?oc_ui=issue-page`;
+    if (scopedToken) {
+      return getRuntimeUrlResolver().api(basePath, { oc_url_token: scopedToken });
+    }
+    return getRuntimeUrlResolver().authenticatedAsset(basePath);
+  }, [guest, scopedToken]);
 
   const readyRef = React.useRef(ready);
   readyRef.current = ready;

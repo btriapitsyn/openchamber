@@ -558,8 +558,8 @@ export const ExtensionsPage: React.FC = () => {
                     variant="ghost"
                     size="icon"
                     className="h-6 w-6 text-muted-foreground hover:text-foreground"
-                    title="Browse folder"
-                    aria-label="Browse folder"
+                    title={t('settings.extensions.add.browseFolder')}
+                    aria-label={t('settings.extensions.add.browseFolder.aria')}
                     disabled={busy}
                     onClick={() => void browseFolder()}
                   >
@@ -570,8 +570,8 @@ export const ExtensionsPage: React.FC = () => {
                     variant="ghost"
                     size="icon"
                     className="h-6 w-6 text-muted-foreground hover:text-foreground"
-                    title="Browse ZIP archive"
-                    aria-label="Browse ZIP archive"
+                    title={t('settings.extensions.add.browseZip')}
+                    aria-label={t('settings.extensions.add.browseZip.aria')}
                     disabled={busy}
                     onClick={() => void browseZip()}
                   >

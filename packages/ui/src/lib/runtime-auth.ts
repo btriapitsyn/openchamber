@@ -335,6 +335,34 @@ export const refreshLocalRuntimeUrlAuthToken = async (localOrigin: string): Prom
   return mintLocalRuntimeUrlAuthToken(origin);
 };
 
+export const requestScopedUrlAuthToken = async (
+  scope: 'guests',
+  apiBaseUrl?: string | null,
+): Promise<string> => {
+  const credential = await getRuntimeAuthCredential();
+  const headers = new Headers();
+  for (const [key, value] of Object.entries(getRuntimeExtraHeadersSync())) {
+    headers.set(key, value);
+  }
+  if (credential?.type === 'bearer') {
+    headers.set('Authorization', `Bearer ${credential.token}`);
+  }
+  const path = `/auth/url-token?scope=${encodeURIComponent(scope)}`;
+  const relay = getActiveRelayTunnel();
+  const response = relay
+    ? await relay.fetch(path, { method: 'POST', headers })
+    : await fetch(buildAuthUrl(apiBaseUrl, path), {
+        method: 'POST',
+        headers,
+        credentials: 'include',
+      });
+  if (!response.ok) {
+    return '';
+  }
+  const payload = (await response.json().catch(() => null)) as { token?: unknown } | null;
+  return typeof payload?.token === 'string' ? payload.token.trim() : '';
+};
+
 // ── Proactive URL auth token refresh ──────────────────────────────────────
 // The url token has a short server TTL. Instead of each consumer minting on its
 // own timer (and clearing the shared token, which 401s other consumers during

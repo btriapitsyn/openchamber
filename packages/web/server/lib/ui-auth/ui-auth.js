@@ -810,13 +810,16 @@ export const createUiAuth = ({
   };
 
   const handleUrlAuthToken = async (req, res) => {
+    const urlStr = String(req?.originalUrl || req?.url || '');
+    const queryScope = String(req?.query?.scope || '');
+    const guestOnly = queryScope === 'guests' || urlStr.includes('scope=guests');
     const sessionToken = await resolveAuthenticatedSessionToken(req, { allowUrlToken: false });
     if (!sessionToken) {
       clearSessionCookie(req, res);
       return respondUnauthorized(req, res);
     }
     res.setHeader('Cache-Control', 'no-store');
-    return res.json(issueUrlAuthTokenForSession(sessionToken));
+    return res.json(issueUrlAuthTokenForSession(sessionToken, { guestOnly }));
   };
 
   const handleSessionCreate = async (req, res) => {

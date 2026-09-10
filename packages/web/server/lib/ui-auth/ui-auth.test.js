@@ -19,6 +19,7 @@ const createResponse = () => {
   let statusCode = 200;
   let body = null;
   const headers = new Map();
+  const cookies = {};
   return {
     status(code) {
       statusCode = code;
@@ -27,6 +28,13 @@ const createResponse = () => {
     json(payload) {
       body = payload;
       return this;
+    },
+    cookie(name, value) {
+      cookies[name] = { value };
+      return this;
+    },
+    get cookies() {
+      return cookies;
     },
     setHeader(name, value) {
       headers.set(name.toLowerCase(), value);
@@ -289,15 +297,43 @@ describe('ui auth client credential seam', () => {
     const guestScopedRes = createResponse();
     await auth.handleUrlAuthToken({ method: 'POST', url: '/auth/url-token?scope=guests', headers: { authorization: 'Bearer client-token' }, query: { scope: 'guests' } }, guestScopedRes);
     const guestScopedToken = guestScopedRes.body.token;
+    expect(guestScopedRes.body.guestOnly).toBe(true);
 
     const guestScopedOkReq = { method: 'GET', path: '/api/guests/demo/panel.js', url: `/api/guests/demo/panel.js?oc_url_token=${encodeURIComponent(guestScopedToken)}`, headers: {} };
     const guestScopedOkAuth = await auth.resolveAuthContext(guestScopedOkReq, null);
     expect(guestScopedOkAuth?.token).toBe('client:device-1');
 
     const guestScopedDeniedReq = { method: 'GET', path: '/api/fs/raw', url: `/api/fs/raw?path=/etc/passwd&oc_url_token=${encodeURIComponent(guestScopedToken)}`, headers: {} };
-    const clientOnlyAuth = createUiAuth({ requireClientAuth: true, clientAuthController: { authenticateBearerToken: async () => null } });
-    const guestScopedDeniedAuth = await clientOnlyAuth.resolveAuthContext(guestScopedDeniedReq, null);
+    const guestScopedDeniedAuth = await auth.resolveAuthContext(guestScopedDeniedReq, null);
     expect(guestScopedDeniedAuth).toBe(null);
+
+    const generalOkReq = { method: 'GET', path: '/api/fs/raw', url: `/api/fs/raw?path=/tmp/a.png&oc_url_token=${encodeURIComponent(urlToken)}`, headers: {} };
+    const generalOkAuth = await auth.resolveAuthContext(generalOkReq, null);
+    expect(generalOkAuth?.token).toBe('client:device-1');
+
+    const pwAuth = createUiAuth({
+      password: 'secret',
+      sessionTtlMs: 123_000,
+    });
+    const loginReq = { method: 'POST', headers: {}, body: { password: 'secret' } };
+    const loginRes = createResponse();
+    await pwAuth.handleSessionCreate(loginReq, loginRes);
+    const sessionCookie = String(loginRes.getHeader('set-cookie') || '').split(';', 1)[0];
+    expect(sessionCookie.startsWith('oc_ui_session=')).toBe(true);
+
+    const pwGuestScopedRes = createResponse();
+    await pwAuth.handleUrlAuthToken({
+      method: 'POST',
+      url: '/auth/url-token?scope=guests',
+      headers: { cookie: sessionCookie },
+      query: { scope: 'guests' },
+    }, pwGuestScopedRes);
+    const pwGuestScopedToken = pwGuestScopedRes.body.token;
+    expect(pwGuestScopedRes.body.guestOnly).toBe(true);
+
+    const pwGuestScopedDeniedReq = { method: 'GET', path: '/api/fs/raw', url: `/api/fs/raw?path=/etc/passwd&oc_url_token=${encodeURIComponent(pwGuestScopedToken)}`, headers: {} };
+    const pwGuestScopedDeniedAuth = await pwAuth.resolveAuthContext(pwGuestScopedDeniedReq, null);
+    expect(pwGuestScopedDeniedAuth).toBe(null);
   });
 
   it('issues desktop client tokens with the UI session expiry', async () => {
