@@ -1260,10 +1260,16 @@ export const DiffView: React.FC<DiffViewProps> = ({
 
     const comparisonSource = React.useMemo<GitComparisonSource | null>(() => {
         if (activeDiffScope === 'pr') return selectedPr;
-        if (activeDiffScope === 'commit' && selectedCommitHash) return { kind: 'commit', hash: selectedCommitHash };
+        if (activeDiffScope === 'commit' && commitComparison.selectedCommit) {
+            return {
+                kind: 'commit',
+                hash: commitComparison.selectedCommit.hash,
+                parentHash: commitComparison.selectedCommit.parents[0] ?? null,
+            };
+        }
         if (activeDiffScope === 'branch' && branchBase && currentBranch) return { kind: 'branch', baseRef: branchBase, headRef: currentBranch };
         return null;
-    }, [activeDiffScope, branchBase, currentBranch, selectedCommitHash, selectedPr]);
+    }, [activeDiffScope, branchBase, commitComparison.selectedCommit, currentBranch, selectedPr]);
     const comparison = useGitComparison(effectiveDirectory ?? null, comparisonSource, visible && !isVSCodeRuntime(), activeDiffScope === 'branch' ? branchRevision : '');
     const { fetchDiff: loadComparisonDiff } = comparison;
     const commitFiles = activeDiffScope === 'commit' ? comparison.files : null;

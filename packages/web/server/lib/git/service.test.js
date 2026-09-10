@@ -15,6 +15,7 @@ import {
   createWorktree,
   getCommitFileDiff,
   getCommitFiles,
+  getLog,
   getGitHistory,
   getGitHistoryMergeBase,
   getGitHistoryRefs,
@@ -549,6 +550,49 @@ describeIfGit('untracked diffs', () => {
     } finally {
       errorSpy.mockRestore();
     }
+  });
+
+  it('rejects non-numeric process failures instead of treating them as diff exit 1', async () => {
+    if (process.platform === 'win32') return;
+    const { tmpDir } = await createTempRepo();
+    fs.writeFileSync(path.join(tmpDir, 'new.txt'), 'new\n');
+    const realGit = execFileSync('/bin/sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim();
+    const binDirectory = path.join(tmpDir, 'bin');
+    const gitShim = path.join(binDirectory, 'git');
+    fs.mkdirSync(binDirectory);
+    fs.writeFileSync(gitShim, [
+      '#!/bin/sh',
+      'if [ "$1" = "diff" ]; then /bin/rm -f "$0"; fi',
+      `exec ${JSON.stringify(realGit)} "$@"`,
+      '',
+    ].join('\n'));
+    fs.chmodSync(gitShim, 0o755);
+    const previousPath = process.env.PATH;
+    process.env.PATH = binDirectory;
+
+    try {
+      await expect(getDiff(tmpDir, { path: 'new.txt' })).rejects.toThrow(/ENOENT|spawn git/);
+    } finally {
+      process.env.PATH = previousPath;
+    }
+  });
+});
+
+describeIfGit('getLog', () => {
+  it('limits current-branch history to 50 commits without including another branch', async () => {
+    const { repository } = createRepositoryWithRemote();
+    runGit(repository, ['checkout', '-b', 'other']);
+    runGit(repository, ['commit', '--allow-empty', '-m', 'other branch only']);
+    runGit(repository, ['checkout', 'next']);
+    for (let index = 0; index < 51; index += 1) {
+      runGit(repository, ['commit', '--allow-empty', '-m', `current ${index}`]);
+    }
+
+    const history = await getLog(repository, { maxCount: 50, to: 'refs/heads/next' });
+
+    expect(history.all).toHaveLength(50);
+    expect(history.all[0].message).toBe('current 50');
+    expect(history.all.some((commit) => commit.message === 'other branch only')).toBe(false);
   });
 });
 

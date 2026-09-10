@@ -9,7 +9,8 @@ import { fetchPullRequestDiff } from '@/lib/diff/pullRequestDiff';
 import { PullRequestSnapshotCache } from '@/lib/diff/pullRequestSnapshotCache';
 import { gitPushScopeKey, subscribeGitPush } from '@/lib/gitPushEvents';
 
-export type GitComparisonSource = Extract<WalkthroughSource, { kind: 'branch' | 'commit' | 'pr' }>;
+export type GitComparisonSource = Extract<WalkthroughSource, { kind: 'branch' | 'pr' }>
+  | { kind: 'commit'; hash: string; parentHash: string | null };
 
 export interface GitComparisonFile {
   path: string;
@@ -56,7 +57,7 @@ export function useGitComparison(directory: string | null, source: GitComparison
         : target.kind === 'branch'
         ? (await getGitRangeFiles(directory, { base: target.baseRef, head: target.headRef, includeWorkingTree: true }))
           .map((file) => ({ ...file, insertions: 0, deletions: 0 }))
-        : (await getCommitFiles(directory, { commitHash: target.hash, parentHash: null })).files
+        : (await getCommitFiles(directory, { commitHash: target.hash, parentHash: target.parentHash })).files
           .map((file) => ({ path: file.path, status: file.status, previousPath: file.originalPath, insertions: file.insertions, deletions: file.deletions }));
       if (generation.current !== request || getRuntimeKey() !== runtime) return;
       setResult((previous) => previous?.key === key && previous.status === 'ready' && previous.files === files

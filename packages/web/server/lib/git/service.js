@@ -691,6 +691,8 @@ const parseWorktreePorcelain = (raw) => {
     }
 
     if (line === 'prunable' || line.startsWith('prunable ')) {
+      // Git retains worktree metadata after its directory disappears so callers
+      // can present it as removable instead of treating it as a live worktree.
       current.prunable = true;
     }
   }
@@ -960,7 +962,7 @@ const runGitCommand = async (cwd, args) => {
     }
     return {
       success: false,
-      exitCode: typeof error?.code === 'number' ? error.code : 1,
+      exitCode: Number.isInteger(error?.code) ? error.code : null,
       stdout,
       stderr: String(error?.stderr || ''),
       message: parseGitErrorText(error),
@@ -2766,6 +2768,8 @@ const getNoIndexDiff = async (repoRoot, repoPath, contextLines) => {
   if (Buffer.byteLength(result.stdout) > GIT_COMMAND_MAX_BUFFER || Buffer.byteLength(result.message || '') > GIT_COMMAND_MAX_BUFFER) {
     throw new Error(`stdout maxBuffer length exceeded: ${GIT_COMMAND_MAX_BUFFER}`);
   }
+  // `git diff --no-index` uses numeric exit 1 for an ordinary difference;
+  // spawn, buffer, and other process failures have no Git exit code.
   if (result.exitCode === 0 || result.exitCode === 1) {
     return result.stdout;
   }
@@ -2934,6 +2938,8 @@ async function runWorkingTreeRangeDiff(context, baseRef, headRef, args, paths = 
   const untracked = await git.raw(['ls-files', '--others', '--exclude-standard', '-z', '--', ...paths]);
   if (!untracked) return readDiff(git);
 
+  // Stage untracked paths in a private index so the range includes the working
+  // tree without mutating the user's real index.
   const temporaryDirectory = await fsp.mkdtemp(path.join(os.tmpdir(), 'openchamber-branch-diff-'));
   try {
     const indexPath = (await git.raw(['rev-parse', '--git-path', 'index'])).trim();
@@ -2998,6 +3004,8 @@ export async function getRangeDiff(directory, { base, head, path: filePath, cont
       paths.push(fileContext.repoPath);
     } catch (error) {
       if (error.message !== 'Invalid file path') throw error;
+      // A committed deletion has no working-tree entry, but remains valid when
+      // the path exists in the comparison merge base.
       const mergeBase = (await git.raw(['merge-base', resolvedBase, headRef])).trim();
       for (const root of new Set([repoRoot, directoryPath])) {
         const target = path.resolve(root, filePath);
@@ -3036,6 +3044,8 @@ export function parseBranchCreationSource(reflogText) {
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean);
+  // Rebase rewrites the branch's history, so its original creation source is
+  // no longer an authoritative comparison base.
   if (lines.some((line) => /^rebase(?:\s|\()/.test(line))) return null;
   // Reflog lists newest entries first; the creation entry is the oldest one.
   for (let index = lines.length - 1; index >= 0; index -= 1) {
@@ -3493,6 +3503,8 @@ export async function applyHunk(directory, filePath, options = {}) {
     const current = await getDiff(directory, { path: filePath, staged: action === 'unstage', contextLines: 3 });
     const starts = [...current.matchAll(/^@@\s/gm)].map((match) => match.index);
     const header = current.slice(0, starts[0] ?? 0);
+    // The submitted patch must exactly match one canonical current hunk, not
+    // merely apply at a compatible offset after surrounding edits changed.
     const isCurrentHunk = starts.some((start, index) => (
       header + current.slice(start, starts[index + 1] ?? current.length) === patch
     ));
@@ -5523,12 +5535,14 @@ export async function getLog(directory, options = {}) {
     };
     const resolvedFrom = await resolveBaseRefForLog(options.from, checkRef);
 
-    const baseLog = await git.log({
-      maxCount,
-      from: resolvedFrom,
-      to: options.to,
-      file: filePath
-    });
+    const baseLog = options.to && !resolvedFrom
+      ? await git.log([`--max-count=${maxCount}`, options.to, ...(filePath ? ['--', filePath] : [])])
+      : await git.log({
+        maxCount,
+        from: resolvedFrom,
+        to: options.to,
+        file: filePath,
+      });
 
     const logArgs = [
       'log',
