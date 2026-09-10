@@ -1880,6 +1880,7 @@ const AssistantMessageBody = React.memo(({
                         animatedToolIds={animatedToolIdsLookup}
                         diffStats={turnGroupingContext?.diffStats}
                         renderJustificationActions={renderJustificationActions}
+                        sessionId={sessionId}
                     />
                 </div>
             );
@@ -2077,6 +2078,8 @@ const AssistantMessageBody = React.memo(({
                                     },
                                 ]}
                                 animateTailText={animatedToolIdsLookup.has(toolPart.id)}
+                                sessionId={sessionId}
+                                onShowPopup={onShowPopup}
                             />
                         </ToolRevealOnMount>
                     </FadeInOnReveal>
