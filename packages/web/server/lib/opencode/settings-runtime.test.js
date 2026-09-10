@@ -1,9 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import crypto from 'crypto';
 import fsPromises from 'fs/promises';
 import os from 'os';
 import path from 'path';
-import { createProjectIdFromPath } from '../projects/project-id.js';
+import { createProjectIdFromPath, projectConfigFileStemOf } from '../projects/project-id.js';
 import { createSettingsRuntime } from './settings-runtime.js';
 
 const createRuntime = async ({ mergePersistedSettings = (_current, changes) => changes } = {}) => {
@@ -141,6 +141,52 @@ describe('settings runtime', () => {
         { id: 'sibling', path: path.join(siblingStorageDir, 'plans', 'outside.md') },
       ]);
     } finally {
+      await cleanup();
+    }
+  });
+
+  it('migrates a legacy id into the bounded file of a project whose path is too long for a file name', async () => {
+    const { runtime, settingsFilePath, tempRoot, cleanup } = await createRuntime();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const projectPath = path.join(tempRoot, 'a'.repeat(160));
+      const oldProjectId = 'legacy-project-id';
+      const newProjectId = createProjectIdFromPath(projectPath);
+      expect(newProjectId.length).toBeGreaterThan(200);
+      const projectsRoot = path.join(path.dirname(settingsFilePath), 'projects');
+      const boundedPath = path.join(projectsRoot, `${projectConfigFileStemOf(newProjectId)}.json`);
+      expect(path.basename(boundedPath).startsWith('path_sha256_')).toBe(true);
+
+      await fsPromises.mkdir(projectPath, { recursive: true });
+      await fsPromises.mkdir(projectsRoot, { recursive: true });
+      await fsPromises.writeFile(
+        settingsFilePath,
+        JSON.stringify({
+          projects: [{ id: oldProjectId, path: projectPath, addedAt: 1, lastOpenedAt: 1 }],
+          activeProjectId: oldProjectId,
+        }, null, 2),
+        'utf8',
+      );
+      await fsPromises.writeFile(
+        path.join(projectsRoot, `${oldProjectId}.json`),
+        JSON.stringify({ 'setup-worktree': ['bun install'] }, null, 2),
+        'utf8',
+      );
+
+      const settings = await runtime.readSettingsFromDiskMigrated();
+
+      expect(settings.projects[0].id).toBe(newProjectId);
+      const migratedConfig = JSON.parse(await fsPromises.readFile(boundedPath, 'utf8'));
+      expect(migratedConfig['setup-worktree']).toEqual(['bun install']);
+      await expect(fsPromises.readFile(path.join(projectsRoot, `${oldProjectId}.json`), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+
+      // A second pass sees the bounded file beside the settings; it is the
+      // project's own file, not a stray from the random-id era.
+      await runtime.readSettingsFromDiskMigrated();
+      expect(JSON.parse(await fsPromises.readFile(boundedPath, 'utf8'))['setup-worktree']).toEqual(['bun install']);
+      expect(warn.mock.calls.some((call) => String(call[0]).includes('orphan'))).toBe(false);
+    } finally {
+      warn.mockRestore();
       await cleanup();
     }
   });

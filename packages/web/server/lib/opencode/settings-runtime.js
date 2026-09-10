@@ -1,4 +1,4 @@
-import { createProjectIdFromPath } from '../projects/project-id.js';
+import { createProjectIdFromPath, projectConfigFileStemOf } from '../projects/project-id.js';
 import {
   buildPreferencesFields,
   flattenPreferences,
@@ -288,8 +288,8 @@ export const createSettingsRuntime = (deps) => {
       return;
     }
 
-    const oldConfigPath = path.join(PROJECTS_ROOT_DIR, `${oldId}.json`);
-    const newConfigPath = path.join(PROJECTS_ROOT_DIR, `${newId}.json`);
+    const oldConfigPath = path.join(PROJECTS_ROOT_DIR, `${projectConfigFileStemOf(oldId)}.json`);
+    const newConfigPath = path.join(PROJECTS_ROOT_DIR, `${projectConfigFileStemOf(newId)}.json`);
     const oldStorageDir = path.join(PROJECTS_ROOT_DIR, oldId);
     const newStorageDir = path.join(PROJECTS_ROOT_DIR, newId);
 
@@ -468,7 +468,7 @@ export const createSettingsRuntime = (deps) => {
     for (const [projectId, orphansForProject] of matches.entries()) {
       const project = canonicalProjects.find((p) => p.id === projectId);
       if (!project) continue;
-      const targetPath = path.join(PROJECTS_ROOT_DIR, `${project.id}.json`);
+      const targetPath = path.join(PROJECTS_ROOT_DIR, `${projectConfigFileStemOf(project.id)}.json`);
 
       for (const orphan of orphansForProject) {
         const targetExisting = (await readJsonFile(targetPath)) || {};
