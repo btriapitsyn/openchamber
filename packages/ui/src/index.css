@@ -417,9 +417,9 @@ button svg.remixicon,
   shape-rendering: geometricPrecision;
 }
 
-/* GPU acceleration for non-spinning SVGs */
-button svg:not(.animate-spin),
-[role="button"] svg:not(.animate-spin) {
+/* GPU acceleration for SVGs without animated transforms */
+button svg:not(.animate-spin):not(.activity-spinner),
+[role="button"] svg:not(.animate-spin):not(.activity-spinner) {
   transform: translateZ(0);
   -webkit-transform: translateZ(0);
 }
