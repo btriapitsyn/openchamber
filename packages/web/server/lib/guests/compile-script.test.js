@@ -11,6 +11,10 @@ const guestEntryJs = path.resolve(
 describe('compileGuestScript', () => {
   test('bundles a guest entry that calls connectHost', async () => {
     const body = await compileGuestScript(guestEntryJs);
+    if (!globalThis.Bun?.build) {
+      expect(body).toBeNull();
+      return;
+    }
     expect(body).toBeTruthy();
     const text = body?.toString('utf8') ?? '';
     expect(text).toContain('openchamber.sdk');
