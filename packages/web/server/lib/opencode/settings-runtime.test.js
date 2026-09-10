@@ -280,8 +280,12 @@ describe('settings runtime', () => {
     const { runtime, settingsFilePath, tempRoot, cleanup } = await createRuntime();
     try {
       // Long enough for the bounded name, short enough that an older build
-      // could still have created `<id>/` on this filesystem.
-      const projectPath = path.join(tempRoot, `${'segment-'.repeat(12)}`, 'demo-repo');
+      // could still have created `<id>/` on this filesystem. The temp root
+      // differs per OS (a few characters on Linux runners, dozens on macOS),
+      // so pad to a fixed path length instead of a fixed segment.
+      const projectPathLength = 170;
+      const segment = 'x'.repeat(Math.max(1, projectPathLength - path.join(tempRoot, 'demo-repo').length - 1));
+      const projectPath = path.join(tempRoot, segment, 'demo-repo');
       const projectId = createProjectIdFromPath(projectPath);
       const stem = projectConfigFileStemOf(projectId);
       expect(projectId.length).toBeGreaterThan(200);
