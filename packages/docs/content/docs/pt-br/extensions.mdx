@@ -1,0 +1,52 @@
+---
+title: Extensões
+description: Instale extensões de terceiros no OpenChamber, aprove o que elas podem fazer, conecte as contas delas e remova-as.
+---
+
+# Extensões
+
+Use **Configurações → Extensões** para adicionar ao OpenChamber painéis feitos por outras pessoas. Uma extensão é uma página pequena que fica na barra da direita, ao lado dos painéis integrados. Ela pode mostrar dados de outro serviço, anexar uma tarefa ao chat e, se você permitir, iniciar sessões, enviar prompts ou ler arquivos.
+
+As extensões funcionam no OpenChamber web e desktop. O VS Code e o app móvel ainda não as carregam. Elas não são a mesma coisa que plugins do OpenCode.
+
+## Instalar uma
+
+1. Abra **Configurações → Extensões**.
+2. Cole uma destas opções no campo **Pasta, ZIP ou URL** e escolha **Adicionar**:
+   - o caminho absoluto de uma pasta neste computador
+   - o caminho de um arquivo `.zip`
+   - um link https para um repositório git ou um arquivo zip
+3. Se a extensão pedir permissões, um diálogo lista todas. Escolha **Permitir e ativar**, ou **Remover** para tirá-la de volta.
+
+No desktop, os botões de pasta e de arquivo ao lado do campo abrem um seletor nativo em vez de digitar um caminho.
+
+O ícone da extensão aparece na barra. Se não aparecer, veja [Solução de problemas](/troubleshooting/).
+
+Uma instalação por pasta roda direto daquela pasta, então quem desenvolve uma extensão pode editar e recarregar. Um zip ou uma URL é copiado primeiro para a pasta de dados do OpenChamber; o arquivo original não é tocado.
+
+## O que uma extensão pode fazer
+
+Mostrar um painel e ler qual projeto e sessão estão abertos não precisa de permissão. Tudo que age em seu nome precisa, e você vê a lista inteira uma vez, na instalação:
+
+- **Enviar mensagens para suas sessões**: escrever e enviar prompts ao modelo, o que gasta tokens.
+- **Criar sessões e worktrees**: iniciar novas sessões no projeto atual.
+- **Ler e gravar arquivos no projeto aberto**.
+- **Ler e gravar arquivos fora do projeto**: só os locais exatos que a extensão lista no diálogo.
+- **Conectar a serviços externos**: chamar a própria API com uma conta que você conecta.
+- **Executar um serviço local**: iniciar um programa separado neste computador com o acesso da sua conta de usuário. Permita isso só para extensões em que você confia; as permissões declaradas descrevem a intenção, não o restringem.
+
+Quando uma versão mais nova pede mais do que você permitiu, o card mostra **Precisa de aprovação** e um botão **Revisar permissões**. Até você permitir a nova lista, essa extensão fica desligada.
+
+## Conectar a conta dela
+
+Uma extensão que fala com um serviço ganha um card em **Configurações → Integrações** sob **Contas de extensões**. Dependendo do serviço, o card pede um token de API, um usuário e token, ou um client id para um fluxo de login. Escolha **Conectar**; **Desconectar** esquece o token guardado. Campos extras que a extensão declara são salvos sozinhos quando você sai deles.
+
+O token fica no servidor do OpenChamber. A página da extensão nunca o vê.
+
+## Pausar ou remover
+
+Cada card tem uma chave **Ativado**. Desligada, mantém a extensão instalada, mas esconde o painel e bloqueia as chamadas. **Remover** apaga uma instalação por zip ou URL da pasta de dados do OpenChamber; numa instalação por pasta só esquece o caminho, sua pasta continua lá.
+
+## Criar a sua
+
+Tudo que uma extensão pode fazer, e como criar uma, está em [Criar uma extensão](/sdk/).

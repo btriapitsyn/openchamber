@@ -1,0 +1,52 @@
+---
+title: Extensions
+description: Install third-party extensions in OpenChamber, approve what they may do, connect their accounts, and remove them.
+---
+
+# Extensions
+
+Use **Settings → Extensions** to add panels made by other people to OpenChamber. An extension is a small page that sits on the right-hand rail, next to the built-in panels. It can show you data from another service, attach a task to the chat, and, if you allow it, start sessions, send prompts, or read files.
+
+Extensions run on OpenChamber web and desktop. VS Code and the mobile app do not load them yet. They are not the same thing as OpenCode plugins.
+
+## Install one
+
+1. Open **Settings → Extensions**.
+2. Paste one of these into the **Folder, ZIP, or URL** field and choose **Add**:
+   - the absolute path of a folder on this computer
+   - the path of a `.zip` file
+   - an https link to a git repository or a zip file
+3. If the extension asks for any permissions, a dialog lists them. Choose **Allow and enable**, or **Remove** to take it back out.
+
+On desktop, the folder and archive buttons next to the field open a native picker instead of typing a path.
+
+The extension's icon appears on the rail. If it does not, see [Troubleshooting](/troubleshooting/).
+
+A folder install runs straight from that folder, so someone developing an extension can edit and reload. A zip or a URL is copied into OpenChamber's own data folder first; the original file is not touched.
+
+## What an extension may do
+
+Showing a panel and reading which project and session are open needs no permission. Anything that acts on your behalf does, and you see the whole list once, when you install:
+
+- **Send messages to your sessions**: write and send prompts to the model, which spends tokens.
+- **Create sessions and worktrees**: start new sessions in the current project.
+- **Read and write files in the open project**.
+- **Read and write files outside the project**: only the exact locations the extension lists in the dialog.
+- **Connect to external services**: call its own API with an account you connect.
+- **Run a local service**: start a separate program on this computer with your user account's access. Allow this only for extensions you trust; the permissions it declares describe intent, they do not restrict it.
+
+When a newer version asks for more than you allowed, the card shows **Needs approval** and a **Review permissions** button. Until you allow the new list, that extension stays off.
+
+## Connect its account
+
+An extension that talks to a service gets a card at **Settings → Integrations** under **Extension accounts**. Depending on the service, the card asks for an API token, a username and token, or a client id for a sign-in flow. Choose **Connect**; **Disconnect** forgets the stored token. Extra fields the extension declares save on their own as you leave them.
+
+The token stays on the OpenChamber server. The extension's page never sees it.
+
+## Pause or remove
+
+Each card has an **Enabled** switch. Off keeps the extension installed but hides its panel and blocks its calls. **Remove** deletes a zip or URL install from OpenChamber's data folder; for a folder install it only forgets the path, your folder stays.
+
+## Build your own
+
+Everything an extension can do, and how to make one, is in [Build an extension](/sdk/).
