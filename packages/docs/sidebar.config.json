@@ -697,6 +697,22 @@
       },
       "items": [
         {
+          "label": "Use extensions",
+          "link": "/extensions/",
+          "translations": {
+            "uk": "Користування розширеннями",
+            "zh-CN": "使用扩展",
+            "es": "Usar extensiones",
+            "pt-BR": "Usar extensões",
+            "ko": "확장 사용하기",
+            "pl": "Korzystanie z rozszerzeń",
+            "fr": "Utiliser les extensions",
+            "ja": "拡張機能を使う",
+            "de": "Erweiterungen verwenden",
+            "tr": "Eklentileri kullanma"
+          }
+        },
+        {
           "label": "Build an extension",
           "link": "/sdk/",
           "translations": {

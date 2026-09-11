@@ -27,12 +27,13 @@ const host = connectHost();
 | `directory` | katalog bieżącego projektu albo `null` |
 | `session` | `{ id, title, busy }` albo `null`. Tytuł wraca do id sesji, gdy go brak. `busy` to status na żywo. `model` i `agent` (agent OpenCode) pojawiają się, gdy sesja je ma. |
 | `surface` | `panel` na pasku bocznym, `dialog` w oknie dołączania |
+| `item` | dołączony element, który użytkownik kliknął, żeby otworzyć tę powierzchnię (te same pola, które przekazałeś do `attach`, łącznie z `data`), albo `null` |
 | `connection` | `{ connected, account }` dla Twojej integracji |
 | `settings` | wartości pól zadeklarowanych w `integration.settings` |
 
 Tokeny dostępu nigdy nie pojawiają się tutaj ani w wyniku `request`.
 
-`onDirectory`, `onSession`, `onSessionLifecycle`, `onConnection` i `onSettings` odtwarzają ostatnią wartość, gdy subskrybujesz późno, a potem odpalają się dalej przy każdej zmianie.
+`onDirectory`, `onSession`, `onSessionLifecycle`, `onConnection`, `onSettings` i `onItem` odtwarzają ostatnią wartość, gdy subskrybujesz późno, a potem odpalają się dalej przy każdej zmianie.
 
 ## Metody
 
@@ -92,7 +93,7 @@ await host.startSession({
 });
 ```
 
-`providerId` to id Twojego panelu; OpenChamber i tak nadpisuje je Twoim id. `id` to Twój własny identyfikator elementu. `kind` to `issue` (domyślnie) lub `pull`. `text` to opcjonalny kontekst dla modelu, od 1 do 16000 znaków po przycięciu.
+`providerId` to id Twojego panelu; OpenChamber i tak nadpisuje je Twoim id. `id` to Twój własny identyfikator elementu. `kind` to `issue` (domyślnie) lub `pull`. `text` to opcjonalny kontekst dla modelu, od 1 do 16000 znaków po przycięciu. `data` to opcjonalny JSON na Twój użytek (status, komentarze, cokolwiek), do 16000 znaków po serializacji. OpenChamber zapisuje go razem z chipem i oddaje bez zmian w `ctx.item`, gdy użytkownik kliknie chip; nigdy nie trafia do modelu.
 
 `startSession` tworzy sesję w bieżącym projekcie. Z `worktree: true` OpenChamber najpierw tworzy worktree git i tam otwiera sesję. Gdy `text` jest ustawione i wybrano model, tekst jest wysyłany jako pierwsza wiadomość. Wynik to `{ sessionId, sent }`, gdzie `sent` to `sent`, `no-model`, `skipped` lub `failed`. Sesja istnieje nawet po `no-model` i `failed`. Brak otwartego projektu, nieudane worktree albo nieudane utworzenie sesji to błąd `HOST_REJECTED`.
 
@@ -106,6 +107,7 @@ Limity, które klient stosuje, zanim cokolwiek wyśle:
 | `title` | 200 |
 | `url` | 2000 |
 | `text` | 16000 |
+| `data` (po serializacji) | 16000 |
 | `author` | 80 |
 | każda nazwa gałęzi | 200 |
 

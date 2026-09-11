@@ -1,0 +1,52 @@
+---
+title: Extensions
+description: Installe des extensions tierces dans OpenChamber, approuve ce qu'elles peuvent faire, connecte leurs comptes et retire-les.
+---
+
+# Extensions
+
+Utilise **Paramètres → Extensions** pour ajouter à OpenChamber des panneaux créés par d'autres personnes. Une extension est une petite page placée dans la barre de droite, à côté des panneaux intégrés. Elle peut t'afficher des données d'un autre service, attacher une tâche au chat et, si tu l'autorises, démarrer des sessions, envoyer des prompts ou lire des fichiers.
+
+Les extensions fonctionnent dans OpenChamber web et desktop. VS Code et l'app mobile ne les chargent pas encore. Ce n'est pas la même chose que les plugins OpenCode.
+
+## En installer une
+
+1. Ouvre **Paramètres → Extensions**.
+2. Colle l'un de ces éléments dans le champ **Dossier, ZIP ou URL** et choisis **Ajouter** :
+   - le chemin absolu d'un dossier sur cet ordinateur
+   - le chemin d'un fichier `.zip`
+   - un lien https vers un dépôt git ou un fichier zip
+3. Si l'extension demande des autorisations, une boîte de dialogue les liste. Choisis **Autoriser et activer**, ou **Supprimer** pour la retirer.
+
+Sur desktop, les boutons dossier et archive à côté du champ ouvrent un sélecteur natif au lieu de taper un chemin.
+
+L'icône de l'extension apparaît dans la barre. Si ce n'est pas le cas, consulte [Dépannage](/troubleshooting/).
+
+Une installation depuis un dossier s'exécute directement depuis ce dossier, donc quelqu'un qui développe une extension peut modifier et recharger. Un zip ou une URL est d'abord copié dans le dossier de données d'OpenChamber ; le fichier d'origine n'est pas touché.
+
+## Ce qu'une extension peut faire
+
+Afficher un panneau et lire quel projet et quelle session sont ouverts ne demande aucune autorisation. Tout ce qui agit en ton nom en demande une, et tu vois toute la liste une seule fois, à l'installation :
+
+- **Envoyer des messages à tes sessions** : écrire et envoyer des prompts au modèle, ce qui consomme des jetons.
+- **Créer des sessions et des worktrees** : démarrer de nouvelles sessions dans le projet courant.
+- **Lire et écrire des fichiers dans le projet ouvert**.
+- **Lire et écrire des fichiers hors du projet** : seulement les emplacements exacts que l'extension liste dans la boîte de dialogue.
+- **Se connecter à des services externes** : appeler sa propre API avec un compte que tu connectes.
+- **Exécuter un service local** : lancer un programme séparé sur cet ordinateur avec les accès de ton compte utilisateur. N'autorise cela qu'aux extensions en qui tu as confiance ; les autorisations qu'elle déclare décrivent l'intention, elles ne la restreignent pas.
+
+Quand une version plus récente demande plus que ce que tu as autorisé, la carte affiche **Approbation requise** et un bouton **Vérifier les autorisations**. Tant que tu n'as pas autorisé la nouvelle liste, cette extension reste désactivée.
+
+## Connecter son compte
+
+Une extension qui parle à un service reçoit une carte dans **Paramètres → Intégrations** sous **Comptes d’extensions**. Selon le service, la carte demande un jeton d'API, un nom d'utilisateur et un jeton, ou un client id pour une connexion. Choisis **Connecter** ; **Déconnecter** oublie le jeton enregistré. Les champs supplémentaires que l'extension déclare s'enregistrent tout seuls quand tu les quittes.
+
+Le jeton reste sur le serveur OpenChamber. La page de l'extension ne le voit jamais.
+
+## Mettre en pause ou retirer
+
+Chaque carte a un interrupteur **Activé**. Désactivé garde l'extension installée mais cache son panneau et bloque ses appels. **Retirer** supprime une installation par zip ou URL du dossier de données d'OpenChamber ; pour une installation depuis un dossier, il oublie seulement le chemin, ton dossier reste.
+
+## Créer la tienne
+
+Tout ce qu'une extension peut faire, et comment en créer une, est dans [Créer une extension](/sdk/).

@@ -27,12 +27,13 @@ const host = connectHost();
 | `directory` | o diretório do projeto atual, ou `null` |
 | `session` | `{ id, title, busy }` ou `null`. Sem título, o id da sessão é usado no lugar. `busy` é o status ao vivo. `model` e `agent` (o agente do OpenCode) aparecem quando a sessão os tem. |
 | `surface` | `panel` na barra lateral, `dialog` na janela de anexar |
+| `item` | o item anexado em que o usuário clicou para abrir esta superfície (os mesmos campos que você passou para `attach`, incluindo `data`), ou `null` |
 | `connection` | `{ connected, account }` da sua integração |
 | `settings` | os valores dos campos que você declarou em `integration.settings` |
 
 Tokens de acesso nunca aparecem aqui nem no resultado de um `request`.
 
-`onDirectory`, `onSession`, `onSessionLifecycle`, `onConnection` e `onSettings` repetem o último valor quando você assina tarde, e depois continuam disparando conforme ele muda.
+`onDirectory`, `onSession`, `onSessionLifecycle`, `onConnection`, `onSettings` e `onItem` repetem o último valor quando você assina tarde, e depois continuam disparando conforme ele muda.
 
 ## Métodos
 
@@ -92,7 +93,7 @@ await host.startSession({
 });
 ```
 
-`providerId` é o id do seu painel; o OpenChamber o sobrescreve com o seu id de qualquer forma. `id` é o seu próprio identificador do item. `kind` é `issue` (padrão) ou `pull`. `text` é contexto opcional para o modelo, de 1 a 16000 caracteres após remover espaços.
+`providerId` é o id do seu painel; o OpenChamber o sobrescreve com o seu id de qualquer forma. `id` é o seu próprio identificador do item. `kind` é `issue` (padrão) ou `pull`. `text` é contexto opcional para o modelo, de 1 a 16000 caracteres após remover espaços. `data` é um JSON opcional seu (status, comentários, o que quiser), até 16000 caracteres depois de serializado. O OpenChamber o guarda junto com o chip e o devolve sem alterações em `ctx.item` quando o usuário clica no chip; ele nunca chega ao modelo.
 
 `startSession` cria uma sessão no projeto atual. Com `worktree: true` o OpenChamber cria primeiro um worktree git e abre a sessão nele. Quando `text` está definido e há um modelo selecionado, ele é enviado como primeira mensagem. O resultado é `{ sessionId, sent }`, onde `sent` é `sent`, `no-model`, `skipped` ou `failed`. A sessão existe mesmo após `no-model` e `failed`. Sem projeto aberto, worktree que falhou ou criação de sessão que falhou, o erro é `HOST_REJECTED`.
 
@@ -106,6 +107,7 @@ Limites que o cliente aplica antes de enviar qualquer coisa:
 | `title` | 200 |
 | `url` | 2000 |
 | `text` | 16000 |
+| `data` (serializado) | 16000 |
 | `author` | 80 |
 | cada nome de branch | 200 |
 

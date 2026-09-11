@@ -27,12 +27,13 @@ const host = connectHost();
 | `directory` | 現在のプロジェクトディレクトリ、または `null` |
 | `session` | `{ id, title, busy }` または `null`。タイトルがなければセッション ID になります。`busy` はライブの状態です。セッションが持っていれば `model` と `agent`(OpenCode のエージェント)も含まれます。 |
 | `surface` | レール上なら `panel`、添付ウィンドウなら `dialog` |
+| `item` | この画面を開くためにユーザーがクリックした添付済みの項目(`attach` に渡したのと同じフィールド、`data` を含む)、または `null` |
 | `connection` | あなたの連携の `{ connected, account }` |
 | `settings` | `integration.settings` で宣言した入力欄の値 |
 
 アクセストークンはここにも `request` の結果にも決して現れません。
 
-`onDirectory`、`onSession`、`onSessionLifecycle`、`onConnection`、`onSettings` は、遅れて購読しても最新の値を再送し、その後は変化のたびに発火し続けます。
+`onDirectory`、`onSession`、`onSessionLifecycle`、`onConnection`、`onSettings`、`onItem` は、遅れて購読しても最新の値を再送し、その後は変化のたびに発火し続けます。
 
 ## メソッド
 
@@ -92,7 +93,7 @@ await host.startSession({
 });
 ```
 
-`providerId` はパネル ID です。いずれにせよ OpenChamber があなたの ID で上書きします。`id` は項目に対するあなた自身の識別子です。`kind` は `issue`(デフォルト)または `pull` です。`text` はモデルに渡す任意のコンテキストで、トリム後 1 から 16000 文字です。
+`providerId` はパネル ID です。いずれにせよ OpenChamber があなたの ID で上書きします。`id` は項目に対するあなた自身の識別子です。`kind` は `issue`(デフォルト)または `pull` です。`text` はモデルに渡す任意のコンテキストで、トリム後 1 から 16000 文字です。`data` は任意の JSON で、内容は自由です(ステータス、コメントなど)。シリアライズ後 16000 文字までです。OpenChamber はこれをチップと一緒に保存し、ユーザーがチップをクリックしたときに `ctx.item` でそのまま返します。モデルには決して渡りません。
 
 `startSession` は現在のプロジェクトにセッションを作ります。`worktree: true` を付けると、OpenChamber はまず git worktree を作り、そこでセッションを開きます。`text` があってモデルが選択されていれば、最初のメッセージとして送られます。結果は `{ sessionId, sent }` で、`sent` は `sent`、`no-model`、`skipped`、`failed` のいずれかです。`no-model` と `failed` の後もセッションは存在します。開いているプロジェクトがない、worktree の作成に失敗した、セッションの作成に失敗した場合は `HOST_REJECTED` エラーになります。
 
@@ -106,6 +107,7 @@ await host.startSession({
 | `title` | 200 |
 | `url` | 2000 |
 | `text` | 16000 |
+| `data`(シリアライズ後) | 16000 |
 | `author` | 80 |
 | 各ブランチ名 | 200 |
 

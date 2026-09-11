@@ -15,6 +15,8 @@ import { PluginPane } from './PluginPane';
 
 type GuestAttachDialogProps = {
   guestId: string | null;
+  /** The chip the dialog was opened from; `null` (default) when opened from a menu. */
+  item?: AttachIssueRequest | null;
   onOpenChange: (open: boolean) => void;
   onAttach?: (issue: AttachIssueRequest) => void;
   onSessionStarted?: () => void;
@@ -22,6 +24,7 @@ type GuestAttachDialogProps = {
 
 export const GuestAttachDialog: React.FC<GuestAttachDialogProps> = ({
   guestId,
+  item = null,
   onOpenChange,
   onAttach,
   onSessionStarted,
@@ -45,6 +48,7 @@ export const GuestAttachDialog: React.FC<GuestAttachDialogProps> = ({
             <PluginPane
               mode={pluginModeFromId(guestId)}
               surface="dialog"
+              item={item}
               onDismiss={() => onOpenChange(false)}
               onAttach={onAttach}
               onSessionStarted={onSessionStarted}

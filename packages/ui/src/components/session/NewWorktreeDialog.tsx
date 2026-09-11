@@ -547,6 +547,7 @@ export function NewWorktreeDialog({
           author: args.guest.author,
           head: args.guest.branches?.head,
           base: args.guest.branches?.base,
+          data: args.guest.data,
           linkedAt: Date.now(),
         }),
         true,

@@ -85,9 +85,10 @@ You can also add a local `.zip` or an https link to a git repository or a zip fi
 
 - `"dialog"` opens your page in a window
 - `true` or `"panel"` opens the rail panel instead
+- `{ "mode": "dialog", "entry": "panel/attach.html" }` opens a separate page of yours in the window, so the picker does not have to share code with the rail panel
 - omit it and the extension stays off that menu
 
-Your page can tell which one it is in from `ctx.surface` (`panel` or `dialog`), so you can show a list on the rail and a picker in the window.
+Your page can tell which one it is in from `ctx.surface` (`panel` or `dialog`). When the user clicks an item you attached earlier, the same surface opens again with `ctx.item` set to that item, including any `data` you stored on it, so you can show its details instead of the list. From the + menu or the rail icon `ctx.item` is `null`.
 
 `contributes.integration` is optional. It adds a card at Settings → Integrations where the user connects an account. See [Accounts and network](#accounts-and-network).
 

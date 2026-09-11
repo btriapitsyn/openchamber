@@ -27,12 +27,13 @@ const host = connectHost();
 | `directory` | 当前项目目录，或 `null` |
 | `session` | `{ id, title, busy }` 或 `null`。没有标题时回退为会话 id。`busy` 是实时状态。会话有 `model` 和 `agent`（OpenCode 的 agent）时也会出现。 |
 | `surface` | 在侧栏中为 `panel`，在附加窗口中为 `dialog` |
+| `item` | 用户为打开此界面而点击的已附加条目（与你传给 `attach` 的字段相同，包括 `data`），或 `null` |
 | `connection` | 你的集成的 `{ connected, account }` |
 | `settings` | 你在 `integration.settings` 中声明的字段的值 |
 
 访问令牌永远不会出现在这里，也不会出现在 `request` 的结果中。
 
-`onDirectory`、`onSession`、`onSessionLifecycle`、`onConnection` 和 `onSettings` 在你较晚订阅时会重放最新值，之后随变化持续触发。
+`onDirectory`、`onSession`、`onSessionLifecycle`、`onConnection`、`onSettings` 和 `onItem` 在你较晚订阅时会重放最新值，之后随变化持续触发。
 
 ## 方法
 
@@ -92,7 +93,7 @@ await host.startSession({
 });
 ```
 
-`providerId` 是你的面板 id；无论如何 OpenChamber 都会用你的 id 覆盖它。`id` 是你自己为条目定义的标识符。`kind` 为 `issue`（默认）或 `pull`。`text` 是给模型的可选上下文，去除首尾空白后 1 到 16000 个字符。
+`providerId` 是你的面板 id；无论如何 OpenChamber 都会用你的 id 覆盖它。`id` 是你自己为条目定义的标识符。`kind` 为 `issue`（默认）或 `pull`。`text` 是给模型的可选上下文，去除首尾空白后 1 到 16000 个字符。`data` 是你自定义的可选 JSON（状态、评论，任何内容），序列化后最多 16000 个字符。OpenChamber 会把它和标签一起保存，并在用户点击标签时通过 `ctx.item` 原样交还；它永远不会到达模型。
 
 `startSession` 在当前项目中创建会话。设置 `worktree: true` 时，OpenChamber 会先创建一个 git worktree，并在那里打开会话。设置了 `text` 且已选择模型时，它会作为第一条消息发送。结果是 `{ sessionId, sent }`，其中 `sent` 为 `sent`、`no-model`、`skipped` 或 `failed`。即使结果是 `no-model` 或 `failed`，会话也已存在。没有打开的项目、worktree 创建失败或会话创建失败，都是 `HOST_REJECTED` 错误。
 
@@ -106,6 +107,7 @@ await host.startSession({
 | `title` | 200 |
 | `url` | 2000 |
 | `text` | 16000 |
+| `data`（序列化后） | 16000 |
 | `author` | 80 |
 | 每个分支名 | 200 |
 

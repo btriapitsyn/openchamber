@@ -5,6 +5,7 @@ import {
   clampAttachRequest,
   clampPromptRequest,
   clampStartSessionRequest,
+  GUEST_ATTACH_DATA_MAX,
   GUEST_ATTACH_TITLE_MAX,
   GUEST_COMPOSE_TEXT_MAX,
   readHostMessage,
@@ -50,6 +51,7 @@ const readyPayload = {
   surface: 'panel',
   connection: { connected: false, account: '' },
   settings: {},
+  item: null,
 };
 
 describe('parseHostMessage', () => {
@@ -134,6 +136,75 @@ describe('parseHostMessage', () => {
     if (message?.type === 'ready') {
       expect(message.payload.surface).toBe('dialog');
     }
+  });
+
+  test('accepts ready with an attached item and an item push', () => {
+    const item = {
+      providerId: 'tasks-demo',
+      id: 'DEMO-1',
+      title: 'Fix the login redirect loop',
+      url: 'https://example.com/tasks/DEMO-1',
+      kind: 'issue' as const,
+    };
+    const message = parseHostMessage({
+      channel: OPENCHAMBER_SDK_CHANNEL,
+      v: 1,
+      type: 'ready',
+      payload: { ...readyPayload, item },
+    });
+    expect(message?.type).toBe('ready');
+    if (message?.type === 'ready') {
+      expect(message.payload.item).toEqual(item);
+    }
+    const push = parseHostMessage({
+      channel: OPENCHAMBER_SDK_CHANNEL,
+      v: 1,
+      type: 'item',
+      payload: { item: null },
+    });
+    expect(push).toEqual({
+      channel: OPENCHAMBER_SDK_CHANNEL,
+      v: 1,
+      type: 'item',
+      payload: { item: null },
+    });
+  });
+
+  test('keeps attach data within the limit and refuses it over the limit', () => {
+    const data = { status: 'open', comments: [{ author: 'mara', text: 'hi' }], n: 1, ok: true, none: null };
+    const base = {
+      channel: OPENCHAMBER_SDK_CHANNEL,
+      v: 1,
+      type: 'attach' as const,
+      id: 'oc-1',
+    };
+    const payload = { providerId: 'tasks-demo', id: 'DEMO-1', title: 'T', url: 'https://x.test/1' };
+    const parsed = guestMessageSchema.safeParse({ ...base, payload: { ...payload, data } });
+    expect(parsed.success).toBe(true);
+    if (parsed.success && parsed.data.type === 'attach') {
+      expect(parsed.data.payload.data).toEqual(data);
+    }
+    expect(guestMessageSchema.safeParse({
+      ...base,
+      payload: { ...payload, data: 'x'.repeat(GUEST_ATTACH_DATA_MAX) },
+    }).success).toBe(false);
+    expect(parseHostMessage({
+      channel: OPENCHAMBER_SDK_CHANNEL,
+      v: 1,
+      type: 'item',
+      payload: { item: { ...payload, data } },
+    })).toMatchObject({ type: 'item', payload: { item: { data } } });
+  });
+
+  test('drops ready without an item field', () => {
+    const { item: _item, ...withoutItem } = readyPayload;
+    void _item;
+    expect(hostMessageSchema.safeParse({
+      channel: OPENCHAMBER_SDK_CHANNEL,
+      v: 1,
+      type: 'ready',
+      payload: withoutItem,
+    }).success).toBe(false);
   });
 
   test('drops ready without connection or settings', () => {
@@ -426,6 +497,14 @@ describe('parseGuestMessage', () => {
         url: 'https://app.clickup.com/t/abc',
       }),
     })?.type).toBe('attach');
+  });
+
+  test('keeps attach data within the limit and drops it over the limit', () => {
+    const base = { providerId: 'tasks-demo', id: 'DEMO-1', title: 'T', url: 'https://x.test/1' };
+    const data = { status: 'open', comments: [{ author: 'mara', text: 'hi' }] };
+    expect(clampAttachRequest({ ...base, data })).toEqual({ ...base, kind: 'issue', data });
+    expect(clampAttachRequest({ ...base, data: 'x'.repeat(GUEST_ATTACH_DATA_MAX) })).toEqual({ ...base, kind: 'issue' });
+    expect(clampStartSessionRequest({ ...base, data: null, worktree: true })).toEqual({ ...base, kind: 'issue', data: null, worktree: true });
   });
 
   test('keeps pull author and branches and drops branches on an issue', () => {

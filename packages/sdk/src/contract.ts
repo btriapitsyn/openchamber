@@ -158,6 +158,12 @@ export type HostReadyContext = {
   surface: GuestHostSurface;
   connection: GuestConnection;
   settings: GuestSettings;
+  /**
+   * The attached item this surface was opened for: the user clicked that
+   * item's chip on the composer. `null` when opened from the rail icon or
+   * the composer + menu.
+   */
+  item: AttachIssueRequest | null;
 };
 
 export type ToastKind = 'info' | 'success' | 'error';
@@ -179,6 +185,9 @@ export type AttachBranches = {
   base: string;
 };
 
+/** Plain JSON: what survives `JSON.stringify` / `JSON.parse` unchanged. */
+export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+
 export type AttachIssueRequest = {
   providerId: string;
   id: string;
@@ -188,6 +197,13 @@ export type AttachIssueRequest = {
   kind?: AttachThreadKind;
   author?: string;
   branches?: AttachBranches;
+  /**
+   * Opaque payload the guest chose. The host stores it with the chip and the
+   * session snapshot and hands it back unchanged as `ready.item.data`; it
+   * never reaches the model or the chip text. Serialized size is capped at
+   * `GUEST_ATTACH_DATA_MAX`; `clampAttachRequest` drops a larger value.
+   */
+  data?: JsonValue;
 };
 
 export type StartSessionRequest = AttachIssueRequest & {
@@ -203,6 +219,8 @@ export const GUEST_ATTACH_URL_MAX = 2_000;
 export const GUEST_ATTACH_TEXT_MAX = 16_000;
 export const GUEST_ATTACH_AUTHOR_MAX = 80;
 export const GUEST_ATTACH_BRANCH_MAX = 200;
+/** `JSON.stringify(data).length` ceiling for `AttachIssueRequest.data`. */
+export const GUEST_ATTACH_DATA_MAX = 16_000;
 export const GUEST_ACCOUNT_MAX = 200;
 export const GUEST_SESSION_MODEL_MAX = 200;
 export const GUEST_SESSION_AGENT_MAX = 80;
@@ -258,6 +276,21 @@ export const resolveHostRequestErrorCode = (value: string | undefined): HostRequ
   value && isHostRequestErrorCode(value) ? value : 'HOST_REJECTED'
 );
 
+export const isJsonValue = (value: JsonValue | undefined): value is JsonValue => {
+  if (value === undefined) return false;
+  if (value === null || value === true || value === false) return true;
+  if (String(value) === value) return true;
+  if (Number(value) === value) return Number.isFinite(value);
+  if (Array.isArray(value)) return value.every(isJsonValue);
+  if (Object(value) === value) return Object.values(value).every(isJsonValue);
+  return false;
+};
+
+/** Whether `data` is plain JSON that serializes within `GUEST_ATTACH_DATA_MAX`. */
+export const isAttachData = (value: JsonValue | undefined): value is JsonValue => (
+  isJsonValue(value) && JSON.stringify(value).length <= GUEST_ATTACH_DATA_MAX
+);
+
 const clampBranch = (value: string | undefined): string => (
   value?.trim().slice(0, GUEST_ATTACH_BRANCH_MAX) ?? ''
 );
@@ -289,6 +322,9 @@ export const clampAttachRequest = (request: AttachIssueRequest): AttachIssueRequ
     if (head && base) {
       next.branches = { head, base };
     }
+  }
+  if (isAttachData(request.data)) {
+    next.data = request.data;
   }
   return next;
 };
@@ -363,6 +399,7 @@ export type HostSessionMessage = Envelope & { type: 'session'; payload: { sessio
 export type HostConnectionMessage = Envelope & { type: 'connection'; payload: { connection: GuestConnection } };
 export type HostSettingsMessage = Envelope & { type: 'settings'; payload: { settings: GuestSettings } };
 export type HostSessionLifecycleMessage = Envelope & { type: 'session-lifecycle'; payload: SessionLifecycleEvent };
+export type HostItemMessage = Envelope & { type: 'item'; payload: { item: AttachIssueRequest | null } };
 export type HostResultMessage = Envelope & { type: 'result'; id: string } & (
   | { ok: true; payload?: HostResultPayload }
   | { ok: false; error: string; code: HostRequestErrorCode }
@@ -375,6 +412,7 @@ export type HostMessage =
   | HostConnectionMessage
   | HostSettingsMessage
   | HostSessionLifecycleMessage
+  | HostItemMessage
   | HostResultMessage;
 
 type GuestCall<Type extends string, Payload = never> = Envelope & { type: Type; id: string } & (
@@ -455,7 +493,7 @@ export const isFileStatResult = (
 );
 
 const HOST_PUSH_TYPES: ReadonlySet<string> = new Set([
-  'ready', 'directory', 'session', 'connection', 'settings', 'session-lifecycle',
+  'ready', 'directory', 'session', 'connection', 'settings', 'session-lifecycle', 'item',
 ]);
 
 /** What a postMessage payload may carry before it is read as a host message. */

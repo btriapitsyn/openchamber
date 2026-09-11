@@ -11,7 +11,10 @@
         "icon": "task",
         "entry": "panel/index.html"
       },
-      "attach": "dialog",
+      "attach": {
+        "mode": "dialog",
+        "entry": "panel/attach.html"
+      },
       "capabilities": [
         "prompt",
         "sessions"

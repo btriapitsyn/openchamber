@@ -57,6 +57,17 @@ const isSafeApiPath = (value: string): boolean => {
 
 const ACCOUNT_NAME = /^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)*$/;
 
+const attachModeSchema = z.enum(['panel', 'dialog']);
+
+// `entry` only means something for the dialog; a panel-mode object naming one
+// is a misconfiguration and fails closed rather than carrying a dead field.
+const attachObjectSchema = z.object({
+  mode: attachModeSchema,
+  entry: z.string().trim().refine(isSafeAssetPath).optional(),
+}).refine((value) => value.mode === 'dialog' || value.entry === undefined, { path: ['entry'] });
+
+const attachSchema = z.union([z.boolean(), attachModeSchema, attachObjectSchema]);
+
 const panelSchema = z.object({
   id: z.string().trim().regex(PANEL_ID),
   name: z.string().trim().min(1),
@@ -180,7 +191,7 @@ export const openChamberManifestSchema = z.object({
   }).strict().optional(),
   contributes: z.object({
     panel: panelSchema,
-    attach: z.union([z.boolean(), z.enum(['panel', 'dialog'])]).optional(),
+    attach: attachSchema.optional(),
     capabilities: z.array(z.enum(DECLARED_GUEST_CAPABILITIES)).max(8).optional(),
     integration: integrationSchema.optional(),
     service: serviceSchema.optional(),
@@ -247,12 +258,16 @@ const failureFromIssue = (issue: { path: ReadonlyArray<PropertyKey>; code: strin
       return fail('invalid-panel-icon', 'panel.icon must be a Remixicon name or a package .svg path.');
     case 'contributes.panel.entry':
       return fail('invalid-panel-entry', 'panel.entry must be a relative path inside the package.');
-    case 'contributes.attach':
-      return fail('invalid-attach', 'contributes.attach must be true, false, "panel", or "dialog".');
     case 'contributes.capabilities':
       return fail('invalid-capabilities', 'contributes.capabilities may list "prompt", "sessions", and "files".');
     default:
       break;
+  }
+  if (path === 'contributes.attach' || path.startsWith('contributes.attach.')) {
+    return fail(
+      'invalid-attach',
+      'contributes.attach must be true, false, "panel", "dialog", or { "mode": "panel" | "dialog", "entry"?: "<html inside the package, dialog only>" }.',
+    );
   }
   if (path.startsWith('contributes.capabilities')) {
     return fail('invalid-capabilities', 'contributes.capabilities may list "prompt", "sessions", and "files".');

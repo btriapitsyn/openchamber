@@ -85,9 +85,10 @@ También puedes añadir un `.zip` local o un enlace https a un repositorio de gi
 
 - `"dialog"` abre tu página en una ventana
 - `true` o `"panel"` abre el panel de la barra lateral en su lugar
+- `{ "mode": "dialog", "entry": "panel/attach.html" }` abre en la ventana una página aparte tuya, para que el selector no tenga que compartir código con el panel de la barra lateral
 - si lo omites, la extensión no aparece en ese menú
 
-Tu página puede saber en cuál de los dos está gracias a `ctx.surface` (`panel` o `dialog`), así que puedes mostrar una lista en la barra lateral y un selector en la ventana.
+Tu página puede saber en cuál de los dos está gracias a `ctx.surface` (`panel` o `dialog`). Cuando el usuario hace clic en un elemento que adjuntaste antes, la misma superficie se abre de nuevo con `ctx.item` apuntando a ese elemento, incluidos los `data` que guardaste en él, así que puedes mostrar sus detalles en lugar de la lista. Desde el menú + o el icono de la barra lateral, `ctx.item` es `null`.
 
 `contributes.integration` es opcional. Añade una tarjeta en Ajustes → Integraciones donde el usuario conecta una cuenta. Consulta [Cuentas y red](#cuentas-y-red).
 

@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import { requestedGuestCapabilities, resolveAttachMode, toPublicService, toPublicIntegration, hostMeetsOpenChamberEngine, openChamberEngineMinimum } from '@openchamber/sdk';
+import { requestedGuestCapabilities, resolveAttachEntry, resolveAttachMode, toPublicService, toPublicIntegration, hostMeetsOpenChamberEngine, openChamberEngineMinimum } from '@openchamber/sdk';
 import { parseManifestJson } from '@openchamber/sdk/schemas';
 
 import { listRelativeGuestScriptHrefs, resolveGuestHtmlRelativePath } from './html-tokens.js';
@@ -174,6 +174,18 @@ export const inspectGuestPackage = async (packageRoot, { openchamberVersion, ski
   if (attach) {
     guest.attach = attach;
   }
+  // A dialog page is checked like panel.entry: the HTML must exist and every
+  // relative script it loads must already be built.
+  const attachEntry = resolveAttachEntry(parsed.manifest.contributes);
+  if (attachEntry) {
+    if (!await resolveGuestAssetPath(packageRoot, attachEntry)) {
+      return { ok: false, code: 'invalid-manifest' };
+    }
+    if (!await guestBuiltScriptsReady(packageRoot, attachEntry)) {
+      return { ok: false, code: 'missing-build' };
+    }
+    guest.attachEntry = attachEntry;
+  }
   if (parsed.manifest.contributes.capabilities?.length) {
     guest.capabilities = [...parsed.manifest.contributes.capabilities];
   }
@@ -221,6 +233,9 @@ export const toPublicGuest = (guest) => {
   const attach = resolveAttachMode(guest.attach);
   if (attach) {
     row.attach = attach;
+  }
+  if (attach === 'dialog' && typeof guest.attachEntry === 'string' && guest.attachEntry) {
+    row.attachEntry = guest.attachEntry;
   }
   if (guest.integration) {
     row.integration = toPublicIntegration(guest.integration);

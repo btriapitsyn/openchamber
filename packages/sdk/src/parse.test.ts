@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { OPENCHAMBER_SDK_API_VERSION } from './api-version.ts';
-import { requestedGuestCapabilities, resolveAttachMode, resolveIntegrationApi, toPublicIntegration } from './manifest.ts';
+import { requestedGuestCapabilities, resolveAttachEntry, resolveAttachMode, resolveIntegrationApi, toPublicIntegration } from './manifest.ts';
 import { parseManifest, parseManifestJson } from './parse.ts';
 
 const validBlock = {
@@ -296,6 +296,55 @@ describe('parseManifest', () => {
     }
   });
 
+  test('keeps the object attach form with a dialog entry', () => {
+    const result = parseManifest({
+      ...validBlock,
+      contributes: {
+        ...validBlock.contributes,
+        attach: { mode: 'dialog', entry: 'panel/attach.html' },
+      },
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.manifest.contributes.attach).toEqual({ mode: 'dialog', entry: 'panel/attach.html' });
+      expect(resolveAttachMode(result.manifest.contributes.attach)).toBe('dialog');
+      expect(resolveAttachEntry(result.manifest.contributes)).toBe('panel/attach.html');
+    }
+  });
+
+  test('object attach without an entry reuses panel.entry', () => {
+    const result = parseManifest({
+      ...validBlock,
+      contributes: { ...validBlock.contributes, attach: { mode: 'panel' } },
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(resolveAttachMode(result.manifest.contributes.attach)).toBe('panel');
+      expect(resolveAttachEntry(result.manifest.contributes)).toBeNull();
+    }
+    expect(resolveAttachEntry({ attach: 'dialog' })).toBeNull();
+    expect(resolveAttachEntry({ attach: undefined })).toBeNull();
+  });
+
+  test('rejects an attach entry that leaves the package or sits on panel mode', () => {
+    expect(parseManifestJson(JSON.stringify({
+      ...validBlock,
+      contributes: { ...validBlock.contributes, attach: { mode: 'dialog', entry: '../attach.html' } },
+    }))).toMatchObject({ ok: false, code: 'invalid-attach' });
+    expect(parseManifestJson(JSON.stringify({
+      ...validBlock,
+      contributes: { ...validBlock.contributes, attach: { mode: 'dialog', entry: 'https://x.test/a.html' } },
+    }))).toMatchObject({ ok: false, code: 'invalid-attach' });
+    expect(parseManifestJson(JSON.stringify({
+      ...validBlock,
+      contributes: { ...validBlock.contributes, attach: { mode: 'panel', entry: 'panel/attach.html' } },
+    }))).toMatchObject({ ok: false, code: 'invalid-attach' });
+    expect(parseManifestJson(JSON.stringify({
+      ...validBlock,
+      contributes: { ...validBlock.contributes, attach: { mode: 'window' } },
+    }))).toMatchObject({ ok: false, code: 'invalid-attach' });
+  });
+
   test('rejects a junk attach value', () => {
     expect(parseManifestJson(JSON.stringify({
       ...validBlock,
@@ -309,6 +358,8 @@ describe('parseManifest', () => {
     expect(resolveAttachMode(true)).toBe('panel');
     expect(resolveAttachMode('panel')).toBe('panel');
     expect(resolveAttachMode('dialog')).toBe('dialog');
+    expect(resolveAttachMode({ mode: 'dialog', entry: 'panel/attach.html' })).toBe('dialog');
+    expect(resolveAttachMode({ mode: 'panel' })).toBe('panel');
   });
 
   test('rejects a missing panel', () => {

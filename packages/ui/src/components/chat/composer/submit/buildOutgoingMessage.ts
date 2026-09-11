@@ -13,10 +13,11 @@
  * so the ordering can be tested rather than trusted.
  */
 
+import type { JsonValue } from '@openchamber/sdk';
 import type { AttachedFile } from '@/stores/types/sessionTypes';
 import type { InlineCommentDraft } from '@/stores/useInlineCommentDraftStore';
 import type { QueuedContextPart } from '@/stores/messageQueueStore';
-import { contextPayloadFromDraft, createContextPart, type ContextPartMetadata } from '@/lib/messages/contextParts';
+import { contextPayloadFromDraft, createContextPart, type ContextPartMetadata, type ContextPartPayload } from '@/lib/messages/contextParts';
 
 export interface OutgoingPart {
     text: string;
@@ -65,6 +66,8 @@ export interface ComposerContextInput {
         url: string;
         contextText: string;
         thread?: 'issue' | 'pull';
+        /** Opaque guest payload; rides the context part metadata, not its text. */
+        data?: JsonValue;
     } | null;
 }
 
@@ -215,14 +218,18 @@ export function buildComposerContext(
     }
 
     if (input.linkedGuestIssue) {
-        const { providerId, id, title, url, contextText, thread } = input.linkedGuestIssue;
-        attach(createContextPart({
+        const { providerId, id, title, url, contextText, thread, data } = input.linkedGuestIssue;
+        const payload: Extract<ContextPartPayload, { kind: 'guest-issue' | 'guest-pr' }> = {
             kind: thread === 'pull' ? 'guest-pr' : 'guest-issue',
             providerId,
             id,
             title,
             url,
-        }, contextText));
+        };
+        if (data !== undefined) {
+            payload.data = data;
+        }
+        attach(createContextPart(payload, contextText));
     }
 
     if (skillInstruction) {

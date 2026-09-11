@@ -85,9 +85,10 @@ Możesz też dodać lokalny plik `.zip` albo link https do repozytorium git lub 
 
 - `"dialog"` otwiera Twoją stronę w oknie
 - `true` lub `"panel"` otwiera zamiast tego panel na pasku bocznym
+- `{ "mode": "dialog", "entry": "panel/attach.html" }` otwiera w oknie osobną Twoją stronę, żeby wybór nie musiał dzielić kodu z panelem na pasku bocznym
 - bez tego klucza rozszerzenie nie pojawia się w tym menu
 
-Twoja strona rozpozna, gdzie się znajduje, po `ctx.surface` (`panel` lub `dialog`), więc możesz pokazać listę na pasku bocznym, a w oknie wybór.
+Twoja strona rozpozna, gdzie się znajduje, po `ctx.surface` (`panel` lub `dialog`). Gdy użytkownik kliknie element, który wcześniej dołączyłeś, ta sama powierzchnia otwiera się ponownie z `ctx.item` ustawionym na ten element, razem z `data`, które na nim zapisałeś, więc możesz pokazać jego szczegóły zamiast listy. Z menu + lub z ikony na pasku bocznym `ctx.item` to `null`.
 
 `contributes.integration` jest opcjonalne. Dodaje kartę w Ustawienia → Integracje, gdzie użytkownik podłącza konto. Zobacz [Konta i sieć](#konta-i-sieć).
 

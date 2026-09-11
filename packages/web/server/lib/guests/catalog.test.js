@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { guestAssetContentType, listInstalledGuests, resolveGuestAssetPath, resolveGuestServedFile, toPublicGuest } from './catalog.js';
+import { guestAssetContentType, inspectGuestPackage, listInstalledGuests, resolveGuestAssetPath, resolveGuestServedFile, toPublicGuest } from './catalog.js';
 import { writeExtensionPaths } from './persist.js';
 
 const writeBuiltGuest = async (root) => {
@@ -161,6 +161,45 @@ describe('listInstalledGuests', () => {
     await writeExtensionPaths([guestRoot], persistPath);
 
     expect(await listInstalledGuests({ persistPath })).toEqual([]);
+
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  test('checks a declared dialog entry like panel.entry and exposes it on the public row', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'oc-guest-'));
+    const guestRoot = path.join(dir, 'tasks');
+    const writeManifest = async () => fs.writeFile(path.join(guestRoot, 'package.json'), JSON.stringify({
+      name: '@openchamber/tasks',
+      version: '1.0.0',
+      openchamber: {
+        apiVersion: 1,
+        contributes: {
+          panel: { id: 'tasks', name: 'Tasks', icon: 'window', entry: 'panel/index.html' },
+          attach: { mode: 'dialog', entry: 'panel/attach.html' },
+        },
+      },
+    }));
+    await fs.mkdir(path.join(guestRoot, 'panel'), { recursive: true });
+    await fs.writeFile(path.join(guestRoot, 'panel', 'index.html'), '<script src="./main.js"></script>');
+    await fs.writeFile(path.join(guestRoot, 'panel', 'main.js'), 'console.log("main")');
+    await writeManifest();
+
+    expect(await inspectGuestPackage(guestRoot, { openchamberVersion: '1.0.0' })).toEqual({ ok: false, code: 'invalid-manifest' });
+
+    await fs.writeFile(path.join(guestRoot, 'panel', 'attach.html'), '<script src="./attach.js"></script>');
+    expect(await inspectGuestPackage(guestRoot, { openchamberVersion: '1.0.0' })).toEqual({ ok: false, code: 'missing-build' });
+
+    await fs.writeFile(path.join(guestRoot, 'panel', 'attach.js'), 'console.log("attach")');
+    const inspected = await inspectGuestPackage(guestRoot, { openchamberVersion: '1.0.0' });
+    expect(inspected.ok).toBe(true);
+    if (inspected.ok) {
+      expect(inspected.guest.attach).toBe('dialog');
+      expect(inspected.guest.attachEntry).toBe('panel/attach.html');
+      expect(toPublicGuest({ ...inspected.guest, source: 'path', path: guestRoot })).toMatchObject({
+        attach: 'dialog',
+        attachEntry: 'panel/attach.html',
+      });
+    }
 
     await fs.rm(dir, { recursive: true, force: true });
   });

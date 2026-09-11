@@ -268,6 +268,23 @@ describe('synthetic context', () => {
             });
     });
 
+    test('a linked guest issue keeps its opaque data in metadata only', () => {
+        const data = { status: 'open', comments: ['hi'] };
+        const result = buildOutgoingMessage(input({
+            composerText: 'fix it',
+            linkedGuestIssue: {
+                providerId: 'hello',
+                id: 'HELLO-1',
+                title: 'Sample ticket',
+                url: 'https://example.com/HELLO-1',
+                contextText: 'guest body',
+                data,
+            },
+        }), deps());
+        expect(result.additionalParts[0].text).toBe('guest body');
+        expect(result.additionalParts[0].metadata?.[CONTEXT_METADATA_KEY]).toMatchObject({ kind: 'guest-issue', data });
+    });
+
     test('a linked guest pull is sent as guest-pr context', () => {
         const result = buildOutgoingMessage(input({
             composerText: 'fix it',

@@ -72,6 +72,7 @@ export const planStartGuestSession = (
       author: clamped.author,
       head: clamped.branches?.head,
       base: clamped.branches?.base,
+      data: clamped.data,
       linkedAt: now,
     }),
   };

@@ -27,12 +27,13 @@ const host = connectHost();
 | `directory` | geçerli proje dizini veya `null` |
 | `session` | `{ id, title, busy }` veya `null`. Başlık yoksa oturum id'sine düşer. `busy` canlı durumdur. Oturumda varsa `model` ve `agent` (OpenCode ajanı) de gelir. |
 | `surface` | şeritte `panel`, iliştirme penceresinde `dialog` |
+| `item` | kullanıcının bu yüzeyi açmak için tıkladığı iliştirilmiş öğe (`attach` çağrısına verdiğiniz alanların aynısı, `data` dahil) veya `null` |
 | `connection` | entegrasyonunuz için `{ connected, account }` |
 | `settings` | `integration.settings` içinde tanımladığınız alanların değerleri |
 
 Erişim token'ları burada da, `request` sonucunda da asla görünmez.
 
-`onDirectory`, `onSession`, `onSessionLifecycle`, `onConnection` ve `onSettings` geç abone olduğunuzda en son değeri yeniden gönderir, sonra değiştikçe tetiklenmeye devam eder.
+`onDirectory`, `onSession`, `onSessionLifecycle`, `onConnection`, `onSettings` ve `onItem` geç abone olduğunuzda en son değeri yeniden gönderir, sonra değiştikçe tetiklenmeye devam eder.
 
 ## Metodlar
 
@@ -92,7 +93,7 @@ await host.startSession({
 });
 ```
 
-`providerId` panel id'nizdir; OpenChamber bunun üzerine zaten sizin id'nizi yazar. `id` öğe için kendi tanımlayıcınızdır. `kind` değeri `issue` (varsayılan) veya `pull`. `text` model için isteğe bağlı bağlamdır; boşluklar kırpıldıktan sonra 1 ile 16000 karakter arası.
+`providerId` panel id'nizdir; OpenChamber bunun üzerine zaten sizin id'nizi yazar. `id` öğe için kendi tanımlayıcınızdır. `kind` değeri `issue` (varsayılan) veya `pull`. `text` model için isteğe bağlı bağlamdır; boşluklar kırpıldıktan sonra 1 ile 16000 karakter arası. `data` size ait isteğe bağlı bir JSON'dur (durum, yorumlar, ne isterseniz); serileştirildiğinde en fazla 16000 karakter. OpenChamber bunu etiketle birlikte saklar ve kullanıcı etikete tıkladığında `ctx.item` içinde değiştirmeden geri verir; modele hiçbir zaman ulaşmaz.
 
 `startSession` geçerli projede bir oturum oluşturur. `worktree: true` ile OpenChamber önce bir git worktree oluşturur ve oturumu orada açar. `text` verilmişse ve bir model seçiliyse ilk mesaj olarak gönderilir. Sonuç `{ sessionId, sent }` olur; `sent` değeri `sent`, `no-model`, `skipped` veya `failed`. `no-model` ve `failed` sonrasında da oturum var olur. Açık proje olmaması, worktree'nin başarısız olması veya oturum oluşturmanın başarısız olması `HOST_REJECTED` hatasıdır.
 
@@ -106,6 +107,7 @@ await host.startSession({
 | `title` | 200 |
 | `url` | 2000 |
 | `text` | 16000 |
+| `data` (serileştirilmiş) | 16000 |
 | `author` | 80 |
 | her dal adı | 200 |
 

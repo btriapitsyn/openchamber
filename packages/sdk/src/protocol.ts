@@ -7,6 +7,7 @@ import {
   GUEST_ACCOUNT_MAX,
   GUEST_ATTACH_AUTHOR_MAX,
   GUEST_ATTACH_BRANCH_MAX,
+  GUEST_ATTACH_DATA_MAX,
   GUEST_ATTACH_ID_MAX,
   GUEST_ATTACH_TEXT_MAX,
   GUEST_ATTACH_TITLE_MAX,
@@ -133,6 +134,21 @@ const hostResultPayloadSchema = z.union([
   fileStatResultPayloadSchema,
 ]);
 
+const attachPayloadSchema = z.object({
+  providerId: z.string().trim().regex(ATTACH_PROVIDER_ID),
+  id: z.string().trim().min(1).max(GUEST_ATTACH_ID_MAX),
+  title: z.string().trim().min(1).max(GUEST_ATTACH_TITLE_MAX),
+  url: z.string().trim().min(1).max(GUEST_ATTACH_URL_MAX),
+  text: z.string().trim().min(1).max(GUEST_ATTACH_TEXT_MAX).optional(),
+  kind: z.enum(['issue', 'pull']).optional(),
+  author: z.string().trim().min(1).max(GUEST_ATTACH_AUTHOR_MAX).optional(),
+  branches: z.object({
+    head: z.string().trim().min(1).max(GUEST_ATTACH_BRANCH_MAX),
+    base: z.string().trim().min(1).max(GUEST_ATTACH_BRANCH_MAX),
+  }).optional(),
+  data: z.json().refine((value) => JSON.stringify(value).length <= GUEST_ATTACH_DATA_MAX).optional(),
+});
+
 const readyPayloadSchema = z.object({
   theme: z.object({
     mode: z.enum(['light', 'dark']),
@@ -144,6 +160,7 @@ const readyPayloadSchema = z.object({
   surface: z.enum(['panel', 'dialog']),
   connection: guestConnectionSchema,
   settings: guestSettingsSchema,
+  item: attachPayloadSchema.nullable(),
 });
 
 const hostResultSchema = z.object({
@@ -231,22 +248,15 @@ export const hostMessageSchema = z.union([
       phase: z.enum(SESSION_LIFECYCLE_PHASES),
     }),
   }),
+  z.object({
+    ...envelope,
+    type: z.literal('item'),
+    payload: z.object({
+      item: attachPayloadSchema.nullable(),
+    }),
+  }),
   hostResultSchema,
 ]);
-
-const attachPayloadSchema = z.object({
-  providerId: z.string().trim().regex(ATTACH_PROVIDER_ID),
-  id: z.string().trim().min(1).max(GUEST_ATTACH_ID_MAX),
-  title: z.string().trim().min(1).max(GUEST_ATTACH_TITLE_MAX),
-  url: z.string().trim().min(1).max(GUEST_ATTACH_URL_MAX),
-  text: z.string().trim().min(1).max(GUEST_ATTACH_TEXT_MAX).optional(),
-  kind: z.enum(['issue', 'pull']).optional(),
-  author: z.string().trim().min(1).max(GUEST_ATTACH_AUTHOR_MAX).optional(),
-  branches: z.object({
-    head: z.string().trim().min(1).max(GUEST_ATTACH_BRANCH_MAX),
-    base: z.string().trim().min(1).max(GUEST_ATTACH_BRANCH_MAX),
-  }).optional(),
-});
 
 const filePathSchema = z.string().min(1).max(GUEST_FILE_PATH_MAX).refine(isGuestFilePath);
 

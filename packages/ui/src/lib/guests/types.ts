@@ -10,6 +10,8 @@ export type InstalledGuest = {
   /** npm package.json version when the package declared one. */
   version?: string;
   attach?: AttachContribution;
+  /** HTML the attach dialog loads instead of `entry`; only sent for dialog-mode guests that declared one. */
+  attachEntry?: string;
   integration?: PublicIntegration;
   /** Declared `contributes.filesystem` patterns, shown on the approval dialog. */
   filesystem?: string[];

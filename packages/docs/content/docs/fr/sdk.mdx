@@ -85,9 +85,10 @@ Vous pouvez aussi ajouter un `.zip` local ou un lien https vers un dépôt git o
 
 - `"dialog"` ouvre votre page dans une fenêtre
 - `true` ou `"panel"` ouvre plutôt le panneau de la barre latérale
+- `{ "mode": "dialog", "entry": "panel/attach.html" }` ouvre dans la fenêtre une page séparée à vous, pour que le sélecteur n'ait pas à partager de code avec le panneau de la barre latérale
 - sans cette clé, l'extension n'apparaît pas dans ce menu
 
-Votre page sait dans lequel des deux elle se trouve grâce à `ctx.surface` (`panel` ou `dialog`), vous pouvez donc afficher une liste dans la barre latérale et un sélecteur dans la fenêtre.
+Votre page sait dans lequel des deux elle se trouve grâce à `ctx.surface` (`panel` ou `dialog`). Quand l'utilisateur clique sur un élément que vous avez attaché plus tôt, la même surface s'ouvre à nouveau avec `ctx.item` pointant sur cet élément, y compris les `data` que vous y avez stockées, vous pouvez donc afficher ses détails au lieu de la liste. Depuis le menu + ou l'icône de la barre latérale, `ctx.item` vaut `null`.
 
 `contributes.integration` est optionnel. Il ajoute une carte dans Paramètres → Intégrations où l'utilisateur connecte un compte. Voir [Comptes et réseau](#comptes-et-réseau).
 

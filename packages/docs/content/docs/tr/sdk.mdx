@@ -85,9 +85,10 @@ Yerel bir `.zip` dosyası ya da bir git deposuna veya zip dosyasına giden https
 
 - `"dialog"` sayfanızı bir pencerede açar
 - `true` veya `"panel"` bunun yerine şerit panelini açar
+- `{ "mode": "dialog", "entry": "panel/attach.html" }` pencerede size ait ayrı bir sayfa açar; böylece seçicinin şerit paneliyle kod paylaşması gerekmez
 - atlarsanız eklenti o menüde görünmez
 
-Sayfanız `ctx.surface` (`panel` veya `dialog`) üzerinden hangisinde olduğunu anlayabilir; böylece şeritte bir liste, pencerede bir seçici gösterebilirsiniz.
+Sayfanız `ctx.surface` (`panel` veya `dialog`) üzerinden hangisinde olduğunu anlayabilir. Kullanıcı daha önce iliştirdiğiniz bir öğeye tıkladığında aynı yüzey yeniden açılır ve `ctx.item` o öğeye, üzerine kaydettiğiniz `data` dahil, ayarlanır; böylece liste yerine öğenin ayrıntılarını gösterebilirsiniz. + menüsünden veya şerit simgesinden açıldığında `ctx.item` `null` olur.
 
 `contributes.integration` isteğe bağlıdır. Ayarlar → Entegrasyonlar sayfasına kullanıcının hesap bağladığı bir kart ekler. Bkz. [Hesaplar ve ağ](#hesaplar-ve-ağ).
 

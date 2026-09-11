@@ -27,12 +27,13 @@ const host = connectHost();
 | `directory` | aktuelles Projektverzeichnis oder `null` |
 | `session` | `{ id, title, busy }` oder `null`. Fehlt der Titel, steht dort die Session-ID. `busy` ist der Live-Status. `model` und `agent` (der OpenCode-Agent) erscheinen, wenn die Session sie hat. |
 | `surface` | `panel` in der Leiste, `dialog` im Anhängen-Fenster |
+| `item` | der angehängte Eintrag, den der Nutzer angeklickt hat, um diese Oberfläche zu öffnen (dieselben Felder, die du an `attach` übergeben hast, einschließlich `data`), oder `null` |
 | `connection` | `{ connected, account }` für deine Integration |
 | `settings` | Werte der Felder, die du in `integration.settings` deklariert hast |
 
 Zugriffstokens tauchen hier nie auf, auch nicht in einem `request`-Ergebnis.
 
-`onDirectory`, `onSession`, `onSessionLifecycle`, `onConnection` und `onSettings` liefern den letzten Wert nach, wenn du dich spät anmeldest, und feuern danach bei jeder Änderung weiter.
+`onDirectory`, `onSession`, `onSessionLifecycle`, `onConnection`, `onSettings` und `onItem` liefern den letzten Wert nach, wenn du dich spät anmeldest, und feuern danach bei jeder Änderung weiter.
 
 ## Methoden
 
@@ -92,7 +93,7 @@ await host.startSession({
 });
 ```
 
-`providerId` ist deine Panel-ID; OpenChamber überschreibt sie ohnehin mit deiner ID. `id` ist deine eigene Kennung für den Eintrag. `kind` ist `issue` (Standard) oder `pull`. `text` ist optionaler Kontext für das Modell, 1 bis 16000 Zeichen nach dem Trimmen.
+`providerId` ist deine Panel-ID; OpenChamber überschreibt sie ohnehin mit deiner ID. `id` ist deine eigene Kennung für den Eintrag. `kind` ist `issue` (Standard) oder `pull`. `text` ist optionaler Kontext für das Modell, 1 bis 16000 Zeichen nach dem Trimmen. `data` ist optionales JSON nach deinem Belieben (Status, Kommentare, was auch immer), serialisiert bis zu 16000 Zeichen. OpenChamber speichert es zusammen mit dem Chip und gibt es unverändert in `ctx.item` zurück, wenn der Nutzer den Chip anklickt; das Modell bekommt es nie zu sehen.
 
 `startSession` legt eine Session im aktuellen Projekt an. Mit `worktree: true` erstellt OpenChamber zuerst einen Git-Worktree und öffnet die Session dort. Ist `text` gesetzt und ein Modell ausgewählt, wird er als erste Nachricht gesendet. Das Ergebnis ist `{ sessionId, sent }`, wobei `sent` einer der Werte `sent`, `no-model`, `skipped` oder `failed` ist. Die Session existiert auch nach `no-model` und `failed`. Kein offenes Projekt, ein fehlgeschlagener Worktree oder ein fehlgeschlagenes Anlegen der Session ist ein `HOST_REJECTED`-Fehler.
 
@@ -106,6 +107,7 @@ Grenzen, die der Client prüft, bevor etwas gesendet wird:
 | `title` | 200 |
 | `url` | 2000 |
 | `text` | 16000 |
+| `data` (serialisiert) | 16000 |
 | `author` | 80 |
 | jeder Branch-Name | 200 |
 

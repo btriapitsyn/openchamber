@@ -72,7 +72,16 @@ const ready: HostMessage = {
     surface: 'panel',
     connection: { connected: false, account: '' },
     settings: {},
+    item: null,
   },
+};
+
+const demoItem = {
+  providerId: 'tasks-demo',
+  id: 'DEMO-1',
+  title: 'Fix the login redirect loop',
+  url: 'https://example.com/tasks/DEMO-1',
+  kind: 'issue' as const,
 };
 
 describe('connectHost', () => {
@@ -137,6 +146,40 @@ describe('connectHost', () => {
       },
     }));
     expect(seen).toEqual(['Later']);
+    host.dispose();
+  });
+
+  test('delivers the ready item and replays it to a late listener', () => {
+    const parent = createFrame();
+    const guest = createFrame();
+    guest.parent = parent.parent;
+
+    const host = connectHost({ target: guest, acceptSource: () => true });
+    guest.dispatch(new MessageEvent('message', {
+      data: { ...ready, payload: { ...ready.payload, item: demoItem } },
+    }));
+
+    const seen: Array<string | null> = [];
+    host.onItem((item) => {
+      seen.push(item?.id ?? null);
+    });
+    expect(seen).toEqual(['DEMO-1']);
+
+    guest.dispatch(new MessageEvent('message', {
+      data: {
+        channel: OPENCHAMBER_SDK_CHANNEL,
+        v: OPENCHAMBER_SDK_API_VERSION,
+        type: 'item',
+        payload: { item: null },
+      },
+    }));
+    expect(seen).toEqual(['DEMO-1', null]);
+
+    let readyItem: string | null = 'unset';
+    host.onReady((context) => {
+      readyItem = context.item?.id ?? null;
+    });
+    expect(readyItem).toBeNull();
     host.dispose();
   });
 

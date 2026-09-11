@@ -133,6 +133,25 @@ describe('getLinkedIssues', () => {
     expect(getLinkedIssues(sessionWith([guest]))).toEqual([guest]);
   });
 
+  test('keeps the opaque guest data through the snapshot round trip', () => {
+    const data = { status: 'open', comments: [{ author: 'mara', text: 'hi' }], count: 2, ok: true, none: null };
+    const guest = buildLinkedGuestIssue({
+      providerId: 'hello',
+      identifier: 'HELLO-1',
+      title: 'Sample ticket',
+      url: 'https://example.com/HELLO-1',
+      data,
+      linkedAt: 3,
+    });
+    expect(guest.data).toEqual(data);
+    // SAFETY: a JSON round trip of a session fixture is the same session shape the
+    // metadata channel hands back; the guard under test re-checks every field.
+    const stored = JSON.parse(JSON.stringify(sessionWith([guest]))) as Parameters<typeof getLinkedIssues>[0];
+    expect(getLinkedIssues(stored)).toEqual([guest]);
+    const restored = getLinkedIssues(stored)[0];
+    expect(restored?.kind === 'guest' ? restored.data : undefined).toEqual(data);
+  });
+
   test('keeps a guest pull with author and branches', () => {
     const guest = buildLinkedGuestIssue({
       providerId: 'gitlab',

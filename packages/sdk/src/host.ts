@@ -65,6 +65,8 @@ export type HostClient = {
   onSessionLifecycle: (listener: (event: SessionLifecycleEvent) => void) => () => void;
   onConnection: (listener: (connection: GuestConnection) => void) => () => void;
   onSettings: (listener: (settings: GuestSettings) => void) => () => void;
+  /** The item this surface was opened for. Replays the last value; `null` when there is none. */
+  onItem: (listener: (item: AttachIssueRequest | null) => void) => () => void;
   toast: (request: ToastRequest) => Promise<void>;
   openUrl: (url: string) => Promise<void>;
   openSurface: (surfaceId: string) => Promise<void>;
@@ -146,6 +148,7 @@ export const connectHost = (options: HostClientOptions = {}): HostClient => {
   const lifecycleListeners = new Set<(event: SessionLifecycleEvent) => void>();
   const connectionListeners = new Set<(connection: GuestConnection) => void>();
   const settingsListeners = new Set<(settings: GuestSettings) => void>();
+  const itemListeners = new Set<(item: AttachIssueRequest | null) => void>();
   const pending = new Map<string, Pending>();
   const ids = { value: 0 };
   let lastReady: HostReadyContext | null = null;
@@ -192,6 +195,7 @@ export const connectHost = (options: HostClientOptions = {}): HostClient => {
       }
       emit(connectionListeners, message.payload.connection);
       emit(settingsListeners, message.payload.settings);
+      emit(itemListeners, message.payload.item);
       return;
     }
 
@@ -235,6 +239,14 @@ export const connectHost = (options: HostClientOptions = {}): HostClient => {
         lastReady = { ...lastReady, settings: message.payload.settings };
       }
       emit(settingsListeners, message.payload.settings);
+      return;
+    }
+
+    if (message.type === 'item') {
+      if (lastReady) {
+        lastReady = { ...lastReady, item: message.payload.item };
+      }
+      emit(itemListeners, message.payload.item);
       return;
     }
 
@@ -317,6 +329,13 @@ export const connectHost = (options: HostClientOptions = {}): HostClient => {
       if (lastReady) listener(lastReady.settings);
       return () => {
         settingsListeners.delete(listener);
+      };
+    },
+    onItem: (listener) => {
+      itemListeners.add(listener);
+      if (lastReady) listener(lastReady.item);
+      return () => {
+        itemListeners.delete(listener);
       };
     },
     toast: (payload) => request({
@@ -514,6 +533,7 @@ export const connectHost = (options: HostClientOptions = {}): HostClient => {
       lifecycleListeners.clear();
       connectionListeners.clear();
       settingsListeners.clear();
+      itemListeners.clear();
     },
   };
 };

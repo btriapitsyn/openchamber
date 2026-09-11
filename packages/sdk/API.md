@@ -71,6 +71,7 @@ Each returns an unsubscribe function. Late subscribers get the last known value 
 | `onSessionLifecycle(listener)` | `SessionLifecycleEvent` | `{ sessionId, phase }` — `started` / `completed` / `failure` |
 | `onConnection(listener)`       | `GuestConnection`       | `{ connected, account }`                                     |
 | `onSettings(listener)`         | `GuestSettings`         | Declared integration fields only (`Record<string, string>`)  |
+| `onItem(listener)`             | `AttachIssueRequest     | null`                                                        | The item this surface was opened for (chip click); `null` from the rail icon or + menu |
 
 
 `HostReadyContext`
@@ -86,6 +87,7 @@ Each returns an unsubscribe function. Late subscribers get the last known value 
 | `surface`      | `'panel'                 | 'dialog'`                                                                                |
 | `connection`   | `{ connected, account }` | Integration link state                                                                   |
 | `settings`     | `Record<string, string>` | Declared keys only                                                                       |
+| `item`         | `AttachIssueRequest      | null`                                                                                    | Set when the user clicked this guest's chip on the composer. Show that item instead of the list |
 
 
 Access tokens never appear in `ready` or in request results.
@@ -131,8 +133,11 @@ Access tokens never appear in `ready` or in request results.
   kind?: 'issue' | 'pull';  // default issue
   author?: string;
   branches?: { head: string; base: string };  // for pull
+  data?: JsonValue;    // opaque, comes back as ready.item.data; not sent to the model
 }
 ```
+
+`data` is plain JSON (`string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue }`). It is stored with the chip and the session snapshot and returned unchanged when the user clicks the chip. `JSON.stringify(data).length` must stay within `GUEST_ATTACH_DATA_MAX` (16 000): `clampAttachRequest` silently drops a larger `data`, and the host schema refuses the whole message if it arrives over the limit.
 
 `StartSessionRequest` = attach fields + optional `worktree?: boolean`.
 
@@ -172,6 +177,7 @@ Access tokens never appear in `ready` or in request results.
 | -------------------------------- | --------- |
 | Clipboard text                   | 32 000    |
 | Compose / prompt / attach `text` | 16 000    |
+| Attach `data` (serialized)       | 16 000    |
 | Attach `id`                      | 128       |
 | Attach `title`                   | 200       |
 | Attach `url`                     | 2 000     |
@@ -290,7 +296,7 @@ Used by the OpenChamber host and by tools that validate packages. Guests rarely 
 | `panel.id`            | kebab-case                                                                                                                                                                           |
 | `panel.icon`          | Remixicon kebab name (`window`) **or** package `.svg` path. Remixicon needs no file. An `.svg` path must exist on disk or install fails (`invalid-manifest`). No URLs/absolute paths |
 | `panel.entry`         | Path inside package. No `..`, absolute, or URL. HTML must exist; its relative `.js` scripts must exist (`missing-build` if not)                                                      |
-| `attach`              | `true` / `"panel"` → + menu opens rail; `"dialog"` → host window; omit/`false` → off menus                                                                                           |
+| `attach`              | `true` / `"panel"` → + menu opens rail; `"dialog"` → host window; omit/`false` → off menus. Object form `{ "mode": "panel" \| "dialog", "entry"?: "panel/attach.html" }`: `entry` (dialog only, same path rules as `panel.entry`, must exist with built scripts) is the page the dialog loads instead of `panel.entry` |
 | `capabilities`        | Optional list of `prompt`, `sessions`, `files`. `files` is read **and** write inside the open project. Approved once at install                                                     |
 | `filesystem`          | Optional, 1–16 globs, each 1–256 chars, starting with `/` or `~/`; `**` spans folders, `*` / `?` stay in one segment; no `..`, empty segment, or backslash (`invalid-filesystem`). Declaring it adds the `filesystem` capability and the dialog lists the globs |
 | `integration`         | Optional. Exactly one of `oauth`, `token`, or `host` (`provider: "linear"` only)                                                                                                     |
@@ -307,6 +313,7 @@ Extra keys are dropped, not forwarded.
 | `parseManifest(document)` (`@openchamber/sdk/schemas`) | Typed document → success/failure (does not throw on junk) |
 | `parseManifestJson(json)` (`@openchamber/sdk/schemas`) | String → same result                                      |
 | `resolveAttachMode(attach)`                        | Normalize to `'panel'                                     |
+| `resolveAttachEntry(contributes)`                  | Dialog page from the object form, or `null` when the dialog reuses `panel.entry` |
 | `resolveIntegrationAuth` / `resolveIntegrationApi` | Auth kind and API origin                                  |
 | `toPublicIntegration` / `toPublicService`            | Catalog-safe public slices                                |
 | `isGuestPackageSvgIcon`                            | Whether icon is a package SVG path                        |

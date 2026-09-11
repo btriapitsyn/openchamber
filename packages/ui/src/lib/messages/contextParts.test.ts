@@ -134,6 +134,20 @@ describe('round-trip through part metadata', () => {
         expect(readContextPart(part)).toEqual(payload);
     });
 
+    test('guest references keep opaque data in metadata, not in text', () => {
+        const payload: ContextPartPayload = {
+            kind: 'guest-issue',
+            providerId: 'hello',
+            id: 'HELLO-1',
+            title: 'Sample ticket',
+            url: 'https://example.com/HELLO-1',
+            data: { status: 'open', comments: [{ author: 'mara', text: 'hi' }] },
+        };
+        const part = asPart(payload, 'guest body');
+        expect(part.text).toBe('guest body');
+        expect(readContextPart(part)).toEqual(payload);
+    });
+
     test('guest pull references carry picker-built text and no github number', () => {
         const payload: ContextPartPayload = {
             kind: 'guest-pr',

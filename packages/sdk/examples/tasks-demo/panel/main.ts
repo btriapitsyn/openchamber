@@ -1,13 +1,7 @@
 import { connectHost, HostRequestError } from '@openchamber/sdk';
 import { applyHostReady, mountBanner, mountButton, mountCheckbox, mountList, mountSearchField, mountText } from '@openchamber/sdk/ui';
 
-const PROVIDER = 'tasks-demo';
-const TASKS = [
-  { id: 'DEMO-1', title: 'Fix the login redirect loop', url: 'https://example.com/tasks/DEMO-1', kind: 'issue' as const },
-  { id: 'DEMO-2', title: 'Add dark mode to settings', url: 'https://example.com/tasks/DEMO-2', kind: 'issue' as const },
-  { id: 'DEMO-3', title: 'Bump dependencies', url: 'https://example.com/tasks/DEMO-3', kind: 'pull' as const },
-  { id: 'DEMO-4', title: 'Write release notes for 2.0', url: 'https://example.com/tasks/DEMO-4', kind: 'issue' as const },
-];
+import { TASKS, attachPayload, findTask } from './tasks.ts';
 
 const host = connectHost();
 const root = document.querySelector('#root');
@@ -56,14 +50,11 @@ host.onReady((ctx) => {
   page.append(listRoot);
 
   const current = (): (typeof TASKS)[number] => {
-    const task = TASKS.find((t) => t.id === selected);
+    const task = selected ? findTask(selected) : null;
     if (!task) throw new Error('nothing selected');
     return task;
   };
-  const payload = () => {
-    const task = current();
-    return { providerId: PROVIDER, id: task.id, title: task.title, url: task.url, kind: task.kind, text: `Work on ${task.id}: ${task.title}\n${task.url}` };
-  };
+  const payload = () => attachPayload(current());
   const report = async (label: string, run: () => Promise<unknown>): Promise<void> => {
     try {
       const result = await run();

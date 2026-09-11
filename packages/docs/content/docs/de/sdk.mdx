@@ -85,9 +85,10 @@ Du kannst auch eine lokale `.zip`-Datei oder einen https-Link zu einem Git-Repos
 
 - `"dialog"` öffnet deine Seite in einem Fenster
 - `true` oder `"panel"` öffnet stattdessen das Panel in der Leiste
+- `{ "mode": "dialog", "entry": "panel/attach.html" }` öffnet eine separate Seite von dir im Fenster, damit die Auswahl keinen Code mit dem Panel in der Leiste teilen muss
 - lässt du es weg, bleibt die Erweiterung aus diesem Menü draußen
 
-Deine Seite erkennt über `ctx.surface` (`panel` oder `dialog`), wo sie gerade läuft. So kannst du in der Leiste eine Liste zeigen und im Fenster eine Auswahl.
+Deine Seite erkennt über `ctx.surface` (`panel` oder `dialog`), wo sie gerade läuft. Wenn der Nutzer einen Eintrag anklickt, den du früher angehängt hast, öffnet sich dieselbe Oberfläche erneut mit `ctx.item` auf diesem Eintrag, einschließlich aller `data`, die du darauf gespeichert hast, sodass du seine Details statt der Liste zeigen kannst. Aus dem +-Menü oder über das Symbol in der Leiste ist `ctx.item` `null`.
 
 `contributes.integration` ist optional. Es fügt unter Einstellungen → Integrationen eine Karte hinzu, auf der der Nutzer ein Konto verbindet. Siehe [Konten und Netzwerk](#konten-und-netzwerk).
 

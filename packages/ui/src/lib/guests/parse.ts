@@ -43,6 +43,7 @@ const installedGuestSchema = z.object({
   entry: z.string().trim().min(1),
   version: z.string().trim().min(1).max(64).optional(),
   attach: z.union([z.boolean(), z.enum(['panel', 'dialog'])]).optional(),
+  attachEntry: z.string().trim().min(1).optional(),
   integration: publicIntegrationSchema.optional(),
   filesystem: z.array(z.string().trim().min(1)).optional(),
   service: publicServiceSchema.optional(),

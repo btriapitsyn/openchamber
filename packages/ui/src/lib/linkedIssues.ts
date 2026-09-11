@@ -1,4 +1,5 @@
 import type { Session } from '@opencode-ai/sdk/v2';
+import { isJsonValue, type JsonValue } from '@openchamber/sdk';
 import { getSessionMetadata, type SessionMetadataRecord } from './sessionReviewMetadata';
 
 /**
@@ -49,6 +50,8 @@ export type LinkedGuestIssue = {
   author?: string;
   head?: string;
   base?: string;
+  /** Opaque guest payload from `attach`, handed back as `ready.item.data`. Never shown or sent to the model. */
+  data?: JsonValue;
   linkedAt: number;
 };
 
@@ -102,6 +105,7 @@ const isLinkedGuestIssue = (value: unknown): value is LinkedGuestIssue => (
   && (value.author === undefined || typeof value.author === 'string')
   && (value.head === undefined || typeof value.head === 'string')
   && (value.base === undefined || typeof value.base === 'string')
+  && (value.data === undefined || isJsonValue(value.data as JsonValue))
   && typeof value.linkedAt === 'number'
   && Number.isFinite(value.linkedAt)
 );
@@ -158,6 +162,7 @@ export const buildLinkedGuestIssue = (input: {
   author?: string;
   head?: string;
   base?: string;
+  data?: JsonValue;
   linkedAt: number;
 }): LinkedGuestIssue => {
   const next: LinkedGuestIssue = {
@@ -180,6 +185,9 @@ export const buildLinkedGuestIssue = (input: {
     if (input.base?.trim()) {
       next.base = input.base.trim();
     }
+  }
+  if (input.data !== undefined) {
+    next.data = input.data;
   }
   return next;
 };

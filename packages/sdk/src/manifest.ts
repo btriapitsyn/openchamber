@@ -11,7 +11,17 @@ export type PanelContribution = {
 
 export type AttachMode = 'panel' | 'dialog';
 
-export type AttachContribution = boolean | AttachMode;
+/**
+ * Object form of `contributes.attach`. `entry` is an HTML page inside the
+ * package that the attach dialog loads instead of `panel.entry`; it is only
+ * meaningful with `mode: "dialog"`.
+ */
+export type AttachContributionObject = {
+  mode: AttachMode;
+  entry?: string;
+};
+
+export type AttachContribution = boolean | AttachMode | AttachContributionObject;
 
 export type IntegrationSettingField = {
   id: string;
@@ -250,10 +260,29 @@ export const hasGuestCapability = (
   capability: GuestCapability,
 ): boolean => capabilities.granted.includes(capability);
 
+// Everything that is not one of the scalar spellings is the object form;
+// the parser has already refused anything else.
+const isAttachObject = (attach: AttachContribution | undefined): attach is AttachContributionObject => (
+  attach !== undefined && attach !== true && attach !== false && attach !== 'panel' && attach !== 'dialog'
+);
+
 export const resolveAttachMode = (attach: AttachContribution | undefined): AttachMode | null => {
   if (attach === true || attach === 'panel') return 'panel';
   if (attach === 'dialog') return 'dialog';
+  if (isAttachObject(attach)) return attach.mode;
   return null;
+};
+
+/**
+ * The page the attach dialog loads, or `null` when the dialog reuses
+ * `panel.entry`. Only the object form with `mode: "dialog"` can name one.
+ */
+export const resolveAttachEntry = (
+  contributes: Pick<OpenChamberContributes, 'attach'>,
+): string | null => {
+  const attach = contributes.attach;
+  if (!isAttachObject(attach) || attach.mode !== 'dialog') return null;
+  return attach.entry ?? null;
 };
 
 export type OpenChamberEngines = {

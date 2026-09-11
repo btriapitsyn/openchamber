@@ -19,6 +19,7 @@ import {
   answerGuestMessage,
   buildConnectionMessage,
   buildDirectoryMessage,
+  buildItemMessage,
   buildReadyMessage,
   buildSessionLifecycleMessage,
   buildSessionMessage,
@@ -30,6 +31,7 @@ import {
 import { guestMay, isGuestActive } from '@/lib/guests/capabilities';
 import { guestFileOperation } from '@/lib/guests/files';
 import { resolveGuestFrameUrl } from '@/lib/guests/frame-url';
+import { useGuestItemStore } from '@/lib/guests/item-store';
 import { fetchHostLinearIssueGet } from '@/lib/guests/host-linear-request';
 import { loadGuestServiceStatus, proxyGuestServiceRequest } from '@/lib/guests/service';
 import {
@@ -55,6 +57,12 @@ import { useSession, useSessionStatus } from '@/sync/sync-context';
 type PluginPaneProps = {
   mode: PluginContextPanelMode;
   surface?: GuestHostSurface;
+  /**
+   * The attached item this surface was opened for (`ready.item`). The dialog
+   * passes it explicitly; the rail pane takes it from `useGuestItemStore`
+   * when this prop is left undefined.
+   */
+  item?: AttachIssueRequest | null;
   onDismiss?: () => void;
   onAttach?: (issue: AttachIssueRequest) => void;
   onSessionStarted?: () => void;
@@ -89,6 +97,7 @@ const readCssVar = (name: string, fallback: string): string => {
 export const PluginPane: React.FC<PluginPaneProps> = ({
   mode,
   surface = 'panel',
+  item: itemProp,
   onDismiss,
   onAttach,
   onSessionStarted,
@@ -108,6 +117,16 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
   const oauthStatus = useGuestOauthStore((state) => state.byId[guestId]);
   const setOauthStatus = useGuestOauthStore((state) => state.setStatus);
   const refreshOauth = useGuestOauthStore((state) => state.refresh);
+  // A chip click parks the item under this guest's id; take it (clearing the
+  // slot) so a later mount of the same pane starts without a stale item.
+  const pendingItem = useGuestItemStore((state) => state.pendingItemByGuest[guestId]);
+  const takePendingItem = useGuestItemStore((state) => state.takePendingItem);
+  const [railItem, setRailItem] = React.useState<AttachIssueRequest | null>(null);
+  React.useEffect(() => {
+    if (itemProp !== undefined || !pendingItem) return;
+    setRailItem(takePendingItem(guestId));
+  }, [guestId, itemProp, pendingItem, takePendingItem]);
+  const item = itemProp !== undefined ? itemProp : railItem;
   const sessionBusy = sessionStatus?.type === 'busy' || sessionStatus?.type === 'retry';
   const lifecyclePhase = guestSessionLifecyclePhase(sessionStatus);
   const sessionSnapshot = React.useMemo(
@@ -160,13 +179,15 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
     surface,
     connection: oauthStatus?.connection ?? EMPTY_GUEST_CONNECTION,
     settings: oauthStatus?.settings ?? {},
-  }), [currentTheme, directory, locale, oauthStatus, sessionSnapshot, surface]);
+    item,
+  }), [currentTheme, directory, item, locale, oauthStatus, sessionSnapshot, surface]);
 
   const frameKey = `${guestId}:service-${guest?.service?.granted ? '1' : '0'}`;
 
   // Minted per mount (and per remount via frameKey): the token in this URL is
   // scoped to the guest's files and short-lived, so it is never reused.
-  const guestEntry = guest?.entry ?? null;
+  // The attach dialog may load its own page; the rail always loads panel.entry.
+  const guestEntry = guest ? (surface === 'dialog' && guest.attachEntry ? guest.attachEntry : guest.entry) : null;
   const [src, setSrc] = React.useState('');
   React.useEffect(() => {
     if (!guestEntry) {
@@ -230,6 +251,7 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
     postToGuest(buildSessionMessage(readyRef.current.session));
     postToGuest(buildConnectionMessage(readyRef.current.connection));
     postToGuest(buildSettingsMessage(readyRef.current.settings));
+    postToGuest(buildItemMessage(readyRef.current.item));
   }, [postToGuest]);
 
   React.useEffect(() => {

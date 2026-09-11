@@ -27,12 +27,13 @@ const host = connectHost();
 | `directory` | current project directory, or `null` |
 | `session` | `{ id, title, busy }` or `null`. Title falls back to the session id. `busy` is the live status. `model` and `agent` (the OpenCode agent) appear when the session has them. |
 | `surface` | `panel` on the rail, `dialog` in the attach window |
+| `item` | the attached item the user clicked to open this surface (the same fields you passed to `attach`, including `data`), or `null` |
 | `connection` | `{ connected, account }` for your integration |
 | `settings` | values of the fields you declared in `integration.settings` |
 
 Access tokens never appear here or in a `request` result.
 
-`onDirectory`, `onSession`, `onSessionLifecycle`, `onConnection`, and `onSettings` replay the latest value when you subscribe late, then keep firing as it changes.
+`onDirectory`, `onSession`, `onSessionLifecycle`, `onConnection`, `onSettings`, and `onItem` replay the latest value when you subscribe late, then keep firing as it changes.
 
 ## Methods
 
@@ -92,7 +93,7 @@ await host.startSession({
 });
 ```
 
-`providerId` is your panel id; OpenChamber overwrites it with your id anyway. `id` is your own identifier for the item. `kind` is `issue` (default) or `pull`. `text` is optional context for the model, 1 to 16000 characters after trim.
+`providerId` is your panel id; OpenChamber overwrites it with your id anyway. `id` is your own identifier for the item. `kind` is `issue` (default) or `pull`. `text` is optional context for the model, 1 to 16000 characters after trim. `data` is optional JSON of your own (status, comments, anything), up to 16000 characters when serialized. OpenChamber stores it with the chip and hands it back unchanged in `ctx.item` when the user clicks the chip; it never reaches the model.
 
 `startSession` creates a session in the current project. With `worktree: true` OpenChamber creates a git worktree first and opens the session there. When `text` is set and a model is selected, it is sent as the first message. The result is `{ sessionId, sent }`, where `sent` is `sent`, `no-model`, `skipped`, or `failed`. The session exists even after `no-model` and `failed`. No open project, a failed worktree, or a failed session create is a `HOST_REJECTED` error.
 
@@ -106,6 +107,7 @@ Limits the client applies before anything is sent:
 | `title` | 200 |
 | `url` | 2000 |
 | `text` | 16000 |
+| `data` (serialized) | 16000 |
 | `author` | 80 |
 | each branch name | 200 |
 

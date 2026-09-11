@@ -95,6 +95,13 @@ export const buildSettingsMessage = (settings: GuestSettings): HostMessage => ({
   payload: { settings },
 });
 
+export const buildItemMessage = (item: AttachIssueRequest | null): HostMessage => ({
+  channel: OPENCHAMBER_SDK_CHANNEL,
+  v: OPENCHAMBER_SDK_API_VERSION,
+  type: 'item',
+  payload: { item },
+});
+
 export const buildSessionLifecycleMessage = (event: SessionLifecycleEvent): HostMessage => ({
   channel: OPENCHAMBER_SDK_CHANNEL,
   v: OPENCHAMBER_SDK_API_VERSION,

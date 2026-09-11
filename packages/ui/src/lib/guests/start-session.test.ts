@@ -72,6 +72,15 @@ describe('planStartGuestSession', () => {
     });
     expect(plan.text).toBe('MR context');
   });
+
+  test('keeps opaque attach data on the snapshot', () => {
+    const data = { status: 'open' };
+    const plan = planStartGuestSession({ ...request, data }, '/repo', 42);
+    expect(plan.ok).toBe(true);
+    if (plan.ok) {
+      expect(plan.linked.data).toEqual(data);
+    }
+  });
 });
 
 describe('runStartGuestSession', () => {

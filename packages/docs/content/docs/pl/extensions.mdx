@@ -1,0 +1,52 @@
+---
+title: Rozszerzenia
+description: Zainstaluj rozszerzenia innych autorów w OpenChamber, zdecyduj, co mogą robić, połącz ich konta i usuń je, gdy nie są potrzebne.
+---
+
+# Rozszerzenia
+
+W **Ustawienia → Rozszerzenia** dodasz do OpenChamber panele zrobione przez inne osoby. Rozszerzenie to mała strona na prawym pasku, obok wbudowanych paneli. Może pokazywać dane z innej usługi, dołączać zadanie do czatu, a jeśli na to pozwolisz, uruchamiać sesje, wysyłać prompty lub czytać pliki.
+
+Rozszerzenia działają w OpenChamber w wersji web i desktop. VS Code i aplikacja mobilna jeszcze ich nie ładują. To nie to samo co wtyczki OpenCode.
+
+## Zainstaluj rozszerzenie
+
+1. Otwórz **Ustawienia → Rozszerzenia**.
+2. Wklej jedną z tych rzeczy w pole **Folder, ZIP lub URL** i wybierz **Dodaj**:
+   - pełną ścieżkę do folderu na tym komputerze
+   - ścieżkę do pliku `.zip`
+   - link https do repozytorium git lub pliku zip
+3. Jeśli rozszerzenie prosi o uprawnienia, okno dialogowe je wymienia. Wybierz **Zezwól i włącz** albo **Usuń**, żeby je wycofać.
+
+Na desktopie przyciski folderu i archiwum obok pola otwierają systemowe okno wyboru, więc nie trzeba wpisywać ścieżki.
+
+Ikona rozszerzenia pojawia się na pasku. Jeśli jej nie ma, zajrzyj do [Rozwiązywania problemów](/troubleshooting/).
+
+Instalacja z folderu działa bezpośrednio z tego folderu, więc ktoś, kto tworzy rozszerzenie, może edytować i przeładowywać. Zip lub URL jest najpierw kopiowany do folderu danych OpenChamber; oryginalny plik zostaje nietknięty.
+
+## Co rozszerzenie może robić
+
+Pokazywanie panelu i odczyt, który projekt i sesja są otwarte, nie wymaga uprawnień. Wszystko, co działa w Twoim imieniu, wymaga, a całą listę widzisz raz, przy instalacji:
+
+- **Wysyłanie wiadomości do Twoich sesji**: pisanie i wysyłanie promptów do modelu, co zużywa tokeny.
+- **Tworzenie sesji i worktree**: uruchamianie nowych sesji w bieżącym projekcie.
+- **Odczyt i zapis plików w otwartym projekcie**.
+- **Odczyt i zapis plików poza projektem**: tylko dokładnie te lokalizacje, które rozszerzenie wymienia w oknie dialogowym.
+- **Łączenie z usługami zewnętrznymi**: wywoływanie własnego API z kontem, które połączysz.
+- **Uruchamianie lokalnej usługi**: uruchomienie osobnego programu na tym komputerze z uprawnieniami Twojego konta. Zezwalaj na to tylko rozszerzeniom, którym ufasz; zadeklarowane uprawnienia opisują zamiar, ale go nie ograniczają.
+
+Gdy nowsza wersja prosi o więcej, niż pozwoliłeś, karta pokazuje **Wymaga zgody** i przycisk **Sprawdź uprawnienia**. Dopóki nie zezwolisz na nową listę, to rozszerzenie pozostaje wyłączone.
+
+## Połącz jego konto
+
+Rozszerzenie, które rozmawia z usługą, dostaje kartę w **Ustawienia → Integracje** w sekcji **Konta rozszerzeń**. Zależnie od usługi karta prosi o token API, nazwę użytkownika i token albo client id do logowania. Wybierz **Połącz**; **Rozłącz** zapomina zapisany token. Dodatkowe pola zadeklarowane przez rozszerzenie zapisują się same, gdy je opuszczasz.
+
+Token zostaje na serwerze OpenChamber. Strona rozszerzenia nigdy go nie widzi.
+
+## Wstrzymaj lub usuń
+
+Każda karta ma przełącznik **Włączone**. Wyłączony zostawia rozszerzenie zainstalowane, ale ukrywa jego panel i blokuje jego wywołania. **Usuń** kasuje instalację z zip lub URL z folderu danych OpenChamber; przy instalacji z folderu tylko zapomina ścieżkę, Twój folder zostaje.
+
+## Zbuduj własne
+
+Wszystko, co rozszerzenie potrafi, i jak je zrobić, znajdziesz w [Zbuduj rozszerzenie](/sdk/).

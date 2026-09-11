@@ -15,6 +15,7 @@
  */
 
 import { z } from 'zod';
+import type { JsonValue } from '@openchamber/sdk';
 import type { TextPart } from '@opencode-ai/sdk/v2';
 import type { InlineCommentDraft } from '@/stores/useInlineCommentDraftStore';
 import { appendTerminalContexts } from './terminalContext';
@@ -110,6 +111,8 @@ type GuestIssueContext = {
     id: string;
     title: string;
     url: string;
+    /** Opaque guest payload; stored for the round trip back to the guest, never rendered. */
+    data?: JsonValue;
 };
 
 type GuestPrContext = {
@@ -118,6 +121,7 @@ type GuestPrContext = {
     id: string;
     title: string;
     url: string;
+    data?: JsonValue;
 };
 
 export type ContextPartPayload =
@@ -366,6 +370,7 @@ const contextPayloadSchema = z.discriminatedUnion('kind', [
         id: z.string().min(1),
         title: z.string(),
         url: z.string(),
+        data: z.json().optional(),
     }),
     z.object({
         kind: z.literal('guest-pr'),
@@ -373,6 +378,7 @@ const contextPayloadSchema = z.discriminatedUnion('kind', [
         id: z.string().min(1),
         title: z.string(),
         url: z.string(),
+        data: z.json().optional(),
     }),
 ]);
 
